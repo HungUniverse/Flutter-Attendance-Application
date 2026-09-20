@@ -1,0 +1,349 @@
+{
+  "schemaVersion": 2,
+  "demo": true,
+  "demoNote": "Roster lấy từ FA26_Markbook.ods; trạng thái điểm danh P/A là dữ liệu giả để demo.",
+  "sessionId": "demo-FA26-PRN232-SE1920-M01-2026-09-07",
+  "revision": 1,
+  "state": "final",
+  "workspaceId": "demo-FA26",
+  "semester": "FA26",
+  "courseCode": "PRN232",
+  "classCode": "SE1920",
+  "scheduleCode": "13",
+  "meeting": {
+    "id": "demo-FA26-PRN232-SE1920-M01-2026-09-07",
+    "number": 1,
+    "startAt": "2026-09-07T12:30:00.000",
+    "endAt": "2026-09-07T14:45:00.000",
+    "state": "closed"
+  },
+  "finalizedAt": "2026-09-07T14:45:00+07:00",
+  "updatedAt": "2026-09-07T14:45:00+07:00",
+  "attendance": [
+    {
+      "rollNumber": "SE194909",
+      "fullName": "Lâm Thiên Hải Anh",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE196327",
+      "fullName": "Hoàng Quốc Bảo",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE194347",
+      "fullName": "Lê Phan Gia Bảo",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE183271",
+      "fullName": "Nguyễn Trần Gia Bảo",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE183011",
+      "fullName": "Dương Hòa Bình",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE180400",
+      "fullName": "Nguyễn Đức Bổn",
+      "attendance": {
+        "status": "A",
+        "source": "finalize",
+        "recordedAt": "2026-09-07T14:45:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE194941",
+      "fullName": "Dương Hạo Cơ",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE190622",
+      "fullName": "Trần Duy Đạt",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE182072",
+      "fullName": "Trần Tiến Đạt",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE192160",
+      "fullName": "Trang Thuận Đức",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE194673",
+      "fullName": "Dương Thành Thanh Duy",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE192427",
+      "fullName": "Lê Hoàng Duy",
+      "attendance": {
+        "status": "A",
+        "source": "finalize",
+        "recordedAt": "2026-09-07T14:45:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE196610",
+      "fullName": "Trần Trung Hải",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE180374",
+      "fullName": "Bùi Quang Hiếu",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE196624",
+      "fullName": "Đặng Minh Hoàng",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE183095",
+      "fullName": "Đỗ Việt Hoàng",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE193324",
+      "fullName": "Vũ Đức Hùng",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "HE170876",
+      "fullName": "Vũ Ngọc Hưng",
+      "attendance": {
+        "status": "A",
+        "source": "finalize",
+        "recordedAt": "2026-09-07T14:45:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE196437",
+      "fullName": "Đỗ Nhất Huy",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE161632",
+      "fullName": "Nguyễn Đức Huy",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE196250",
+      "fullName": "Trần Nguyễn Nam Khánh",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE194466",
+      "fullName": "Nguyễn Hoàng Anh Khôi",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE184144",
+      "fullName": "Trần Hoài Khôi",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE180629",
+      "fullName": "Nguyễn Thành Minh",
+      "attendance": {
+        "status": "A",
+        "source": "finalize",
+        "recordedAt": "2026-09-07T14:45:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE180338",
+      "fullName": "Hoàng Thanh Nguyên",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE196296",
+      "fullName": "Nguyễn Bảo Nguyên",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE184226",
+      "fullName": "Lâm Hoàng Nhân",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE184265",
+      "fullName": "Lê Trường Phúc",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE180299",
+      "fullName": "Tô Thiên Phước",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE180447",
+      "fullName": "Nguyễn Văn Phú Quý",
+      "attendance": {
+        "status": "A",
+        "source": "finalize",
+        "recordedAt": "2026-09-07T14:45:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE183201",
+      "fullName": "Nguyễn Phạm Xuân Sơn",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE192024",
+      "fullName": "Dương Quốc Thái",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE194001",
+      "fullName": "Nguyễn Huỳnh Nhật Thịnh",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE184988",
+      "fullName": "Vũ Đức Tuấn",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE183051",
+      "fullName": "Thân Lê Thành Vinh",
+      "attendance": {
+        "status": "P",
+        "source": "simulator",
+        "recordedAt": "2026-09-07T12:40:00+07:00"
+      }
+    },
+    {
+      "rollNumber": "SE196401",
+      "fullName": "Trương Quốc Vương",
+      "attendance": {
+        "status": "A",
+        "source": "finalize",
+        "recordedAt": "2026-09-07T14:45:00+07:00"
+      }
+    }
+  ],
+  "auditEvents": []
+}

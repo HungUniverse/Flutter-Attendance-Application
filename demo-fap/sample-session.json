@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 2,
+  "sessionId": "demo-meeting-1",
+  "revision": 1,
+  "state": "final",
+  "workspaceId": "demo-workspace",
+  "semester": "FA26",
+  "courseCode": "PRM393",
+  "classCode": "SE1917",
+  "scheduleCode": "11",
+  "meeting": { "id": "demo-meeting-1", "number": 1, "startAt": "2026-09-07T07:00:00.000", "endAt": "2026-09-07T09:15:00.000", "state": "closed" },
+  "attendance": [
+    { "rollNumber": "SE000001", "memberCode": "", "email": "sv1@example.com", "fullName": "Nguyễn Văn An", "attendance": { "status": "P", "source": "scan", "recordedAt": "2026-09-07T07:07:00.000Z" } },
+    { "rollNumber": "SE000002", "memberCode": "", "email": "sv2@example.com", "fullName": "Trần Thị Bình", "attendance": { "status": "A", "source": "finalize", "recordedAt": "2026-09-07T09:15:00.000Z" } },
+    { "rollNumber": "SE000003", "memberCode": "", "email": "sv3@example.com", "fullName": "Lê Minh Châu", "attendance": { "status": "P", "source": "scan", "recordedAt": "2026-09-07T07:09:00.000Z" } }
+  ],
+  "auditEvents": []
+}

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <h1>FAP Attendance</h1>
+      <p class="hint">Mở trang điểm danh FAP hoặc trang demo trước khi nhập file.</p>
+      <label class="file-button">
+        Chọn JSON/CSV từ máy
+        <input id="attendanceFile" type="file" accept=".json,.csv,application/json,text/csv" />
+      </label>
+      <button id="driveFile" class="secondary">Chọn CSV từ Google Drive</button>
+      <section id="preview" hidden></section>
+      <label id="confirmRow" hidden>
+        <input id="confirm" type="checkbox" /> Tôi đã kiểm tra đúng lớp, ngày và slot
+      </label>
+      <label id="autoSubmitRow" hidden>
+        <input id="autoSubmit" type="checkbox" /> Tự bấm Submit sau khi điền và kiểm tra lại
+      </label>
+      <button id="submit" disabled>Điền P/A vào trang</button>
+      <p id="status" role="status"></p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
