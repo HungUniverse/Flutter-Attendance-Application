@@ -1,82 +1,146 @@
 # FAP Attendance
 
-Hệ thống điểm danh local-first không dùng database:
+Ứng dụng điểm danh cho giảng viên, xây dựng bằng Flutter Windows. Sinh viên quét QR bằng camera điện thoại và điểm danh trên trình duyệt, không cần cài ứng dụng. Dữ liệu lớp và lịch sử điểm danh được lưu bằng file JSON/CSV trên máy giảng viên; Google Drive là nơi đồng bộ tùy chọn, **không sử dụng database**.
 
-- Flutter Windows: import markbook, sinh lịch, mở QR, quản lý P/A, lưu JSON, export CSV và đồng bộ Google Drive.
-- Điện thoại sinh viên: quét QR bằng camera để mở trang web đăng nhập/check-in, không cần cài app; challenge hết hạn sau 2 phút.
-- Chrome Extension Manifest V3: chọn JSON session/CSV local hoặc CSV từ Drive, đối chiếu hai chiều MSSV, fill P/A và tùy chọn tự Submit.
+Dự án còn có một **web FAP mô phỏng** và Chrome Extension để trình diễn quy trình nhập điểm danh. Web mô phỏng không phải trang FAP thật và không gửi dữ liệu đến FAP thật.
 
-## Chạy Lab 1
+## Thành phần và tiến độ
+
+| Thành phần | Chức năng hiện có |
+| --- | --- |
+| Flutter Windows | Import ODS/XLSX, dashboard lớp và lịch hôm nay, cấu hình lịch từng lớp, bảng P/A, QR, chốt/sửa slot, export CSV, lưu local, kết nối Drive. |
+| Trang check-in trên điện thoại | Mở bằng QR trong trình duyệt, nhập email và OTP nếu được yêu cầu, gửi điểm danh trong thời hạn 2 phút. |
+| Firebase Authentication | Tùy chọn cấu hình để xác minh email sinh viên bằng email/mật khẩu và email verification; không dùng Firestore/Realtime Database. |
+| Web FAP mô phỏng | Dashboard các lớp từ markbook, danh sách điểm danh theo slot, một ô Present cho mỗi sinh viên, Submit và xem trạng thái đã chốt. |
+| Chrome Extension | Đọc JSON session hoặc CSV, đối chiếu MSSV với trang đang mở, điền điểm danh; giảng viên chọn có tự bấm Submit hay không. |
+
+## Yêu cầu môi trường
+
+- Flutter SDK/Dart SDK và Windows Developer Mode.
+- Visual Studio với workload **Desktop development with C++** để chạy/build Flutter Windows.
+- Node.js và npm để chạy web demo, build Extension.
+- Google Chrome để nạp Extension.
+- Android SDK chỉ cần nếu muốn chạy ứng dụng Flutter Android còn nằm trong mã nguồn; luồng sinh viên quét QR bằng trình duyệt **không cần Android SDK hoặc app Android**.
+
+Kiểm tra môi trường Flutter:
+
+```powershell
+flutter doctor -v
+```
+
+## Chạy ứng dụng giảng viên trên Windows
+
+Tại thư mục gốc dự án:
 
 ```powershell
 flutter pub get
 flutter run -d windows
 ```
 
-Import file `test/fixtures/FA26_Markbook.ods`. Workspace được lưu tại thư mục Documents của Windows:
+Để tạo bản `.exe`:
 
-```text
-FAP Attendance/<semester>/
-  workspace.json
-  index.json
-  source/<markbook>
-  classes/<course>_<class>/class.json
-  classes/<course>_<class>/sessions/M01_2026-09-07.json
-  classes/<course>_<class>/exports/*.csv
+```powershell
+flutter build windows
 ```
 
-Mỗi slot chỉ có một file JSON ổn định. File chuyển từ trạng thái `working` sang `final`; khi sửa sau chốt, app tăng `revision` và thêm `auditEvents` ngay trong cùng file. Mỗi lần ghi dùng file tạm và `.bak` local để phục hồi sự cố; `.bak` không được tải lên Drive. Khi nâng cấp từ bản cũ, các file `_working`/`_v001_final`/`_v002_correction` được gộp về file ổn định và chuyển vào `.recovery` ngoài thư mục đồng bộ.
+File chạy nằm trong `build/windows/x64/runner/Release/fap_attendance.exe`. Khi chuyển sang máy khác, hãy sao chép **toàn bộ thư mục `Release`**, không chỉ riêng file `.exe`.
 
-## Sinh viên quét QR bằng trình duyệt
+### Import và điểm danh
 
-Khi GV mở slot điểm danh, desktop mở trang web check-in. QR là link web: sinh viên dùng camera điện thoại quét, trang mở ngay và bắt đầu đếm ngược **2 phút**. QR trên màn GV đổi mỗi 15 giây. Sinh viên nhập email trong roster, nhập OTP nếu GV bật chế độ QR + OTP, rồi Submit. Desktop nhận P ngay. Nếu đã hết 2 phút, sinh viên quét mã QR đang hiển thị để lấy lượt mới.
+1. Ở màn chào, nhập email giảng viên rồi chọn file `test/fixtures/FA26_Markbook.ods` hoặc một file `.ods`/`.xlsx` cùng cấu trúc. Có thể import từ Google Drive sau khi kết nối Drive.
+2. Chọn học kỳ, ngày bắt đầu, số tuần và số slot mỗi tuần. Sau import, có thể chỉnh lịch **riêng cho từng lớp** trước khi bắt đầu điểm danh lớp đó.
+3. Dashboard hiển thị các lớp và lịch dạy hôm nay. Mở một lớp để xem bảng sinh viên, các slot, tổng P/A và tỷ lệ vắng.
+4. Chọn slot thuộc ngày hiện tại rồi mở QR thường hoặc QR + OTP. QR thay mỗi 15 giây. Có thể dùng chức năng mô phỏng sinh viên trên desktop để demo không cần điện thoại.
+5. Sau khi sinh viên điểm danh, bấm **Chốt danh sách**. Các ô chưa có P trở thành A. Slot đã qua ngày cũng được chốt A cho những sinh viên chưa điểm danh; không thể mở QR lại cho slot đã chốt.
+6. Nếu cần sửa sau chốt, nhập lý do để tạo audit event và tăng revision trong JSON của slot. Chỉ export CSV cho slot đã chốt.
 
-App tự thử tạo URL HTTPS công khai bằng Cloudflare Quick Tunnel qua `cloudflared`. Trên máy GV, cài `cloudflared.exe` hoặc đặt tại `%LOCALAPPDATA%\FAP Attendance Tools\cloudflared.exe`. Khi URL công khai xuất hiện trên màn QR, sinh viên ở Wi‑Fi/4G khác nhau đều có thể vào. Tunnel chỉ hoạt động khi máy GV, app và kết nối Internet vẫn chạy; mỗi lần mở lại có thể nhận URL khác. Nếu tunnel không chạy, app không hiển thị QR không dùng được: hãy thử lại bằng nút **Bật link công khai cho mọi mạng** hoặc dán một HTTPS origin từ tunnel riêng. Server mặc định chỉ nghe trên máy GV, không cần cấp quyền Firewall inbound.
+Import lại markbook **cùng học kỳ** sẽ cập nhật lớp/sinh viên và giữ lịch sử điểm danh hiện có. Xóa lớp khỏi workspace sẽ chuyển dữ liệu lớp vào thư mục `trash/classes` trên máy, thay vì xóa vĩnh viễn ngay.
 
-Chế độ chưa cấu hình Firebase **chỉ đối chiếu email**, không chứng minh sinh viên sở hữu email đó; chỉ phù hợp demo Lab 2. Bật Firebase bên dưới trước khi dùng thật. Không cần mở cổng inbound trên router cho Quick Tunnel.
+### Lưu trữ trên máy
 
-## Firebase Authentication — Lab 3
+Workspace nằm trong thư mục Documents của Windows:
 
-Bật Email/Password provider trong Firebase Authentication. Cả Windows và Android chạy với cùng cấu hình:
+```text
+FAP Attendance/
+  <semester>/
+    workspace.json
+    index.json
+    source/<markbook>
+    classes/<course>_<class>/
+      class.json
+      sessions/M01_yyyy-mm-dd.json
+      exports/*.csv
+    trash/classes/
+```
+
+**Một slot có một file JSON**. File đó đi từ `working` sang `final`; khi sửa sau chốt, nội dung được cập nhật với `revision` và `auditEvents`. App ghi file tạm rồi thay file chính, giữ `.bak` local để phục hồi. CSV là dữ liệu xuất ra, không phải nguồn lịch sử chính. Các file phiên bản cũ được chuyển vào `.recovery` khi app nâng cấp định dạng.
+
+## Sinh viên quét QR trên mạng khác
+
+Desktop phục vụ trang check-in và thử tạo HTTPS URL công khai bằng **Cloudflare Quick Tunnel**. Cài `cloudflared.exe` trong PATH hoặc đặt tại `%LOCALAPPDATA%\FAP Attendance Tools\cloudflared.exe`. Khi màn QR hiển thị URL công khai, sinh viên dùng Wi-Fi hoặc 4G khác mạng với giảng viên vẫn truy cập được. Máy giảng viên phải đang mở app, có Internet và giữ tunnel hoạt động trong suốt lúc điểm danh. URL có thể đổi ở lần mở sau.
+
+Nếu chưa có URL, dùng nút **Bật link công khai cho mọi mạng** hoặc cấu hình một HTTPS origin từ tunnel riêng. Server check-in mặc định chỉ nghe trên máy giảng viên; Quick Tunnel không cần mở cổng trên router.
+
+Sau khi quét QR, sinh viên có **2 phút** để hoàn tất đăng nhập/check-in. Hết hạn phải quét lại QR đang hiển thị. Ở chế độ QR + OTP, sinh viên còn phải nhập mã sáu chữ số. Khi chưa cấu hình Firebase, hệ thống chỉ đối chiếu email với danh sách lớp, **chưa xác minh người dùng thực sự sở hữu email đó**; chỉ nên dùng chế độ này để demo.
+
+### Bật xác minh email bằng Firebase
+
+Tạo Firebase project, bật Authentication → Email/Password, rồi chạy desktop với cấu hình của cùng project:
 
 ```powershell
 flutter run -d windows --dart-define=FIREBASE_API_KEY=... --dart-define=FIREBASE_APP_ID=... --dart-define=FIREBASE_SENDER_ID=... --dart-define=FIREBASE_PROJECT_ID=...
 ```
 
-Khi có `FIREBASE_API_KEY`, trang check-in yêu cầu email/mật khẩu; desktop kiểm tra Firebase ID token và `emailVerified=true`. Trang browser được đưa ra Internet qua HTTPS tunnel; cổng HTTP local chỉ nghe loopback. Mã Flutter Android vẫn còn trong dự án nhưng không cần dùng cho luồng QR trình duyệt. Firestore và Realtime Database không được sử dụng.
+Khi có `FIREBASE_API_KEY`, trang check-in yêu cầu email/mật khẩu. Desktop kiểm tra Firebase ID token, trạng thái email đã xác minh và email phải khớp roster. Không lưu mật khẩu hoặc ID token vào lịch sử điểm danh.
 
-## Google Drive
+## Đồng bộ Google Drive (tùy chọn)
 
-Tạo OAuth Client loại **Desktop app**, bật Drive API, rồi chạy desktop với:
+Trong Google Cloud Console, bật Google Drive API và tạo OAuth Client loại **Desktop app**. Chạy ứng dụng với Client ID; thêm Client Secret nếu cấu hình OAuth của bạn yêu cầu:
 
 ```powershell
-flutter run -d windows --dart-define=GOOGLE_OAUTH_CLIENT_ID=... --dart-define=GOOGLE_OAUTH_CLIENT_SECRET=...
+flutter run -d windows --dart-define=GOOGLE_OAUTH_CLIENT_ID=...
 ```
 
-Nút **Kết nối Drive** dùng system browser và scope `drive.file`. Refresh token được giữ trong Windows Credential Manager qua secure storage. Đồng bộ có debounce 10 giây, đồng bộ ngay khi chốt/export, tạo lease ba phút và gia hạn mỗi phút. Khi phát hiện hai phía cùng đổi, bản Drive được lưu local với đuôi `.drive-conflict` và app không ghi đè.
+Trong app bấm **Kết nối Drive**, hoàn tất đăng nhập bằng trình duyệt hệ thống rồi bấm **Đồng bộ ngay**. App dùng quyền `drive.file`; token được giữ trong Windows Credential Manager, không ghi vào JSON workspace. Dữ liệu được đưa vào folder `FAP Attendance/<semester>` của tài khoản giảng viên. Đồng bộ nhiều lần không tạo lại file không đổi: app chỉ cập nhật khi nội dung thay đổi. Nếu mất mạng, bản local vẫn được giữ để đồng bộ sau. Khi phát hiện hai bản cùng bị sửa, app lưu bản Drive thành `.drive-conflict` ở local và không tự ghi đè dữ liệu.
 
-## Web FAP demo và Chrome Extension
+Không đưa Client Secret, token, file cấu hình cá nhân hoặc dữ liệu sinh viên thật vào Git.
 
-Chạy trang demo độc lập:
+## Web FAP mô phỏng
+
+Từ thư mục gốc dự án:
 
 ```powershell
 node demo-fap/server.mjs
 ```
 
-Mở `http://localhost:4173/`. Dashboard đọc `D:\Fall2026\PRM393\FA26_Markbook.ods` (hoặc bản fixture cùng nội dung trong `test/fixtures`) và liệt kê 10 lớp. Bấm một lớp để chọn slot và mở danh sách điểm danh; sau khi Submit, trang báo **Đã chốt danh sách** và có nút **Về dashboard**. Các slot đã chốt được giữ trong `localStorage`, hiển thị tiến độ trên dashboard và không cho điền lại. Khi file markbook thay đổi, tải lại trang để cập nhật dữ liệu. Có thể đặt biến môi trường `FAP_MARKBOOK_PATH` trước khi chạy server để dùng file khác. Trang chỉ lấy MSSV/họ tên, không đưa email hay cột điểm lên web; chỉ nghe trên `localhost`. Thứ tự cột là **MSSV → Fullname → Ô điểm danh → Hình thẻ sinh viên**. Vì markbook không có ảnh thẻ, trang dùng hình thay thế. Có thể nạp JSON session thật bằng nút **Mở JSON để demo** trên dashboard. Nút Submit chỉ lưu trong trình duyệt demo, **không gửi tới FAP thật**.
+Mở [http://localhost:4173/](http://localhost:4173/). Server cần Node.js và Dart SDK. Nó đọc `../FA26_Markbook.ods` nếu có, nếu không sẽ dùng `test/fixtures/FA26_Markbook.ods`. Muốn chọn file khác, đặt biến `FAP_MARKBOOK_PATH` trước khi chạy server. Trang chỉ chạy trên localhost; markbook chỉ được đọc để lấy lớp, MSSV và họ tên, không lấy cột điểm.
 
-Trong extension, chọn file `Mxx_yyyy-mm-dd.json` của slot đã chốt (`state: final`) hoặc CSV. Trên dashboard web demo, mở cùng lớp rồi chọn đúng ngày/slot; Extension đối chiếu MSSV và metadata trước khi cho điền. Mặc định chỉ điền ô Present, để GV kiểm tra và tự bấm Submit; đánh dấu **Tự bấm Submit** để extension bấm nút gốc và chờ thông báo thành công. Sau khi chốt, Extension sẽ từ chối điền lại slot đó. Nếu dùng fixture giả `demo-fap/sample-session.json` để kiểm thử Extension, hãy nạp chính file đó vào trang demo trước.
+Luồng demo:
 
-Google Picker là nguồn CSV tùy chọn. Để dùng Picker, trong `extension/public/manifest.json`, thay `REPLACE_WITH_EXTENSION_OAUTH_CLIENT_ID` bằng OAuth Client cho Chrome Extension; trong `extension/src/drive_picker.ts`, thay `REPLACE_WITH_GOOGLE_PICKER_API_KEY` bằng API key đã bật Google Picker API. Nạp JSON/CSV từ máy không cần hai cấu hình này.
+1. Dashboard hiển thị danh sách lớp và số slot đã chốt.
+2. Bấm lớp, chọn slot, xem các cột **MSSV → Fullname → Ô điểm danh → Hình thẻ sinh viên**. Markbook không có ảnh thẻ nên trang dùng hình thay thế.
+3. Đánh dấu **Present** cho sinh viên có mặt; không đánh dấu nghĩa là Absent.
+4. Bấm **Submit điểm danh**. Trang hiện **Đã chốt danh sách**, khóa slot và có nút **Về dashboard**. Mở lại slot sẽ thấy kết quả đã chốt.
+
+Kết quả của **web demo** nằm trong `localStorage` của chính trình duyệt đó; không đồng bộ với JSON workspace của desktop và không gửi đến FAP thật. Muốn demo một file session JSON, dùng nút **Mở JSON để demo** ở dashboard, sau đó nạp cùng file vào Extension để điền P/A. File `demo-fap/PRN232_SE1920_M01_2026-09-07_DEMO.json` dùng roster thật từ markbook nhưng trạng thái P/A là **dữ liệu giả**. Để diễn lại từ đầu, xóa khóa `fap-demo-finalized-v1` trong DevTools → Application → Local Storage của `http://localhost:4173`, rồi tải lại trang; thao tác này chỉ xóa trạng thái chốt của web demo trong trình duyệt đó.
+
+## Chrome Extension
+
+Build Extension:
 
 ```powershell
 cd extension
 npm install
 npm run build
-npm test
 ```
 
-Mở `chrome://extensions`, bật Developer mode, chọn **Load unpacked** và trỏ tới `extension/dist`. Content script chạy trên trang FAP và localhost demo. Selector DOM tập trung trong `src/fap_adapter.ts`; **trang FAP thật vẫn cần HTML fixture đã ẩn danh để xác nhận selector và thao tác Submit**, còn demo đã có kiểm thử tự động.
+Mở `chrome://extensions` → bật **Developer mode** → **Load unpacked** → chọn thư mục `extension/dist`. Sau khi sửa hoặc build lại mã Extension, bấm **Reload** trên trang Extensions và tải lại tab web demo/FAP.
+
+Để demo an toàn, mở lớp và slot tương ứng trên web mô phỏng, bấm Extension, chọn file JSON session đã chốt hoặc CSV từ máy. Extension preview số P/A và đối chiếu MSSV, lớp, ngày, slot với trang. Nếu có sinh viên thiếu, thừa hoặc trùng, thao tác sẽ bị chặn. Xác nhận để điền; mặc định **không tự Submit** để giảng viên kiểm tra. Có thể bật **Tự bấm Submit** trước khi xác nhận. Slot đã chốt trên web demo sẽ không cho điền lại.
+
+Muốn dùng Google Picker trong Extension, cần thay Client ID trong `extension/public/manifest.json` và API key trong `extension/src/drive_picker.ts`, rồi build lại. Nạp JSON/CSV từ máy **không cần** hai cấu hình này.
+
+Extension có adapter cho trang FAP thật, nhưng selector và hành vi Submit **chưa được xác nhận bằng HTML trang điểm danh FAP thật**. Chỉ dùng trên tài khoản/trang thử nghiệm sau khi đã kiểm tra preview và kết quả; đừng mặc định rằng demo thành công đồng nghĩa với FAP thật đã lưu điểm danh.
 
 ## Kiểm thử
 
@@ -84,12 +148,8 @@ Mở `chrome://extensions`, bật Developer mode, chọn **Load unpacked** và t
 flutter analyze
 flutter test
 cd extension
-npm run build
 npm test
+npm run build
 ```
 
-Fixture ODS nguồn có vài dòng cuối thiếu Class/Email. Importer không làm hỏng cả sheet: các dòng roster đầy đủ vẫn được import và từng dòng lỗi được báo trong hộp cảnh báo.
-
-## Giới hạn cấu hình máy hiện tại
-
-Để build Windows cần Visual Studio workload **Desktop development with C++** (MSVC, CMake, Windows SDK). Để build Android cần Android SDK. Windows Developer Mode phải bật để Flutter tạo symlink cho plugin.
+Fixture markbook có vài dòng thiếu Class/Email. Importer bỏ qua các dòng lỗi, vẫn import các sinh viên hợp lệ và hiển thị cảnh báo để giảng viên kiểm tra.
