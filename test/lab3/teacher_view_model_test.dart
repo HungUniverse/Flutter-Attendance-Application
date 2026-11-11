@@ -18,6 +18,31 @@ void main() {
   tearDown(() async {
     await h.dispose();
   });
+  test('notification history failure leaves the workspace available', () async {
+    h.notices.failHistory = true;
+
+    await h.vm.retryLoad();
+
+    expect(h.vm.workspaceLoadFailed, isFalse);
+    expect(h.vm.course('c1').students, hasLength(3));
+    expect(h.telemetry.errors, contains('notification_history'));
+    expect(await h.vm.refresh(), isTrue);
+  });
+
+  test(
+    'startup discards the saved link for an already closed meeting',
+    () async {
+      await h.vm.close('c1', 'm1');
+      await h.repo.saveLink('teacher1', h.links.session);
+
+      await h.vm.retryLoad();
+
+      expect(h.vm.meeting('c1', 'm1').state, MeetingState.closed);
+      expect(h.vm.link, isNull);
+      expect(await h.repo.loadLink('teacher1'), isNull);
+    },
+  );
+
   test(
     'legacy workspace metadata does not prevent restoring attendance',
     () async {

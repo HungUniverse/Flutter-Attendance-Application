@@ -8,6 +8,8 @@ import 'package:fap_attendance/data/shared_workspace_sync.dart';
 import 'package:fap_attendance/domain/attendance_service.dart';
 import 'package:fap_attendance/domain/models.dart';
 import 'package:fap_attendance/lab3/services/contracts.dart';
+import 'package:fap_attendance/lab3/services/synced_workspace_repository.dart';
+import 'package:fap_attendance/lab3/viewmodels/teacher_view_model.dart';
 
 import 'fakes.dart';
 
@@ -78,6 +80,74 @@ void main() {
     expect(received.classes.single.meetings.single.id, 'm1');
     expect(b.status, 'Đã đồng bộ');
   });
+
+  test(
+    'Android can import after receiving a closed meeting from desktop',
+    () async {
+      final desktop = device('desktop');
+      final auth = FakeAuth();
+      final notifications = FakeNotices();
+      final links = FakeLinks();
+      final mobileRoot = Directory('${root.path}/mobile');
+      final sync = SharedWorkspaceSync(
+        SharedApi(auth, baseUrl: 'https://attendance.test', client: client),
+        mobileRoot,
+      );
+      final repository = SyncedMobileWorkspaceRepository(mobileRoot, sync);
+      final vm = TeacherViewModel(
+        auth: auth,
+        repository: repository,
+        telemetry: FakeTelemetry(),
+        config: FakeConfig(),
+        notifications: notifications,
+        uploads: FakeUpload(),
+        device: FakeDevice(),
+        links: links,
+        sync: sync,
+        clock: () => fixtureNow,
+      );
+      addTearDown(() async {
+        vm.dispose();
+        desktop.dispose();
+        await auth.controller.close();
+        await notifications.controller.close();
+      });
+      final original = fixtureWorkspace();
+      await desktop.save(original);
+      await repository.saveLink('teacher1', links.session);
+      await vm.initialize(timers: false);
+      expect(vm.link?.id, links.session.id);
+
+      final closed = AttendanceService().closeMeeting(
+        original.classes.single,
+        'm1',
+        now: fixtureNow,
+      );
+      await desktop.save(original.copyWith(classes: [closed]));
+
+      expect(await vm.refresh(), isTrue);
+      expect(vm.meeting('c1', 'm1').state, MeetingState.closed);
+      expect(vm.link, isNull);
+      expect(await repository.loadLink('teacher1'), isNull);
+      final file = File('test/fixtures/FA26_Markbook.ods');
+      expect(
+        await vm.importRoster(
+          bytes: await file.readAsBytes(),
+          filename: 'FA26_Markbook.ods',
+          semester: 'FA26',
+          start: fixtureNow,
+          weeks: 10,
+          perWeek: 2,
+        ),
+        isTrue,
+      );
+      expect(
+        vm.workspace!.classes.length,
+        greaterThan(original.classes.length),
+      );
+      expect(vm.meeting('c1', 'm1').state, MeetingState.closed);
+    },
+  );
   test(
     'offline outbox survives restart and is uploaded on reconnect',
     () async {

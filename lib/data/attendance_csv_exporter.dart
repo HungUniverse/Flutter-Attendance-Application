@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:csv/csv.dart';
@@ -5,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 
 import '../domain/models.dart';
+import 'report_file_writer.dart';
 
 class AttendanceCsvExporter {
   String encode(
@@ -82,10 +84,9 @@ class AttendanceCsvExporter {
     final name =
         '${workspace.semester}_${courseClass.courseCode}_${courseClass.classCode}_M${meeting.number.toString().padLeft(2, '0')}_$date.csv';
     final file = File(p.join(directory.path, name));
-    await file.writeAsString(
-      encode(workspace, courseClass, meeting),
-      flush: true,
+    return writeReportAtomically(
+      file,
+      Stream.value(utf8.encode(encode(workspace, courseClass, meeting))),
     );
-    return file;
   }
 }

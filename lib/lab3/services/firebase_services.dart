@@ -212,8 +212,12 @@ class FirebaseReportUpload implements UploadService {
 }
 
 class FirebaseNotificationService implements NotificationService {
-  FirebaseNotificationService(this.messaging);
+  FirebaseNotificationService(
+    this.messaging, {
+    SharedPreferencesAsync? preferences,
+  }) : _preferences = preferences ?? SharedPreferencesAsync();
   final FirebaseMessaging messaging;
+  final SharedPreferencesAsync _preferences;
   final _opened = StreamController<AppNotice>.broadcast();
   StreamSubscription<RemoteMessage>? _foreground;
   StreamSubscription<RemoteMessage>? _tap;
@@ -249,7 +253,7 @@ class FirebaseNotificationService implements NotificationService {
     await _foreground?.cancel();
     await _tap?.cancel();
     _uid = uid;
-    await SharedPreferencesAsync().setString('fap_notice_owner', uid);
+    await _preferences.setString('fap_notice_owner', uid);
     _foreground = FirebaseMessaging.onMessage.listen((m) async {
       try {
         await persist(m);
@@ -278,17 +282,22 @@ class FirebaseNotificationService implements NotificationService {
   Future<String?> token() => messaging.getToken();
   @override
   Future<List<AppNotice>> history(String uid) async {
-    final prefs = SharedPreferencesAsync();
-    final keys = (await prefs.getKeys()).where(
-      (key) => key.startsWith('fap_notice_${uid}_'),
-    );
+    final prefix = 'fap_notice_${uid}_';
+    final keys = (await _preferences.getKeys())
+        .where((key) => key.startsWith(prefix))
+        .toSet();
+    final values = await _preferences.getAll(allowList: keys);
     final entries = <AppNotice>[];
-    for (final key in keys) {
-      final value = await prefs.getString(key);
-      if (value != null) {
+    for (final value in values.values) {
+      if (value is! String) continue;
+      try {
         entries.add(
           AppNotice.fromJson(jsonDecode(value) as Map<String, dynamic>),
         );
+      } on FormatException {
+        // Skip a malformed entry so the rest of the inbox remains readable.
+      } on TypeError {
+        // A stored entry may have a different schema.
       }
     }
     return entries..sort((a, b) => b.at.compareTo(a.at));
@@ -299,7 +308,7 @@ class FirebaseNotificationService implements NotificationService {
     _uid = null;
     await _foreground?.cancel();
     await _tap?.cancel();
-    await SharedPreferencesAsync().remove('fap_notice_owner');
+    await _preferences.remove('fap_notice_owner');
     await messaging.deleteToken();
   }
 }

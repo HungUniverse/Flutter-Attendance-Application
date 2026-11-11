@@ -132,6 +132,7 @@ class FakeConfig implements ConfigService {
 class FakeNotices implements NotificationService {
   final controller = StreamController<AppNotice>.broadcast();
   bool fail = false;
+  bool failHistory = false;
   @override
   Stream<AppNotice> get opened => controller.stream;
   @override
@@ -147,7 +148,12 @@ class FakeNotices implements NotificationService {
   @override
   Future<String?> token() async => 'fake-device-token';
   @override
-  Future<List<AppNotice>> history(String uid) async => [];
+  Future<List<AppNotice>> history(String uid) async {
+    if (failHistory) {
+      throw const FormatException('Invalid notification history');
+    }
+    return [];
+  }
 }
 
 class FakeUpload implements UploadService {

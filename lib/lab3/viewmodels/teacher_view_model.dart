@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
@@ -113,11 +114,15 @@ class TeacherViewModel extends ChangeNotifier {
       if (generation != _generation || disposed) return;
       workspace = loaded;
       link = savedLink;
+      await _clearClosedLink(identity.uid);
+      if (generation != _generation || disposed) return;
       if (workspace != null) await _reconcile();
       await _safe(() => config.refresh());
       if (generation != _generation || disposed) return;
       await _safe(() => notifications.start(identity.uid));
-      notices = await notifications.history(identity.uid);
+      if (generation != _generation || disposed) return;
+      await _refreshNotices(identity.uid);
+      if (generation != _generation || disposed) return;
       if (link != null) await _refreshLink();
     } on Object catch (e, stack) {
       if (generation == _generation) {
@@ -501,35 +506,76 @@ class TeacherViewModel extends ChangeNotifier {
   Future<bool> refresh() => _run('refresh', _refresh);
   Future<bool> receiveServerWorkspace() => _run('resolve_sync', () async {
     if (sync != null && workspace != null) {
-      workspace = await sync!.useServer(workspace!.semester);
+      final owner = uid;
+      final generation = _generation;
+      final received = await sync!.useServer(workspace!.semester);
+      if (generation != _generation || disposed) return;
+      workspace = received;
+      await _clearClosedLink(owner);
     }
     _notify();
   });
+
+  Meeting? _meetingForLink(LinkSession session) => workspace?.classes
+      .firstWhereOrNull((c) => c.id == session.classId)
+      ?.meetings
+      .firstWhereOrNull((m) => m.id == session.meetingId);
+
+  Future<void> _clearClosedLink(String owner) async {
+    final current = link;
+    if (current == null ||
+        _meetingForLink(current)?.state != MeetingState.closed) {
+      return;
+    }
+    final generation = _generation;
+    await repository.saveLink(owner, null);
+    if (generation != _generation || disposed) return;
+    link = null;
+    linkError = null;
+  }
+
+  Future<void> _refreshNotices(String owner) async {
+    final generation = _generation;
+    try {
+      final history = await notifications.history(owner);
+      if (generation == _generation && !disposed) notices = history;
+    } on Object catch (e, stack) {
+      await _safe(() => telemetry.error(e, stack, 'notification_history'));
+    }
+  }
+
   Future<void> _refresh() async {
     if (user == null) return;
+    final owner = uid;
+    final generation = _generation;
     if (sync != null) {
-      workspace = await repository.load(uid, semester: workspace?.semester);
+      final loaded = await repository.load(
+        owner,
+        semester: workspace?.semester,
+      );
+      if (generation != _generation || disposed) return;
+      workspace = loaded;
+      await _clearClosedLink(owner);
+      if (generation != _generation || disposed) return;
       if (workspace != null && links is HttpAttendanceLinkService) {
         final recovered = await (links as HttpAttendanceLinkService).current();
+        if (generation != _generation || disposed) return;
+        final meeting = recovered == null ? null : _meetingForLink(recovered);
         if (recovered != null &&
-            workspace!.classes.any(
-              (c) =>
-                  c.id == recovered.classId &&
-                  c.meetings.any(
-                    (m) =>
-                        m.id == recovered.meetingId &&
-                        m.state != MeetingState.closed,
-                  ),
-            )) {
+            meeting != null &&
+            meeting.state != MeetingState.closed) {
+          await repository.saveLink(owner, recovered);
+          if (generation != _generation || disposed) return;
           link = recovered;
-          await repository.saveLink(uid, link);
         }
       }
       _notify();
     }
     await _refreshLink();
+    if (generation != _generation || disposed) return;
     await _reconcile();
-    notices = await notifications.history(uid);
+    if (generation != _generation || disposed) return;
+    await _refreshNotices(owner);
   }
 
   Future<void> _reconcile() async {
