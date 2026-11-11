@@ -12,6 +12,7 @@ TeacherWorkspace fixtureWorkspace({
   MeetingState state = MeetingState.active,
   String semester = 'FA26',
   String courseCode = 'PRM393',
+  String firstRollNumber = 'S1',
 }) => TeacherWorkspace(
   id: 'w1',
   semester: semester,
@@ -22,18 +23,18 @@ TeacherWorkspace fixtureWorkspace({
       courseCode: courseCode,
       classCode: 'SE1901',
       scheduleCode: '22',
-      students: const [
+      students: [
         Student(
-          rollNumber: 'S1',
+          rollNumber: firstRollNumber,
           email: 'one@example.com',
           fullName: 'Nguyễn Thị Minh Anh',
         ),
-        Student(
+        const Student(
           rollNumber: 'S2',
           email: 'two@example.com',
           fullName: 'Trần Nguyễn Hoàng Phương Thảo',
         ),
-        Student(
+        const Student(
           rollNumber: 'S3',
           email: 'three@example.com',
           fullName: 'Lê Quốc Bảo',

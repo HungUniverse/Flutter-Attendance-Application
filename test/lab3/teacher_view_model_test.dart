@@ -257,9 +257,15 @@ void main() {
 
   test('JSON and CSV exports use the corrected result after reload', () async {
     const reason = 'Đối chiếu danh sách đã ký';
+    const rollNumber = '001';
+    await h.repo.save(
+      'teacher1',
+      fixtureWorkspace(firstRollNumber: rollNumber),
+    );
+    await h.vm.retryLoad();
     expect(await h.vm.close('c1', 'm1'), isTrue);
     expect(
-      await h.vm.edit('c1', 'm1', 'S1', AttendanceStatus.present, reason),
+      await h.vm.edit('c1', 'm1', rollNumber, AttendanceStatus.present, reason),
       isTrue,
     );
     await h.vm.retryLoad();
@@ -275,7 +281,7 @@ void main() {
         for (final row in records)
           row['rollNumber']: row['attendance']['status'],
       },
-      {'S1': 'P', 'S2': 'A', 'S3': 'A'},
+      {rollNumber: 'P', 'S2': 'A', 'S3': 'A'},
     );
     final audit =
         (report['auditEvents'] as List).single as Map<String, dynamic>;
@@ -283,14 +289,13 @@ void main() {
 
     expect(await h.vm.export('c1', 'm1', 'csv'), isTrue);
     final csvFile = h.vm.exportedFile!;
-    final rows = const CsvToListConverter().convert(
-      await csvFile.readAsString(),
-    );
+    final rows = const CsvToListConverter(shouldParseNumbers: false)
+        .convert(await csvFile.readAsString());
     final rollIndex = rows.first.indexOf('roll_number');
     final statusIndex = rows.first.indexOf('status');
     expect(
       {for (final row in rows.skip(1)) row[rollIndex]: row[statusIndex]},
-      {'S1': 'P', 'S2': 'A', 'S3': 'A'},
+      {rollNumber: 'P', 'S2': 'A', 'S3': 'A'},
     );
   });
 
