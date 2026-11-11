@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:csv/csv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fap_attendance/domain/models.dart';
 import 'package:fap_attendance/lab3/services/contracts.dart';
@@ -103,6 +105,100 @@ void main() {
       expect(audit.reason, 'Kiểm tra lại danh sách');
     },
   );
+  test(
+    'reload restores a closed meeting, its correction and audit reason',
+    () async {
+      const reason = 'Đối chiếu danh sách đã ký';
+      expect(await h.vm.close('c1', 'm1'), isTrue);
+      expect(
+        await h.vm.edit('c1', 'm1', 'S1', AttendanceStatus.present, reason),
+        isTrue,
+      );
+
+      await h.vm.retryLoad();
+
+      final course = h.vm.course('c1');
+      expect(h.vm.meeting('c1', 'm1').state, MeetingState.closed);
+      expect(course.recordFor('m1', 'S1')?.status, AttendanceStatus.present);
+      final audit = course.auditEvents.single;
+      expect(audit.rollNumber, 'S1');
+      expect(audit.oldValue, 'A');
+      expect(audit.newValue, 'P');
+      expect(audit.reason, reason);
+      expect(h.vm.counts('c1', 'm1'), {
+        AttendanceStatus.present: 1,
+        AttendanceStatus.absent: 2,
+        AttendanceStatus.unmarked: 0,
+      });
+    },
+  );
+
+  test(
+    'failed correction leaves the closed meeting unchanged after reload',
+    () async {
+      expect(await h.vm.close('c1', 'm1'), isTrue);
+      h.repo.failSave = true;
+      expect(
+        await h.vm.edit(
+          'c1',
+          'm1',
+          'S1',
+          AttendanceStatus.present,
+          'Đối chiếu danh sách đã ký',
+        ),
+        isFalse,
+      );
+      expect(h.vm.message, isNull);
+      expect(h.telemetry.errors, contains('attendance_edit'));
+
+      await h.vm.retryLoad();
+
+      final course = h.vm.course('c1');
+      expect(h.vm.meeting('c1', 'm1').state, MeetingState.closed);
+      expect(course.recordFor('m1', 'S1')?.status, AttendanceStatus.absent);
+      expect(course.auditEvents, isEmpty);
+    },
+  );
+
+  test('JSON and CSV exports use the corrected result after reload', () async {
+    const reason = 'Đối chiếu danh sách đã ký';
+    expect(await h.vm.close('c1', 'm1'), isTrue);
+    expect(
+      await h.vm.edit('c1', 'm1', 'S1', AttendanceStatus.present, reason),
+      isTrue,
+    );
+    await h.vm.retryLoad();
+
+    expect(await h.vm.export('c1', 'm1', 'json'), isTrue);
+    final jsonFile = h.vm.exportedFile!;
+    final report =
+        jsonDecode(await jsonFile.readAsString()) as Map<String, dynamic>;
+    final records = (report['attendance'] as List).cast<Map<String, dynamic>>();
+    expect(report['state'], 'final');
+    expect(
+      {
+        for (final row in records)
+          row['rollNumber']: row['attendance']['status'],
+      },
+      {'S1': 'P', 'S2': 'A', 'S3': 'A'},
+    );
+    final audit =
+        (report['auditEvents'] as List).single as Map<String, dynamic>;
+    expect(audit['reason'], reason);
+
+    expect(await h.vm.export('c1', 'm1', 'csv'), isTrue);
+    final csvFile = h.vm.exportedFile!;
+    final rows = const CsvToListConverter().convert(
+      await csvFile.readAsString(),
+    );
+    final rollIndex = rows.first.indexOf('roll_number');
+    final statusIndex = rows.first.indexOf('status');
+    expect(
+      {for (final row in rows.skip(1)) row[rollIndex]: row[statusIndex]},
+      {'S1': 'P', 'S2': 'A', 'S3': 'A'},
+    );
+  });
+
   test('failed local write never publishes a false success', () async {
     h.repo.failSave = true;
     expect(await h.vm.mark('c1', 'm1', 'S1', AttendanceStatus.present), false);
