@@ -198,6 +198,7 @@ class FakeLinks implements AttendanceLinkService {
   bool configured = true;
   bool fail = false;
   bool receiving = true;
+  Completer<LinkUpdate>? pendingPoll;
   List<LinkSubmission> submissions = [];
   LinkSession get session => LinkSession(
     id: 'session1',
@@ -217,6 +218,8 @@ class FakeLinks implements AttendanceLinkService {
   @override
   Future<LinkUpdate> poll(LinkSession s) async {
     if (fail) throw const SocketException('offline');
+    final pending = pendingPoll;
+    if (pending != null) return pending.future;
     return LinkUpdate(session, submissions);
   }
 
@@ -230,10 +233,19 @@ class FakeLinks implements AttendanceLinkService {
 class FailingRepository extends FileMobileWorkspaceRepository {
   FailingRepository(super.root);
   bool failSave = false;
+  bool failClearLink = false;
   @override
   Future<void> save(String uid, TeacherWorkspace workspace) async {
     if (failSave) throw const FileSystemException('disk full');
     await super.save(uid, workspace);
+  }
+
+  @override
+  Future<void> saveLink(String uid, LinkSession? session) async {
+    if (session == null && failClearLink) {
+      throw const FileSystemException('Cannot remove the link cache');
+    }
+    await super.saveLink(uid, session);
   }
 }
 

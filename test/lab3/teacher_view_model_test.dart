@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -39,9 +40,78 @@ void main() {
 
       expect(h.vm.meeting('c1', 'm1').state, MeetingState.closed);
       expect(h.vm.link, isNull);
+      expect(h.links.receiving, isFalse);
       expect(await h.repo.loadLink('teacher1'), isNull);
     },
   );
+
+  test(
+    'link cache cleanup failure does not block a closed workspace',
+    () async {
+      expect(await h.vm.close('c1', 'm1'), isTrue);
+      await h.repo.saveLink('teacher1', h.links.session);
+      h.repo.failClearLink = true;
+
+      await h.vm.retryLoad();
+
+      expect(h.vm.workspaceLoadFailed, isFalse);
+      expect(h.vm.meeting('c1', 'm1').state, MeetingState.closed);
+      expect(h.vm.link, isNull);
+      expect(h.links.receiving, isFalse);
+      expect(h.telemetry.errors, contains('clear_closed_link'));
+      expect(await h.repo.loadLink('teacher1'), isNotNull);
+    },
+  );
+
+  test(
+    'offline relay cleanup keeps the saved handle until it can stop',
+    () async {
+      expect(await h.vm.close('c1', 'm1'), isTrue);
+      await h.repo.saveLink('teacher1', h.links.session);
+      h.links.fail = true;
+
+      await h.vm.retryLoad();
+
+      expect(h.vm.workspaceLoadFailed, isFalse);
+      expect(h.vm.link, isNull);
+      expect(h.links.receiving, isTrue);
+      expect(await h.repo.loadLink('teacher1'), isNotNull);
+      h.links.fail = false;
+
+      await h.vm.retryLoad();
+
+      expect(h.links.receiving, isFalse);
+      expect(await h.repo.loadLink('teacher1'), isNull);
+    },
+  );
+
+  test('a poll started before reload cannot restore the closed link', () async {
+    expect(await h.vm.createLink('c1', 'm1'), isTrue);
+    final session = h.links.session;
+    final poll = Completer<LinkUpdate>();
+    h.links.pendingPoll = poll;
+    final refreshing = h.vm.refresh();
+    final closed = h.vm.attendance.closeMeeting(
+      h.vm.course('c1'),
+      'm1',
+      now: fixtureNow,
+    );
+    await h.repo.save('teacher1', h.vm.workspace!.copyWith(classes: [closed]));
+    await h.vm.retryLoad();
+
+    poll.complete(
+      LinkUpdate(session, [LinkSubmission('one@example.com', fixtureNow)]),
+    );
+    expect(await refreshing, isFalse);
+    expect(h.vm.link, isNull);
+    expect(h.vm.linkError, isNull);
+    expect(h.vm.meeting('c1', 'm1').state, MeetingState.closed);
+    expect(
+      h.vm.course('c1').recordFor('m1', 'S1')?.status,
+      AttendanceStatus.absent,
+    );
+    expect(await h.repo.loadLink('teacher1'), isNull);
+  });
 
   test(
     'legacy workspace metadata does not prevent restoring attendance',

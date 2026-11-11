@@ -17,9 +17,7 @@ class _Preferences extends Fake implements SharedPreferencesAsync {
       values.keys.where((key) => allowList?.contains(key) ?? true).toSet();
 
   @override
-  Future<Map<String, Object?>> getAll({Set<String>? allowList}) async => {
-    for (final key in await getKeys(allowList: allowList)) key: values[key],
-  };
+  Future<String?> getString(String key) async => values[key] as String?;
 }
 
 void main() {

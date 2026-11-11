@@ -283,14 +283,14 @@ class FirebaseNotificationService implements NotificationService {
   @override
   Future<List<AppNotice>> history(String uid) async {
     final prefix = 'fap_notice_${uid}_';
-    final keys = (await _preferences.getKeys())
-        .where((key) => key.startsWith(prefix))
-        .toSet();
-    final values = await _preferences.getAll(allowList: keys);
+    final keys = (await _preferences.getKeys()).where(
+      (key) => key.startsWith(prefix),
+    );
     final entries = <AppNotice>[];
-    for (final value in values.values) {
-      if (value is! String) continue;
+    for (final key in keys) {
       try {
+        final value = await _preferences.getString(key);
+        if (value == null) continue;
         entries.add(
           AppNotice.fromJson(jsonDecode(value) as Map<String, dynamic>),
         );

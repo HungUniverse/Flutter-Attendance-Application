@@ -114,7 +114,7 @@ class TeacherViewModel extends ChangeNotifier {
       if (generation != _generation || disposed) return;
       workspace = loaded;
       link = savedLink;
-      await _clearClosedLink(identity.uid);
+      await _clearClosedLink(identity.uid, savedLink);
       if (generation != _generation || disposed) return;
       if (workspace != null) await _reconcile();
       await _safe(() => config.refresh());
@@ -215,10 +215,13 @@ class TeacherViewModel extends ChangeNotifier {
       course(classId).meetings.singleWhere((m) => m.id == meetingId);
   Future<void> _persist(TeacherWorkspace value) async {
     final owner = uid;
+    final generation = _generation;
     final updated = value.copyWith(updatedAt: now().toUtc());
     await repository.save(owner, updated);
-    if (user?.uid != owner || disposed) {
-      throw const AppProblem('Tài khoản đã thay đổi.');
+    if (generation != _generation || disposed) {
+      throw const AppProblem(
+        'Workspace đã thay đổi. Hãy kiểm tra lại dữ liệu.',
+      );
     }
     workspace = updated;
     _notify();
@@ -453,10 +456,13 @@ class TeacherViewModel extends ChangeNotifier {
   Future<void> _refreshLink() async {
     final current = link;
     if (current == null) return;
+    final generation = _generation;
+    bool isCurrent() =>
+        generation == _generation && !disposed && identical(link, current);
     try {
       final owner = uid;
       final update = await links.poll(current);
-      if (owner != user?.uid) return;
+      if (!isCurrent()) return;
       final original = course(current.classId);
       var c = original;
       final m = meeting(current.classId, current.meetingId);
@@ -476,14 +482,17 @@ class TeacherViewModel extends ChangeNotifier {
         }
         if (!identical(c, original)) await _replace(c);
       }
-      link = update.session;
-      if (current.receiving != link!.receiving ||
-          current.expiresAt != link!.expiresAt) {
-        await repository.saveLink(owner, link);
+      if (!isCurrent()) return;
+      final updated = update.session;
+      if (current.receiving != updated.receiving ||
+          current.expiresAt != updated.expiresAt) {
+        await repository.saveLink(owner, updated);
       }
+      if (!isCurrent()) return;
+      link = updated;
       linkError = null;
     } on Object catch (e) {
-      linkError = _friendly(e);
+      if (isCurrent()) linkError = _friendly(e);
     }
   }
 
@@ -511,7 +520,7 @@ class TeacherViewModel extends ChangeNotifier {
       final received = await sync!.useServer(workspace!.semester);
       if (generation != _generation || disposed) return;
       workspace = received;
-      await _clearClosedLink(owner);
+      await _clearClosedLink(owner, link);
     }
     _notify();
   });
@@ -521,17 +530,26 @@ class TeacherViewModel extends ChangeNotifier {
       ?.meetings
       .firstWhereOrNull((m) => m.id == session.meetingId);
 
-  Future<void> _clearClosedLink(String owner) async {
-    final current = link;
-    if (current == null ||
-        _meetingForLink(current)?.state != MeetingState.closed) {
+  Future<void> _clearClosedLink(String owner, LinkSession? session) async {
+    if (session == null ||
+        _meetingForLink(session)?.state != MeetingState.closed) {
       return;
     }
+    if (link?.id == session.id) {
+      link = null;
+      linkError = null;
+    }
     final generation = _generation;
-    await repository.saveLink(owner, null);
-    if (generation != _generation || disposed) return;
-    link = null;
-    linkError = null;
+    try {
+      // Keep the saved handle when the relay is unavailable so cleanup can retry.
+      if (session.receiving && session.expiresAt.isAfter(now())) {
+        await links.stop(session);
+      }
+      if (generation != _generation || disposed || link != null) return;
+      await repository.saveLink(owner, null);
+    } on Object catch (e, stack) {
+      await _safe(() => telemetry.error(e, stack, 'clear_closed_link'));
+    }
   }
 
   Future<void> _refreshNotices(String owner) async {
@@ -555,18 +573,21 @@ class TeacherViewModel extends ChangeNotifier {
       );
       if (generation != _generation || disposed) return;
       workspace = loaded;
-      await _clearClosedLink(owner);
+      await _clearClosedLink(owner, link);
       if (generation != _generation || disposed) return;
       if (workspace != null && links is HttpAttendanceLinkService) {
         final recovered = await (links as HttpAttendanceLinkService).current();
         if (generation != _generation || disposed) return;
-        final meeting = recovered == null ? null : _meetingForLink(recovered);
-        if (recovered != null &&
-            meeting != null &&
-            meeting.state != MeetingState.closed) {
-          await repository.saveLink(owner, recovered);
-          if (generation != _generation || disposed) return;
-          link = recovered;
+        if (recovered != null) {
+          final meeting = _meetingForLink(recovered);
+          if (meeting?.state == MeetingState.closed) {
+            await _clearClosedLink(owner, recovered);
+            if (generation != _generation || disposed) return;
+          } else if (meeting != null) {
+            await repository.saveLink(owner, recovered);
+            if (generation != _generation || disposed) return;
+            link = recovered;
+          }
         }
       }
       _notify();

@@ -128,6 +128,7 @@ void main() {
       expect(await vm.refresh(), isTrue);
       expect(vm.meeting('c1', 'm1').state, MeetingState.closed);
       expect(vm.link, isNull);
+      expect(links.receiving, isFalse);
       expect(await repository.loadLink('teacher1'), isNull);
       final file = File('test/fixtures/FA26_Markbook.ods');
       expect(
