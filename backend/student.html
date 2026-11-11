@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FAP Attendance · Sinh viên</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#fff7f3;color:#243047;font:16px/1.5 Roboto,Arial,sans-serif}
+header{background:#c93c13;color:white;padding:20px;font-size:20px;font-weight:700}main{max-width:560px;padding:20px;margin:auto}
+section{background:white;border:1px solid #d9dee7;border-radius:16px;padding:20px;margin-bottom:20px}
+button,input{font:inherit;min-height:52px;border-radius:12px;width:100%;margin-top:12px;padding:12px}
+input{border:1px solid #667085}button{background:#c93c13;color:white;border:0;cursor:pointer}button.secondary{background:white;color:#243047;border:1px solid #667085}
+button:disabled{opacity:.5;cursor:default}#result{white-space:pre-wrap}label{display:block;margin-top:12px}.success{color:#16835d}.error{color:#c93a2b}
+</style></head><body><header>FAP Attendance</header><main>
+<section><h1>Điểm danh sinh viên</h1><p id="context">Đang kiểm tra buổi học…</p><p id="timer" aria-live="polite"></p></section>
+<section><p>Đăng nhập bằng email có trong danh sách lớp. Mở link chưa được tính Có mặt.</p>
+<button id="google" disabled>Đăng nhập Google</button>
+<details><summary>Đăng nhập bằng email/mật khẩu</summary><form id="signin">
+<label>Email sinh viên<input id="email" type="email" autocomplete="username" required></label>
+<label>Mật khẩu<input id="password" type="password" autocomplete="current-password" required></label>
+<button id="emailLogin" disabled>Đăng nhập</button></form></details>
+<p id="account"></p><button id="submit" disabled>Xác nhận và gửi điểm danh</button>
+<label id="codeLabel" hidden>Mã xác nhận trên màn hình giảng viên<input id="code" inputmode="numeric" maxlength="6" autocomplete="off"></label>
+<button id="restart" class="secondary">Mở lượt xác nhận mới</button>
+<p id="result" role="status" aria-live="polite"></p></section></main>
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, onAuthStateChanged, setPersistence, inMemoryPersistence } from 'https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js';
+const $=id=>document.getElementById(id); const token=location.pathname.split('/').pop();
+let auth, challenge, expiresAt=0, sending=false, accepted=false;
+function result(text,error=false){$('result').textContent=text;$('result').className=error?'error':'success';}
+function update(){const left=Math.max(0,Math.ceil((expiresAt-Date.now())/1000));$('timer').textContent=left?`Còn ${left} giây để hoàn tất lượt này.`:'Lượt xác nhận đã hết hạn. Mở lượt mới nếu buổi vẫn nhận.';
+ $('submit').disabled=!auth?.currentUser||!challenge||left===0||sending||accepted;}
+async function newChallenge(){try{const r=await fetch(`/api/join/${token}/challenge`,{method:'POST',headers:{'content-type':'application/json'},body:'{}'});const j=await r.json();if(!r.ok)throw Error(j.error);
+ challenge=j.challengeId;expiresAt=j.expiresAt;accepted=false;$('codeLabel').hidden=!j.requiresCode;$('context').textContent=`${j.label} · Slot ${j.number} · ${j.meetingDate}`;result('');update();}catch(e){challenge=null;result(e.message,true);update();}}
+$('restart').onclick=newChallenge;
+$('submit').onclick=async()=>{if(sending||!auth?.currentUser)return;sending=true;update();try{
+ const idToken=await auth.currentUser.getIdToken();const r=await fetch(`/api/join/${token}/submit`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${idToken}`},body:JSON.stringify({challengeId:challenge,code:$('code').value.trim()})});
+ const j=await r.json();if(!r.ok)throw Error(j.error);accepted=true;result(j.message);
+}catch(e){result(e.message,true);}finally{sending=false;update();}};
+try{const r=await fetch('/web-config');const config=await r.json();auth=getAuth(initializeApp(config));await setPersistence(auth,inMemoryPersistence);
+ onAuthStateChanged(auth,user=>{$('account').textContent=user?`Tài khoản: ${user.email}`:'Chưa đăng nhập';update();});
+ $('google').disabled=false;$('emailLogin').disabled=false;
+ $('google').onclick=async()=>{try{await signInWithPopup(auth,new GoogleAuthProvider());}catch{result('Không đăng nhập được hoặc đã hủy. Hãy thử lại.',true);}};
+ $('signin').onsubmit=async e=>{e.preventDefault();try{await signInWithEmailAndPassword(auth,$('email').value.trim(),$('password').value);$('password').value='';}catch{result('Không đăng nhập được. Kiểm tra tài khoản và kết nối.',true);}};
+ await newChallenge();setInterval(update,1000);
+}catch{result('Chưa kết nối được dịch vụ xác thực. Hãy thử tải lại trang.',true);}
+</script></body></html>

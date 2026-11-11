@@ -1,0 +1,1660 @@
+<!DOCTYPE html>
+
+<html lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>FAP Attendance — Interactive Prototype Simulator</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#C93C13',
+            'primary-dark': '#A32F0D',
+            'primary-soft': '#FFF0E8',
+            brand: '#F4511E',
+            bgLight: '#FFF7F3',
+            surface: '#FFFFFF',
+            textMain: '#243047',
+            textSub: '#667085',
+            borderSub: '#E5E9F0',
+            success: '#16835D',
+            error: '#C93A2B',
+            info: '#2563B8'
+          },
+          fontFamily: {
+            sans: ['"Roboto Flex"', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    body {
+      background-color: #1E2430;
+      font-family: 'Roboto Flex', sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      color: #243047;
+    }
+    /* Mobile frame container */
+    #phone-container {
+      width: 412px;
+      height: 860px;
+      background: #FFF7F3;
+      border-radius: 40px;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.45), 0 0 0 10px #2D3748;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .status-bar {
+      height: 38px;
+      background: #C93C13;
+      color: #fff;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 20px;
+      font-size: 13px;
+      font-weight: 600;
+      z-index: 50;
+      flex-shrink: 0;
+    }
+    .screen-content {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      position: relative;
+      background: #FFF7F3;
+      -webkit-overflow-scrolling: touch;
+    }
+    .screen-content::-webkit-scrollbar {
+      width: 4px;
+    }
+    .screen-content::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 4px;
+    }
+    /* Flow pill switcher on top */
+    .flow-controller {
+      position: absolute;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(8px);
+      padding: 4px 6px;
+      border-radius: 999px;
+      display: flex;
+      gap: 4px;
+      z-index: 100;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    .flow-btn {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
+      color: #94A3B8;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .flow-btn.active {
+      background: #C93C13;
+      color: #FFFFFF;
+      box-shadow: 0 2px 6px rgba(201, 60, 19, 0.4);
+    }
+    /* Interactive click hotspot ripple */
+    .clickable {
+      cursor: pointer;
+      transition: transform 0.1s ease, opacity 0.1s ease;
+    }
+    .clickable:active {
+      transform: scale(0.98);
+      opacity: 0.9;
+    }
+    /* Navigation Bottom Tab */
+    .bottom-nav {
+      height: 60px;
+      background: #FFFFFF;
+      border-top: 1px solid #E5E9F0;
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      flex-shrink: 0;
+      z-index: 40;
+    }
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      font-size: 11px;
+      font-weight: 500;
+      color: #667085;
+      cursor: pointer;
+    }
+    .nav-item.active {
+      color: #C93C13;
+      font-weight: 700;
+    }
+    /* Modal / Bottom sheet overlay */
+    .sheet-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(36, 48, 71, 0.6);
+      backdrop-filter: blur(2px);
+      z-index: 60;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    .sheet-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .sheet-box {
+      background: #FFFFFF;
+      border-radius: 24px 24px 0 0;
+      padding: 20px 20px 28px 20px;
+      transform: translateY(100%);
+      transition: transform 0.25s ease;
+      max-height: 85%;
+      overflow-y: auto;
+    }
+    .sheet-overlay.open .sheet-box {
+      transform: translateY(0);
+    }
+    /* Toast notifications */
+    #toast-msg {
+      position: absolute;
+      top: 55px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-20px);
+      background: #1E293B;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.25s ease;
+      z-index: 90;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+    }
+    #toast-msg.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+<!-- Floating Flow Switcher -->
+<div class="flow-controller">
+<div class="flow-btn active" id="btn-f1" onclick="switchStartingPoint('F1')">Flow 1: Cấu hình</div>
+<div class="flow-btn" id="btn-classes" onclick="switchStartingPoint('CLASSES')">S02: Danh sách lớp</div>
+<div class="flow-btn" id="btn-f2" onclick="switchStartingPoint('F2')">Flow 2: QR &amp; Chốt</div>
+<div class="flow-btn" id="btn-f3" onclick="switchStartingPoint('F3')">Flow 3: Sửa &amp; Xuất</div>
+</div>
+<!-- Toast Notification -->
+<div id="toast-msg"><i class="fa-solid fa-circle-check text-green-400"></i> <span id="toast-text">Thông báo</span></div>
+<!-- Mobile Simulator Frame -->
+<div id="phone-container">
+<!-- Status Bar -->
+<div class="status-bar">
+<span>09:30</span>
+<div class="flex items-center gap-2 text-xs">
+<i class="fa-solid fa-wifi"></i>
+<i class="fa-solid fa-signal"></i>
+<i class="fa-solid fa-battery-full"></i>
+</div>
+</div>
+<!-- Screen Content Container (Router switches views inside here) -->
+<div class="screen-content" id="app-viewport">
+<!-- Views will be dynamically swapped by JavaScript -->
+</div>
+<!-- Bottom Tab Navigation (Visible on S02 grid, s02_class_list and S10) -->
+<div class="bottom-nav hidden" id="global-bottom-nav">
+<div class="nav-item active" id="tab-s02" onclick="navigateTo('s02_class_list')">
+<i class="fa-regular fa-calendar-days text-lg"></i>
+<span>Lịch tuần &amp; Lớp học</span>
+</div>
+<div class="nav-item" id="tab-s10" onclick="navigateTo('S10')">
+<i class="fa-brands fa-google-drive text-lg"></i>
+<span>Google Drive</span>
+</div>
+</div>
+<!-- Global Interactive Overlays / Bottom Sheets -->
+<div class="sheet-overlay" id="global-overlay" onclick="closeOverlay(event)">
+<div class="sheet-box" id="overlay-content" onclick="event.stopPropagation()">
+<!-- Dynamic overlay body injected here -->
+</div>
+</div>
+</div>
+<script>
+    // System State Store
+    const state = {
+      currentScreen: 'S01',
+      historyStack: [],
+      workspaceReady: false,
+      slot5Closed: false,
+      slot5Present: 26,
+      slot5Absent: 4,
+      slot5Pending: 0,
+      studentNoteReason: "Bổ sung có mặt sau khi kiểm tra lại camera lớp học.",
+      studentStatus: "P",
+      driveConnected: true,
+      exportFormat: 'json',
+      backupDrive: true,
+      activeFlow: 'F1',
+      // Class expansion state in S02 Class List
+      classesExpanded: {
+        SE1920: true,
+        SE1921: false,
+        SE1918: false
+      }
+    };
+
+    function showToast(text, isError = false) {
+      const toast = document.getElementById('toast-msg');
+      const toastText = document.getElementById('toast-text');
+      toast.querySelector('i').className = isError ? "fa-solid fa-circle-exclamation text-red-400" : "fa-solid fa-circle-check text-green-400";
+      toastText.innerText = text;
+      toast.classList.add('show');
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 2400);
+    }
+
+    function toggleClassExpand(classId) {
+      state.classesExpanded[classId] = !state.classesExpanded[classId];
+      renderCurrentScreen();
+    }
+
+    function switchStartingPoint(flow) {
+      state.activeFlow = flow;
+      document.querySelectorAll('.flow-btn').forEach(btn => btn.classList.remove('active'));
+      const activeEl = document.getElementById('btn-' + flow.toLowerCase());
+      if (activeEl) activeEl.classList.add('active');
+
+      if (flow === 'F1') {
+        navigateTo('S01', true);
+        showToast('Điểm bắt đầu Flow 1: Chuẩn bị & Cấu hình');
+      } else if (flow === 'CLASSES') {
+        state.workspaceReady = true;
+        navigateTo('s02_class_list', true);
+        showToast('Màn hình mới: S02 Dashboard Danh sách Lớp học');
+      } else if (flow === 'F2') {
+        state.workspaceReady = true;
+        navigateTo('s02_class_list', true);
+        showToast('Điểm bắt đầu Flow 2: Điểm danh QR & Chốt');
+      } else if (flow === 'F3') {
+        state.workspaceReady = true;
+        navigateTo('S08', true);
+        showToast('Điểm bắt đầu Flow 3: Xem Note, Sửa & Xuất file');
+      }
+    }
+
+    function navigateTo(screenId, clearStack = false) {
+      if (clearStack) {
+        state.historyStack = [];
+      } else {
+        state.historyStack.push(state.currentScreen);
+      }
+      state.currentScreen = screenId;
+      renderCurrentScreen();
+    }
+
+    function goBack() {
+      if (state.historyStack.length > 0) {
+        state.currentScreen = state.historyStack.pop();
+        renderCurrentScreen();
+      } else {
+        navigateTo('s02_class_list');
+      }
+    }
+
+    function openOverlay(type, data = {}) {
+      const overlay = document.getElementById('global-overlay');
+      const box = document.getElementById('overlay-content');
+      
+      if (type === 'CONFIRM_CLOSE_SLOT5') {
+        box.innerHTML = `
+          <div class="w-12 h-1 bg-slate-300 rounded-full mx-auto mb-4"></div>
+          <div class="flex items-center gap-3 mb-3 text-primary">
+            <i class="fa-solid fa-triangle-exclamation text-2xl"></i>
+            <h3 class="text-lg font-bold text-textMain">Xác nhận chốt danh sách Slot 5</h3>
+          </div>
+          <p class="text-sm text-textSub mb-4 leading-relaxed">
+            Học phần: <b>PRN232 · SE1920</b> (Hôm nay 24/09/2026).<br>
+            Hiện tại đã ghi nhận <b>26 sinh viên có mặt</b>. Còn <b>4 sinh viên chưa check-in</b> sẽ tự động chuyển thành <b>Vắng (A)</b>.
+          </p>
+          <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-5 text-xs text-amber-800 flex items-start gap-2">
+            <i class="fa-solid fa-circle-info mt-0.5 text-amber-600"></i>
+            <span>Sau khi chốt, mã QR sẽ dừng nhận điểm danh. Bạn vẫn có thể xem lại và sửa có lý do sau này.</span>
+          </div>
+          <div class="flex gap-3">
+            <button class="flex-1 py-3 px-4 rounded-xl border border-slate-300 text-textMain font-semibold text-sm clickable" onclick="closeOverlay()">Tiếp tục điểm danh</button>
+            <button class="flex-1 py-3 px-4 rounded-xl bg-primary text-white font-semibold text-sm clickable" onclick="confirmCloseSlot5()">Đồng ý chốt</button>
+          </div>
+        `;
+      } else if (type === 'VIEW_NOTE') {
+        box.innerHTML = `
+          <div class="w-12 h-1 bg-slate-300 rounded-full mx-auto mb-4"></div>
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-base font-bold text-textMain flex items-center gap-2">
+              <i class="fa-solid fa-clipboard-list text-primary"></i> Ghi chú & Lịch sử chỉnh sửa
+            </h3>
+            <span class="text-xs font-semibold px-2 py-0.5 rounded bg-orange-100 text-primary">Slot 4</span>
+          </div>
+          <div class="bg-orange-50/60 border border-orange-100 rounded-xl p-3.5 mb-4 text-xs">
+            <div class="flex justify-between items-center mb-1 text-textSub">
+              <span>Sinh viên: <b>Nguyễn Hoàng Bảo Long</b></span>
+              <span>MSSV: <b>SE180123</b></span>
+            </div>
+            <div class="text-textSub mb-2">Thời điểm sửa: 21/09/2026 • 10:15 bởi Giảng viên (Demo)</div>
+            <div class="flex items-center gap-2 font-semibold text-textMain mb-2">
+              <span class="px-2 py-0.5 bg-red-100 text-red-700 rounded line-through">A (Vắng)</span>
+              <i class="fa-solid fa-arrow-right text-textSub text-xs"></i>
+              <span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded">P (Có mặt)</span>
+            </div>
+            <div class="bg-white p-2.5 rounded-lg border border-orange-200 text-textMain italic">
+              "${state.studentNoteReason}"
+            </div>
+          </div>
+          <p class="text-xs text-textSub mb-5 italic">Ghi chú lưu kèm trong tệp JSON slot và không bị mất sau ngày học.</p>
+          <button class="w-full py-3 rounded-xl bg-primary text-white font-semibold text-sm clickable" onclick="closeOverlay()">Đóng</button>
+        `;
+      } else if (type === 'EDIT_STUDENT') {
+        box.innerHTML = `
+          <div class="w-12 h-1 bg-slate-300 rounded-full mx-auto mb-4"></div>
+          <div class="flex justify-between items-center mb-3">
+            <h3 class="text-base font-bold text-textMain">Sửa kết quả điểm danh Slot 4</h3>
+            <span class="text-xs bg-slate-100 px-2 py-1 rounded text-textSub">SE180123</span>
+          </div>
+          <p class="text-xs text-textSub mb-4">Lớp PRN232_SE1920 • Thời gian 2 (09:30 - 11:45), Thứ Hai 21/09/2026</p>
+          
+          <div class="mb-4">
+            <label class="block text-xs font-semibold text-textSub mb-2">Chọn trạng thái mới:</label>
+            <div class="grid grid-cols-2 gap-3">
+              <label class="flex items-center gap-2 p-2.5 rounded-xl border border-emerald-300 bg-emerald-50/50 cursor-pointer">
+                <input type="radio" name="newStatus" value="P" checked class="text-emerald-600 focus:ring-emerald-500">
+                <span class="text-xs font-semibold text-emerald-800">P · Có mặt</span>
+              </label>
+              <label class="flex items-center gap-2 p-2.5 rounded-xl border border-red-200 bg-red-50/30 cursor-pointer">
+                <input type="radio" name="newStatus" value="A" class="text-red-600 focus:ring-red-500">
+                <span class="text-xs font-semibold text-red-800">A · Vắng</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <label class="block text-xs font-semibold text-textSub mb-1">
+              Lý do chỉnh sửa <span class="text-red-500">* (Bắt buộc)</span>:
+            </label>
+            <textarea id="editReasonInput" rows="3" class="w-full text-xs p-3 border border-slate-300 rounded-xl focus:border-primary focus:outline-none" placeholder="Nhập lý do chi tiết (không được để trống)...">${state.studentNoteReason}</textarea>
+            <p id="editReasonError" class="text-xs text-red-500 mt-1 hidden"><i class="fa-solid fa-triangle-exclamation"></i> Vui lòng nhập lý do hợp lệ trước khi lưu.</p>
+          </div>
+
+          <div class="flex gap-3">
+            <button class="flex-1 py-3 px-4 rounded-xl border border-slate-300 text-textMain font-semibold text-sm clickable" onclick="closeOverlay()">Hủy</button>
+            <button class="flex-1 py-3 px-4 rounded-xl bg-primary text-white font-semibold text-sm clickable" onclick="saveStudentEdit()">Lưu thay đổi</button>
+          </div>
+        `;
+      }
+      overlay.classList.add('open');
+    }
+
+    function closeOverlay(event) {
+      if (event && event.target !== document.getElementById('global-overlay')) return;
+      document.getElementById('global-overlay').classList.remove('open');
+    }
+
+    function confirmCloseSlot5() {
+      closeOverlay();
+      state.slot5Closed = true;
+      state.slot5Pending = 0;
+      showToast('Đã chốt Slot 5 thành công (26 P, 4 A)');
+      navigateTo('S04_CLOSED');
+    }
+
+    function saveStudentEdit() {
+      const reason = document.getElementById('editReasonInput').value.trim();
+      const err = document.getElementById('editReasonError');
+      if (!reason) {
+        err.classList.remove('hidden');
+        return;
+      }
+      state.studentNoteReason = reason;
+      closeOverlay();
+      showToast('Đã lưu lý do và cập nhật kiểm toán');
+      navigateTo('S07');
+    }
+
+    // ==========================================
+    // SCREEN RENDERING ENGINE
+    // ==========================================
+    function renderCurrentScreen() {
+      const viewport = document.getElementById('app-viewport');
+      const bottomNav = document.getElementById('global-bottom-nav');
+      
+      // Control Bottom Nav visibility
+      if (state.currentScreen === 'S02' || state.currentScreen === 's02_class_list' || state.currentScreen === 'S10') {
+        bottomNav.classList.remove('hidden');
+        document.getElementById('tab-s02').className = (state.currentScreen === 'S02' || state.currentScreen === 's02_class_list') ? "nav-item active" : "nav-item";
+        document.getElementById('tab-s10').className = (state.currentScreen === 'S10') ? "nav-item active" : "nav-item";
+      } else {
+        bottomNav.classList.add('hidden');
+      }
+
+      switch(state.currentScreen) {
+
+        // ==============================================
+        // S01: Bắt đầu Workspace
+        // ==============================================
+        case 'S01':
+          viewport.innerHTML = `
+            <div class="p-6 flex flex-col justify-between min-h-full">
+              <div class="pt-6">
+                <div class="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center text-primary text-3xl mb-5">
+                  <i class="fa-solid fa-graduation-cap"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-textMain mb-2">FAP Attendance</h1>
+                <p class="text-sm text-textSub mb-8 leading-relaxed">
+                  Ứng dụng điểm danh mobile dành cho giảng viên Đại học FPT. Dữ liệu lưu cục bộ an toàn, tùy chọn sao lưu đám mây.
+                </p>
+
+                <div class="bg-white p-5 rounded-2xl border border-borderSub shadow-sm mb-5">
+                  <label class="block text-xs font-semibold text-textSub mb-2">Email nhận diện giảng viên:</label>
+                  <div class="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm">
+                    <i class="fa-regular fa-envelope text-textSub"></i>
+                    <input type="text" value="gv.demo@fpt.edu.vn" readonly class="bg-transparent w-full font-medium text-textMain outline-none">
+                  </div>
+                  <p class="text-[11px] text-textSub mt-2 italic">* Email dùng định danh workspace, không dùng phân quyền.</p>
+                </div>
+              </div>
+
+              <div class="space-y-3 pb-4">
+                <button class="w-full py-4 rounded-xl bg-primary text-white font-bold text-sm shadow-lg shadow-primary/25 flex items-center justify-center gap-2 clickable" onclick="navigateTo('S03')">
+                  <i class="fa-solid fa-file-import"></i> Bắt đầu với markbook (ODS/XLSX)
+                </button>
+                <button class="w-full py-3.5 rounded-xl border border-slate-300 bg-white text-textMain font-semibold text-sm flex items-center justify-center gap-2 clickable" onclick="navigateTo('S10')">
+                  <i class="fa-brands fa-google-drive text-amber-600"></i> Kết nối Google Drive
+                </button>
+              </div>
+            </div>
+          `;
+          break;
+
+        // ==============================================
+        // S03: Import markbook
+        // ==============================================
+        case 'S03':
+          viewport.innerHTML = `
+            <div class="bg-white border-b border-borderSub px-4 py-3 flex items-center gap-3 sticky top-0 z-30">
+              <button class="text-textSub text-lg clickable" onclick="goBack()"><i class="fa-solid fa-arrow-left"></i></button>
+              <h2 class="font-bold text-base text-textMain">Import markbook</h2>
+            </div>
+            <div class="p-5 space-y-5">
+              <div class="bg-white p-4 rounded-2xl border border-borderSub shadow-sm">
+                <span class="text-xs font-bold text-primary tracking-wide uppercase">Tệp nguồn</span>
+                <div class="mt-3 flex items-center gap-3 p-3 bg-orange-50/50 border border-orange-100 rounded-xl">
+                  <i class="fa-solid fa-file-excel text-emerald-600 text-2xl"></i>
+                  <div class="flex-1 overflow-hidden">
+                    <p class="text-xs font-bold text-textMain truncate">Markbook_FA26_PRN232_SE1920.xlsx</p>
+                    <p class="text-[11px] text-textSub">Kích thước 48 KB • 30 sinh viên</p>
+                  </div>
+                  <button class="text-xs font-semibold text-primary px-2 py-1 bg-white rounded border border-orange-200 clickable" onclick="showToast('Chọn tệp khác...')">Đổi</button>
+                </div>
+              </div>
+
+              <div class="bg-white p-4 rounded-2xl border border-borderSub shadow-sm space-y-4">
+                <span class="text-xs font-bold text-textMain tracking-wide uppercase">Cấu hình học kỳ</span>
+                <div>
+                  <label class="block text-xs text-textSub mb-1">Học kỳ:</label>
+                  <input type="text" value="FA26" readonly class="w-full text-xs font-semibold p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+                </div>
+                <div>
+                  <label class="block text-xs text-textSub mb-1">Ngày bắt đầu học kỳ:</label>
+                  <input type="text" value="Thứ Hai, 07/09/2026" readonly class="w-full text-xs font-semibold p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-xs text-textSub mb-1">Số tuần:</label>
+                    <input type="text" value="10 tuần" readonly class="w-full text-xs font-semibold p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+                  </div>
+                  <div>
+                    <label class="block text-xs text-textSub mb-1">Slot / tuần:</label>
+                    <input type="text" value="2 slot/tuần" readonly class="w-full text-xs font-semibold p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+                  </div>
+                </div>
+              </div>
+
+              <div class="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800 flex gap-2">
+                <i class="fa-solid fa-circle-info mt-0.5 text-blue-600"></i>
+                <span>Hệ thống áp dụng cơ chế merge thông minh, bảo tồn lịch sử điểm danh nếu import lại cùng học kỳ.</span>
+              </div>
+
+              <div class="pt-4 flex gap-3">
+                <button class="flex-1 py-3.5 rounded-xl border border-slate-300 text-textMain font-semibold text-sm clickable" onclick="goBack()">Hủy</button>
+                <button class="flex-1 py-3.5 rounded-xl bg-primary text-white font-bold text-sm shadow-md shadow-primary/20 clickable" onclick="state.workspaceReady = true; showToast('Import thành công!'); navigateTo('s02_class_list')">
+                  Xác nhận Import
+                </button>
+              </div>
+            </div>
+          `;
+          break;
+
+        // ==============================================
+        // S02: Dashboard Danh sách Lớp học & Chi tiết Slot (SCREEN_2 Mới)
+        // ==============================================
+        case 's02_class_list':
+          viewport.innerHTML = `
+            <!-- Top App Header -->
+            <div class="bg-primary px-4 py-3 text-white flex justify-between items-center sticky top-0 z-30 shadow">
+              <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center font-bold text-sm">FA</div>
+                <div>
+                  <h2 class="font-bold text-sm leading-tight">FAP Attendance · FA26</h2>
+                  <p class="text-[11px] text-white/80">Giảng viên: gv.demo@fpt.edu.vn</p>
+                </div>
+              </div>
+              <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">GV</div>
+            </div>
+
+            <!-- Import Success Banner -->
+            <div class="mx-4 mt-3 bg-emerald-50 border border-emerald-200 rounded-2xl p-3 flex items-start gap-2.5 shadow-sm">
+              <i class="fa-solid fa-circle-check text-emerald-600 text-base mt-0.5"></i>
+              <div class="flex-1 text-xs">
+                <span class="font-bold text-emerald-900 block">Import markbook thành công • Học kỳ FA26</span>
+                <span class="text-emerald-700">3 lớp học • 90 sinh viên đã sẵn sàng cho điểm danh</span>
+              </div>
+            </div>
+
+            <!-- Tab Switcher: Danh sách lớp học vs Lịch tuần (Grid) -->
+            <div class="px-4 pt-3">
+              <div class="bg-slate-200/80 p-1 rounded-xl flex text-xs font-semibold">
+                <button class="flex-1 py-1.5 rounded-lg bg-white text-primary shadow-sm font-bold flex items-center justify-center gap-1.5">
+                  <i class="fa-solid fa-list-check"></i> Danh sách lớp học
+                </button>
+                <button class="flex-1 py-1.5 rounded-lg text-textSub hover:text-textMain flex items-center justify-center gap-1.5 clickable" onclick="navigateTo('S02')">
+                  <i class="fa-regular fa-calendar-days"></i> Lịch tuần (Grid)
+                </button>
+              </div>
+            </div>
+
+            <!-- Action bar & summary -->
+            <div class="px-4 pt-3 flex justify-between items-center text-xs">
+              <span class="font-bold text-textSub uppercase tracking-wider text-[10px]">Học phần học kỳ FA26 (3)</span>
+              <button class="text-primary font-bold flex items-center gap-1 clickable" onclick="navigateTo('S03')">
+                <i class="fa-solid fa-file-import"></i> Import thêm markbook mới
+              </button>
+            </div>
+
+            <!-- Class Cards Container -->
+            <div class="p-4 space-y-3.5 pb-8">
+              
+              <!-- CLASS 1: PRN232 · Lớp SE1920 (Active / Ongoing) -->
+              <div class="bg-white rounded-2xl border border-primary/40 shadow-md overflow-hidden">
+                <div class="p-3.5 bg-gradient-to-r from-orange-50/60 to-white flex items-start justify-between cursor-pointer" onclick="toggleClassExpand('SE1920')">
+                  <div class="flex-1">
+                    <div class="flex items-center gap-2 mb-1">
+                      <span class="px-2 py-0.5 bg-primary text-white text-[10px] font-bold rounded uppercase tracking-wider">Đang diễn ra</span>
+                      <span class="text-xs font-bold text-textSub">FA26 · 30 SV</span>
+                    </div>
+                    <h3 class="font-bold text-base text-textMain leading-tight">PRN232 · Lớp SE1920</h3>
+                    <p class="text-xs text-textSub mt-0.5">Tiến độ: <b>5/20 slot</b> • Tỷ lệ có mặt: <b class="text-emerald-700">95.8%</b></p>
+                  </div>
+                  <div class="text-primary text-sm pt-1 pl-2">
+                    <i class="fa-solid ${state.classesExpanded.SE1920 ? 'fa-chevron-up' : 'fa-chevron-down'}"></i>
+                  </div>
+                </div>
+
+                ${state.classesExpanded.SE1920 ? `
+                  <div class="border-t border-slate-100 p-3 space-y-2.5 bg-slate-50/50">
+                    <span class="text-[11px] font-bold text-textSub uppercase tracking-wider block">Chi tiết các slot học:</span>
+                    
+                    <!-- Slot 5 Today -->
+                    <div class="bg-white p-3 rounded-xl border border-orange-200 shadow-sm flex flex-col gap-2">
+                      <div class="flex justify-between items-start">
+                        <div>
+                          <div class="flex items-center gap-1.5">
+                            <span class="text-xs font-bold px-1.5 py-0.5 bg-orange-100 text-primary rounded">Slot 5</span>
+                            <span class="text-xs font-bold text-textMain">Hôm nay (24/09/2026)</span>
+                          </div>
+                          <span class="text-[11px] text-textSub block mt-0.5">Thời gian 2: 09:30 - 11:45</span>
+                        </div>
+                        <span class="text-[10px] font-bold ${state.slot5Closed ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'} px-2 py-0.5 rounded-full">
+                          ${state.slot5Closed ? 'Đã chốt phiên' : 'Đang mở check-in'}
+                        </span>
+                      </div>
+                      <div class="flex justify-between items-center pt-1 border-t border-slate-100">
+                        <span class="text-[11px] text-textSub font-medium">${state.slot5Present} P • ${state.slot5Absent} A • ${state.slot5Pending} Chưa ghi</span>
+                        <button class="px-3 py-1.5 bg-primary text-white text-xs font-bold rounded-lg shadow-sm flex items-center gap-1.5 clickable" onclick="navigateTo('${state.slot5Closed ? 'S04_CLOSED' : 'S04_ACTIVE'}')">
+                          ${state.slot5Closed ? '<i class=\"fa-solid fa-eye\"></i> Xem kết quả' : '<i class=\"fa-solid fa-qrcode\"></i> Vào điểm danh'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- Slot 4 Closed -->
+                    <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
+                      <div class="flex justify-between items-start">
+                        <div>
+                          <div class="flex items-center gap-1.5">
+                            <span class="text-xs font-bold px-1.5 py-0.5 bg-slate-100 text-textSub rounded">Slot 4</span>
+                            <span class="text-xs font-bold text-textMain">Thứ Hai (21/09/2026)</span>
+                          </div>
+                          <span class="text-[11px] text-textSub block mt-0.5">Thời gian 2: 09:30 - 11:45</span>
+                        </div>
+                        <span class="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                          Đã chốt
+                        </span>
+                      </div>
+                      <div class="flex justify-between items-center pt-1 border-t border-slate-100">
+                        <span class="text-[11px] text-textSub font-medium">28 P • 2 A (1 ghi chú sửa)</span>
+                        <div class="flex gap-1.5">
+                          <button class="px-2.5 py-1.5 border border-slate-300 text-textMain text-xs font-semibold rounded-lg clickable" onclick="navigateTo('S08')">
+                            Lịch sử
+                          </button>
+                          <button class="px-2.5 py-1.5 bg-primary text-white text-xs font-bold rounded-lg clickable shadow-sm" onclick="navigateTo('S09')">
+                            Xuất file
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Slot 3 Closed -->
+                    <div class="bg-white p-2.5 rounded-xl border border-slate-200 text-xs flex justify-between items-center">
+                      <div>
+                        <span class="font-semibold text-textMain">Slot 3 · Thứ Năm 17/09/2026</span>
+                        <span class="text-[11px] text-textSub block">Thời gian 2: 09:30 - 11:45 • 29 P, 1 A</span>
+                      </div>
+                      <span class="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded text-[11px]">Đã chốt</span>
+                    </div>
+
+                    <!-- Slot 6 Upcoming -->
+                    <div class="bg-white p-2.5 rounded-xl border border-dashed border-slate-300 text-xs flex justify-between items-center opacity-75">
+                      <div>
+                        <span class="font-semibold text-textSub">Slot 6 · Thứ Hai 28/09/2026</span>
+                        <span class="text-[11px] text-textSub block">Thời gian 2: 09:30 - 11:45</span>
+                      </div>
+                      <span class="text-slate-500 font-medium text-[11px]">Sắp tới</span>
+                    </div>
+                  </div>
+                ` : ''}
+              </div>
+
+              <!-- CLASS 2: PRN232 · Lớp SE1921 (Not started) -->
+              <div class="bg-white rounded-2xl border border-borderSub shadow-sm overflow-hidden">
+                <div class="p-3.5 flex items-start justify-between cursor-pointer" onclick="toggleClassExpand('SE1921')">
+                  <div class="flex-1">
+                    <div class="flex items-center gap-2 mb-1">
+                      <span class="px-2 py-0.5 bg-slate-100 text-textSub text-[10px] font-bold rounded uppercase tracking-wider">Chưa bắt đầu</span>
+                      <span class="text-xs font-bold text-textSub">FA26 · 30 SV</span>
+                    </div>
+                    <h3 class="font-bold text-base text-textMain leading-tight">PRN232 · Lớp SE1921</h3>
+                    <p class="text-xs text-textSub mt-0.5">Tiến độ: <b>0/20 slot</b> • Bắt đầu từ 28/09/2026</p>
+                  </div>
+                  <div class="text-textSub text-sm pt-1 pl-2">
+                    <i class="fa-solid ${state.classesExpanded.SE1921 ? 'fa-chevron-up' : 'fa-chevron-down'}"></i>
+                  </div>
+                </div>
+
+                ${state.classesExpanded.SE1921 ? `
+                  <div class="border-t border-slate-100 p-3 space-y-2.5 bg-slate-50/50">
+                    <div class="bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-xs text-amber-800 flex items-center justify-between">
+                      <span>Lớp học chưa kích hoạt slot nào. Bạn có thể chỉnh sửa cấu hình lịch học.</span>
+                    </div>
+                    <div class="flex justify-between items-center pt-1">
+                      <span class="text-xs text-textSub">Thời gian 3 (12:30 - 14:45)</span>
+                      <button class="px-3 py-2 bg-primary text-white text-xs font-bold rounded-xl shadow-sm flex items-center gap-1.5 clickable" onclick="navigateTo('S05_EDITABLE')">
+                        <i class="fa-solid fa-gear"></i> Cấu hình lịch học
+                      </button>
+                    </div>
+                  </div>
+                ` : ''}
+              </div>
+
+              <!-- CLASS 3: SWD392 · Lớp SE1918 (Not started) -->
+              <div class="bg-white rounded-2xl border border-borderSub shadow-sm overflow-hidden">
+                <div class="p-3.5 flex items-start justify-between cursor-pointer" onclick="toggleClassExpand('SE1918')">
+                  <div class="flex-1">
+                    <div class="flex items-center gap-2 mb-1">
+                      <span class="px-2 py-0.5 bg-slate-100 text-textSub text-[10px] font-bold rounded uppercase tracking-wider">Chưa bắt đầu</span>
+                      <span class="text-xs font-bold text-textSub">FA26 · 30 SV</span>
+                    </div>
+                    <h3 class="font-bold text-base text-textMain leading-tight">SWD392 · Lớp SE1918</h3>
+                    <p class="text-xs text-textSub mt-0.5">Tiến độ: <b>0/20 slot</b> • Thời gian 1 (07:00 - 09:15)</p>
+                  </div>
+                  <div class="text-textSub text-sm pt-1 pl-2">
+                    <i class="fa-solid ${state.classesExpanded.SE1918 ? 'fa-chevron-up' : 'fa-chevron-down'}"></i>
+                  </div>
+                </div>
+
+                ${state.classesExpanded.SE1918 ? `
+                  <div class="border-t border-slate-100 p-3 space-y-2 bg-slate-50/50 text-xs">
+                    <div class="p-2.5 bg-white rounded-xl border border-slate-200 text-textSub flex justify-between items-center">
+                      <span>Slot 1 · Thứ Tư 30/09/2026</span>
+                      <span class="text-[11px] font-medium text-slate-500">Chưa bắt đầu</span>
+                    </div>
+                    <div class="p-2.5 bg-white rounded-xl border border-slate-200 text-textSub flex justify-between items-center">
+                      <span>Slot 2 · Thứ Sáu 02/10/2026</span>
+                      <span class="text-[11px] font-medium text-slate-500">Chưa bắt đầu</span>
+                    </div>
+                  </div>
+                ` : ''}
+              </div>
+
+            </div>
+          `;
+          break;
+
+        // ==============================================
+        // S02: Dashboard / Thời khóa biểu tuần (Grid view)
+        // ==============================================
+        case 'S02':
+          viewport.innerHTML = `
+            <!-- Header bar -->
+            <div class="bg-primary px-4 py-3 text-white flex justify-between items-center sticky top-0 z-30 shadow">
+              <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center font-bold text-sm">FA</div>
+                <div>
+                  <h2 class="font-bold text-sm leading-tight">Thời khóa biểu tuần</h2>
+                  <p class="text-[11px] text-white/80">Học kỳ FA26 • Tuần 3 (21/09 - 27/09/2026)</p>
+                </div>
+              </div>
+              <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">GV</div>
+            </div>
+
+            <!-- Tab Switcher: Danh sách lớp học vs Lịch tuần (Grid) -->
+            <div class="px-4 pt-3">
+              <div class="bg-slate-200/80 p-1 rounded-xl flex text-xs font-semibold">
+                <button class="flex-1 py-1.5 rounded-lg text-textSub hover:text-textMain flex items-center justify-center gap-1.5 clickable" onclick="navigateTo('s02_class_list')">
+                  <i class="fa-solid fa-list-check"></i> Danh sách lớp học
+                </button>
+                <button class="flex-1 py-1.5 rounded-lg bg-white text-primary shadow-sm font-bold flex items-center justify-center gap-1.5">
+                  <i class="fa-regular fa-calendar-days"></i> Lịch tuần (Grid)
+                </button>
+              </div>
+            </div>
+
+            <!-- Week Switcher Controls -->
+            <div class="bg-white border-b border-borderSub px-4 py-2.5 mt-3 flex justify-between items-center text-xs">
+              <button class="px-2.5 py-1 rounded border border-slate-200 text-textSub clickable" onclick="showToast('Xem tuần trước')"><i class="fa-solid fa-chevron-left"></i> Tuần trước</button>
+              <span class="font-bold text-textMain px-2 py-1 bg-orange-50 text-primary rounded-lg">Tuần này (Hiện tại)</span>
+              <button class="px-2.5 py-1 rounded border border-slate-200 text-textSub clickable" onclick="showToast('Xem tuần sau')">Tuần sau <i class="fa-solid fa-chevron-right"></i></button>
+            </div>
+
+            <!-- Class Manager Quick Access Bar -->
+            <div class="px-4 pt-3 flex justify-between items-center text-xs">
+              <span class="font-bold text-textSub uppercase tracking-wider text-[10px]">Lịch dạy theo slot</span>
+              <button class="text-primary font-bold flex items-center gap-1 clickable" onclick="navigateTo('S05_EDITABLE')">
+                <i class="fa-solid fa-gear"></i> Quản lý lịch lớp SE1921 (Chưa bắt đầu)
+              </button>
+            </div>
+
+            <!-- Schedule Timetable Grid -->
+            <div class="p-4 space-y-3">
+              
+              <!-- Slot 4 card (Closed past session) -->
+              <div class="bg-white rounded-2xl border border-borderSub p-3.5 shadow-sm clickable" onclick="navigateTo('S08')">
+                <div class="flex justify-between items-center mb-2">
+                  <span class="text-xs font-semibold px-2 py-0.5 rounded bg-slate-100 text-textSub">Slot 4 • Thứ Hai 21/09</span>
+                  <span class="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded flex items-center gap-1">
+                    <i class="fa-solid fa-circle-check"></i> Đã chốt
+                  </span>
+                </div>
+                <div class="font-bold text-sm text-textMain">PRN232 • Lớp SE1920</div>
+                <div class="text-xs text-textSub mt-0.5">Thời gian 2: 09:30 - 11:45</div>
+                <div class="mt-2.5 pt-2 border-t border-slate-100 flex justify-between items-center text-xs">
+                  <span class="text-textSub">28 Có mặt (P) • 2 Vắng (A)</span>
+                  <span class="text-primary font-semibold flex items-center gap-1">Xem chi tiết <i class="fa-solid fa-angle-right text-[10px]"></i></span>
+                </div>
+              </div>
+
+              <!-- Slot 5 card (Active today session) -->
+              <div class="bg-white rounded-2xl border-2 border-primary/40 p-4 shadow-md bg-gradient-to-br from-white to-orange-50/40 relative overflow-hidden clickable" onclick="navigateTo('${state.slot5Closed ? 'S04_CLOSED' : 'S04_ACTIVE'}')">
+                <div class="absolute top-0 right-0 bg-primary text-white text-[10px] font-bold px-3 py-0.5 rounded-bl-xl uppercase tracking-wider">
+                  ${state.slot5Closed ? 'ĐÃ CHỐT' : 'HÔM NAY • SLOT ACTIVE'}
+                </div>
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-xs font-bold px-2 py-0.5 rounded bg-orange-100 text-primary">Slot 5</span>
+                  <span class="text-xs text-textSub">Thứ Năm, 24/09/2026</span>
+                </div>
+                <div class="font-bold text-base text-textMain">PRN232 • Lớp SE1920</div>
+                <div class="text-xs text-textSub mt-0.5">Thời gian 2: 09:30 - 11:45</div>
+                
+                <div class="mt-3 flex items-center justify-between text-xs font-semibold">
+                  <span class="text-emerald-700"><i class="fa-solid fa-circle text-[8px]"></i> ${state.slot5Present} Có mặt</span>
+                  <span class="text-red-600"><i class="fa-solid fa-circle text-[8px]"></i> ${state.slot5Absent} Vắng</span>
+                  <span class="text-amber-600"><i class="fa-solid fa-circle text-[8px]"></i> ${state.slot5Pending} Chưa ghi</span>
+                </div>
+
+                <div class="mt-3 pt-2.5 border-t border-orange-200/60 flex justify-between items-center">
+                  <span class="text-xs text-textSub font-medium">${state.slot5Closed ? 'Phiên đã chốt hoàn tất' : 'Chạm để mở roster điểm danh'}</span>
+                  <button class="px-3 py-1.5 bg-primary text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm">
+                    ${state.slot5Closed ? 'Xem kết quả' : '<i class="fa-solid fa-qrcode"></i> Vào điểm danh'}
+                  </button>
+                </div>
+              </div>
+
+              <!-- Other Slot mockup -->
+              <div class="bg-slate-50/80 rounded-2xl border border-dashed border-slate-300 p-3.5 text-center text-xs text-textSub">
+                <p class="font-medium">Slot 1 & Slot 3: Không có lịch dạy</p>
+              </div>
+
+            </div>
+          `;
+          break;
+
+        // ==============================================
+        // S04: Điểm danh lớp (Slot 5 Đang mở)
+        // ==============================================
+        case 'S04_ACTIVE':
+          viewport.innerHTML = `
+            <div class="bg-primary px-4 py-3 text-white flex items-center justify-between sticky top-0 z-30 shadow">
+              <div class="flex items-center gap-3">
+                <button class="text-white text-base clickable" onclick="navigateTo('s02_class_list')"><i class="fa-solid fa-arrow-left"></i></button>
+                <div>
+                  <h2 class="font-bold text-base">Điểm danh lớp</h2>
+                  <p class="text-[11px] text-white/80">PRN232 • Lớp SE1920 • Học kỳ FA26</p>
+                </div>
+              </div>
+              <button class="text-xs bg-white/20 px-2.5 py-1 rounded-lg text-white font-medium clickable" onclick="navigateTo('S08')">Lịch sử</button>
+            </div>
+
+            <div class="p-4 space-y-3.5">
+              <!-- Context Card Slot 5 -->
+              <div class="bg-white p-4 rounded-2xl border border-borderSub shadow-sm">
+                <div class="flex justify-between items-start mb-2">
+                  <div>
+                    <h3 class="font-bold text-base text-textMain">Slot 5/20</h3>
+                    <p class="text-xs text-textSub">Thứ Năm, 24/09/2026 • Thời gian 2 (09:30 - 11:45)</p>
+                  </div>
+                  <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 flex items-center gap-1">
+                    <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span> Đang điểm danh
+                  </span>
+                </div>
+                <div class="grid grid-cols-3 gap-2 text-center pt-2 border-t border-slate-100 mt-2">
+                  <div class="bg-slate-50 p-2 rounded-xl">
+                    <span class="block text-xs text-textSub">Sĩ số</span>
+                    <span class="text-sm font-bold text-textMain">30</span>
+                  </div>
+                  <div class="bg-emerald-50 p-2 rounded-xl">
+                    <span class="block text-xs text-emerald-800">Có mặt (P)</span>
+                    <span class="text-sm font-bold text-emerald-700">26</span>
+                  </div>
+                  <div class="bg-amber-50 p-2 rounded-xl">
+                    <span class="block text-xs text-amber-800">Chưa ghi</span>
+                    <span class="text-sm font-bold text-amber-700">4</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Quick Action Bar -->
+              <div class="flex gap-2">
+                <button class="flex-1 py-3 px-3 bg-primary text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-md shadow-primary/20 clickable" onclick="navigateTo('S06')">
+                  <i class="fa-solid fa-qrcode text-sm"></i> Mở điểm danh QR
+                </button>
+                <button class="py-3 px-3 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-textMain flex items-center justify-center gap-1 clickable" onclick="navigateTo('S08')">
+                  <i class="fa-solid fa-clock-rotate-left"></i> Lịch sử
+                </button>
+              </div>
+
+              <!-- Roster Section -->
+              <div>
+                <div class="flex justify-between items-center mb-2 px-1">
+                  <span class="text-xs font-bold text-textMain uppercase tracking-wide">Danh sách sinh viên (30)</span>
+                  <span class="text-xs text-textSub">Chạm sinh viên để xem chi tiết</span>
+                </div>
+
+                <div class="space-y-2">
+                  <!-- Student 1: Bảo Long (Has note indicator) -->
+                  <div class="bg-white p-3 rounded-xl border border-borderSub flex items-center justify-between shadow-sm clickable" onclick="navigateTo('S07')">
+                    <div class="flex items-center gap-3">
+                      <div class="w-9 h-9 rounded-full bg-primary/10 text-primary font-bold text-xs flex items-center justify-center">NL</div>
+                      <div>
+                        <div class="font-bold text-xs text-textMain">Nguyễn Hoàng Bảo Long</div>
+                        <div class="text-[11px] text-textSub flex items-center gap-2">
+                          <span>SE180123</span>
+                          <span class="text-primary font-medium flex items-center gap-1"><i class="fa-regular fa-note-sticky"></i> Có ghi chú ở Slot 4</span>
+                        </div>
+                      </div>
+                    </div>
+                    <span class="text-xs font-bold px-2 py-1 bg-emerald-100 text-emerald-800 rounded-lg flex items-center gap-1">
+                      <i class="fa-solid fa-check"></i> Có mặt
+                    </span>
+                  </div>
+
+                  <!-- Student 2 -->
+                  <div class="bg-white p-3 rounded-xl border border-borderSub flex items-center justify-between shadow-sm">
+                    <div class="flex items-center gap-3">
+                      <div class="w-9 h-9 rounded-full bg-slate-100 text-textSub font-bold text-xs flex items-center justify-center">TA</div>
+                      <div>
+                        <div class="font-bold text-xs text-textMain">Trần Thị Mai Anh</div>
+                        <div class="text-[11px] text-textSub">SE180456</div>
+                      </div>
+                    </div>
+                    <span class="text-xs font-bold px-2 py-1 bg-emerald-100 text-emerald-800 rounded-lg flex items-center gap-1">
+                      <i class="fa-solid fa-check"></i> Có mặt
+                    </span>
+                  </div>
+
+                  <!-- Student 3: Pending Check-in -->
+                  <div class="bg-white p-3 rounded-xl border border-borderSub flex items-center justify-between shadow-sm">
+                    <div class="flex items-center gap-3">
+                      <div class="w-9 h-9 rounded-full bg-slate-100 text-textSub font-bold text-xs flex items-center justify-center">PB</div>
+                      <div>
+                        <div class="font-bold text-xs text-textMain">Phạm Quốc Bảo</div>
+                        <div class="text-[11px] text-textSub">SE180789</div>
+                      </div>
+                    </div>
+                    <span class="text-xs font-bold px-2 py-1 bg-amber-50 text-amber-800 rounded-lg flex items-center gap-1">
+                      <i class="fa-solid fa-hourglass-half"></i> Chưa ghi nhận
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+          break;
+
+        // ==============================================
+        // S04: Điểm danh lớp (Slot 5 Đã chốt)
+        // ==============================================
+        case 'S04_CLOSED':
+          viewport.innerHTML = `
+            <div class="bg-primary px-4 py-3 text-white flex items-center justify-between sticky top-0 z-30 shadow">
+              <div class="flex items-center gap-3">
+                <button class="text-white text-base clickable" onclick="navigateTo('s02_class_list')"><i class="fa-solid fa-arrow-left"></i></button>
+                <div>
+                  <h2 class="font-bold text-base">Điểm danh lớp</h2>
+                  <p class="text-[11px] text-white/80">PRN232 • Lớp SE1920 • Đã chốt</p>
+                </div>
+              </div>
+              <button class="text-xs bg-white/20 px-2.5 py-1 rounded-lg text-white font-medium clickable" onclick="navigateTo('S08')">Lịch sử</button>
+            </div>
+
+            <div class="p-4 space-y-3.5">
+              <div class="bg-white p-4 rounded-2xl border border-emerald-300 shadow-sm bg-gradient-to-r from-emerald-50/40 to-white">
+                <div class="flex justify-between items-start mb-2">
+                  <div>
+                    <h3 class="font-bold text-base text-textMain">Slot 5/20</h3>
+                    <p class="text-xs text-textSub">Thứ Năm, 24/09/2026 • Thời gian 2</p>
+                  </div>
+                  <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                    <i class="fa-solid fa-circle-check"></i> Đã chốt phiên
+                  </span>
+                </div>
+                <div class="grid grid-cols-3 gap-2 text-center pt-2 border-t border-slate-100 mt-2">
+                  <div class="bg-slate-50 p-2 rounded-xl">
+                    <span class="block text-xs text-textSub">Sĩ số</span>
+                    <span class="text-sm font-bold text-textMain">30</span>
+                  </div>
+                  <div class="bg-emerald-50 p-2 rounded-xl">
+                    <span class="block text-xs text-emerald-800">Có mặt (P)</span>
+                    <span class="text-sm font-bold text-emerald-700">26</span>
+                  </div>
+                  <div class="bg-red-50 p-2 rounded-xl">
+                    <span class="block text-xs text-red-800">Vắng (A)</span>
+                    <span class="text-sm font-bold text-red-700">4</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex gap-2">
+                <button class="flex-1 py-3 px-3 bg-primary text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-md shadow-primary/20 clickable" onclick="navigateTo('S09')">
+                  <i class="fa-solid fa-file-export"></i> Xuất kết quả Slot này
+                </button>
+                <button class="py-3 px-3 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-textMain flex items-center justify-center gap-1 clickable" onclick="navigateTo('S08')">
+                  <i class="fa-solid fa-clock-rotate-left"></i> Xem lịch sử
+                </button>
+              </div>
+
+              <!-- Roster Section -->
+              <div>
+                <div class="flex justify-between items-center mb-2 px-1">
+                  <span class="text-xs font-bold text-textMain uppercase tracking-wide">Kết quả chính thức (30 SV)</span>
+                </div>
+                <div class="space-y-2">
+                  <div class="bg-white p-3 rounded-xl border border-borderSub flex items-center justify-between shadow-sm clickable" onclick="navigateTo('S07')">
+                    <div class="flex items-center gap-3">
+                      <div class="w-9 h-9 rounded-full bg-primary/10 text-primary font-bold text-xs flex items-center justify-center">NL</div>
+                      <div>
+                        <div class="font-bold text-xs text-textMain">Nguyễn Hoàng Bảo Long</div>
+                        <div class="text-[11px] text-textSub">SE180123</div>
+                      </div>
+                    </div>
+                    <span class="text-xs font-bold px-2 py-1 bg-emerald-100 text-emerald-800 rounded-lg">P · Có mặt</span>
+                  </div>
+
+                  <div class="bg-white p-3 rounded-xl border border-borderSub flex items-center justify-between shadow-sm">
+                    <div class="flex items-center gap-3">
+                      <div class="w-9 h-9 rounded-full bg-slate-100 text-textSub font-bold text-xs flex items-center justify-center">PB</div>
+                      <div>
+                        <div class="font-bold text-xs text-textMain">Phạm Quốc Bảo</div>
+                        <div class="text-[11px] text-textSub">SE180789</div>
+                      </div>
+                    </div>
+                    <span class="text-xs font-bold px-2 py-1 bg-red-100 text-red-800 rounded-lg">A · Vắng (Tự chốt)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+          break;
+
+        // ==============================================
+        // S06: Điểm danh QR
+        // ==============================================
+        case 'S06':
+          viewport.innerHTML = `
+            <div class="bg-primary px-4 py-3 text-white flex items-center justify-between sticky top-0 z-30 shadow">
+              <div class="flex items-center gap-3">
+                <button class="text-white text-base clickable" onclick="goBack()"><i class="fa-solid fa-arrow-left"></i></button>
+                <div>
+                  <h2 class="font-bold text-base">Điểm danh QR</h2>
+                  <p class="text-[11px] text-white/80">PRN232 • Lớp SE1920 • Slot 5</p>
+                </div>
+              </div>
+              <span class="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-500 text-white">Live</span>
+            </div>
+
+            <div class="p-5 flex flex-col items-center justify-between min-h-[calc(100%-60px)]">
+              <div class="w-full flex flex-col items-center">
+                <!-- Mode badge -->
+                <div class="flex items-center gap-2 bg-orange-100 text-primary text-xs font-bold px-3 py-1 rounded-full mb-3">
+                  <i class="fa-solid fa-shield-halved"></i> Chế độ QR + Mã bí mật (Khuyến nghị)
+                </div>
+
+                <!-- QR Box Container -->
+                <div class="bg-white p-4 rounded-3xl border-2 border-slate-200 shadow-xl flex flex-col items-center w-64 h-64 justify-center relative mb-3">
+                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=https://fap.fpt.edu.vn/checkin?code=PRN232_FA26_SLOT5" alt="QR Code" class="w-48 h-48 rounded-lg">
+                  <div class="text-[10px] text-textSub mt-2 font-medium flex items-center gap-1">
+                    <i class="fa-solid fa-arrows-rotate text-primary animate-spin"></i> Mã đổi sau mỗi 15 giây
+                  </div>
+                </div>
+
+                <!-- 6-digit Secret Code -->
+                <div class="bg-white border border-borderSub rounded-2xl p-3 w-full text-center shadow-sm mb-4">
+                  <span class="text-xs text-textSub uppercase font-semibold tracking-wider">Mã bí mật xác nhận</span>
+                  <div class="text-3xl font-extrabold text-primary tracking-widest mt-0.5">849 203</div>
+                  <p class="text-[11px] text-textSub mt-1">Sinh viên quét QR và nhập mã này trong vòng 2 phút.</p>
+                </div>
+
+                <!-- Live stats -->
+                <div class="w-full bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 flex justify-between items-center text-xs">
+                  <div>
+                    <span class="text-emerald-800 font-semibold">Tiến độ check-in lớp:</span>
+                    <p class="text-textSub text-[11px]">Đã có 26/30 sinh viên quét thành công</p>
+                  </div>
+                  <span class="text-base font-extrabold text-emerald-700">86.7%</span>
+                </div>
+              </div>
+
+              <!-- Action buttons -->
+              <div class="w-full space-y-2.5 pt-4">
+                <button class="w-full py-4 rounded-xl bg-primary text-white font-bold text-sm shadow-lg shadow-primary/25 flex items-center justify-center gap-2 clickable" onclick="openOverlay('CONFIRM_CLOSE_SLOT5')">
+                  <i class="fa-solid fa-lock"></i> Chốt danh sách Slot 5
+                </button>
+                <button class="w-full py-3 rounded-xl border border-slate-300 text-textSub font-semibold text-xs flex items-center justify-center gap-1 clickable" onclick="goBack()">
+                  <i class="fa-solid fa-arrow-left"></i> Quay lại màn hình lớp (Giữ QR chạy ngầm)
+                </button>
+              </div>
+            </div>
+          `;
+          break;
+
+        // ==============================================
+        // S05: Cấu hình lịch lớp (SE1921 Editable)
+        // ==============================================
+        case 'S05_EDITABLE':
+          viewport.innerHTML = `
+            <div class="bg-white border-b border-borderSub px-4 py-3 flex items-center justify-between sticky top-0 z-30">
+              <div class="flex items-center gap-3">
+                <button class="text-textSub text-lg clickable" onclick="goBack()"><i class="fa-solid fa-arrow-left"></i></button>
+                <h2 class="font-bold text-base text-textMain">Cấu hình lịch lớp</h2>
+              </div>
+              <span class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full">Được phép sửa</span>
+            </div>
+
+            <div class="p-5 space-y-4">
+              <div class="bg-orange-50/60 p-3.5 rounded-2xl border border-orange-100 text-xs text-textMain">
+                <span class="font-bold text-primary">Lớp PRN232 • SE1921</span>
+                <p class="text-textSub mt-0.5">Lớp chưa có slot active hoặc closed. Giảng viên được phép điều chỉnh lịch học trước ngày bắt đầu.</p>
+              </div>
+
+              <div class="bg-white p-4 rounded-2xl border border-borderSub shadow-sm space-y-3.5 text-xs">
+                <div>
+                  <label class="block font-semibold text-textSub mb-1">Số tuần học:</label>
+                  <input type="number" value="10" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-textMain focus:outline-none focus:border-primary">
+                </div>
+
+                <div>
+                  <label class="block font-semibold text-textSub mb-1">Tần suất:</label>
+                  <select class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-textMain focus:outline-none focus:border-primary">
+                    <option selected>2 slot / tuần (Thứ Hai & Thứ Năm)</option>
+                    <option>1 slot / tuần</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block font-semibold text-textSub mb-1">Thời gian cố định:</label>
+                  <input type="text" value="Thời gian 2 (09:30 - 11:45)" readonly class="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-xl text-textSub">
+                </div>
+
+                <div>
+                  <label class="block font-semibold text-textSub mb-1">Ngày nghỉ / Học bù ngoại lệ:</label>
+                  <div class="space-y-1.5 pt-1">
+                    <div class="flex justify-between items-center p-2 rounded-lg bg-slate-50 border border-slate-200">
+                      <span>Nghỉ: Thứ Năm 15/10/2026</span>
+                      <span class="text-red-500 font-semibold cursor-pointer">Xóa</span>
+                    </div>
+                    <div class="flex justify-between items-center p-2 rounded-lg bg-emerald-50/60 border border-emerald-200 text-emerald-800">
+                      <span>Bù: Chủ Nhật 18/10/2026</span>
+                      <span class="text-red-500 font-semibold cursor-pointer">Xóa</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="pt-2 flex gap-3">
+                <button class="flex-1 py-3.5 rounded-xl border border-slate-300 text-textMain font-semibold text-sm clickable" onclick="goBack()">Hủy</button>
+                <button class="flex-1 py-3.5 rounded-xl bg-primary text-white font-bold text-sm shadow-md shadow-primary/20 clickable" onclick="showToast('Đã lưu cấu hình lịch SE1921'); goBack()">
+                  Lưu cấu hình
+                </button>
+              </div>
+            </div>
+          `;
+          break;
+
+        // ==============================================
+        // S08: Lịch sử điểm danh lớp
+        // ==============================================
+        case 'S08':
+          viewport.innerHTML = `
+            <div class="bg-primary px-4 py-3 text-white flex items-center justify-between sticky top-0 z-30 shadow">
+              <div class="flex items-center gap-3">
+                <button class="text-white text-base clickable" onclick="navigateTo('s02_class_list')"><i class="fa-solid fa-arrow-left"></i></button>
+                <div>
+                  <h2 class="font-bold text-base">Lịch sử điểm danh lớp</h2>
+                  <p class="text-[11px] text-white/80">PRN232 • Lớp SE1920 • Học kỳ FA26</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="p-4 space-y-3.5">
+              <!-- Summary Card 4 Slots -->
+              <div class="bg-white p-4 rounded-2xl border border-borderSub shadow-sm">
+                <div class="flex justify-between items-center mb-2">
+                  <span class="text-xs font-bold text-textSub uppercase tracking-wider">Tỷ lệ có mặt — 4 slot đã chốt</span>
+                  <span class="text-base font-extrabold text-emerald-700">96,7%</span>
+                </div>
+                <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                  <div class="bg-emerald-600 h-full rounded-full" style="width: 96.7%"></div>
+                </div>
+                <p class="text-[11px] text-textSub mt-2">Tổng 116 lượt có mặt trên 120 lượt điểm danh (Không tính Slot 5).</p>
+              </div>
+
+              <!-- List of Slots -->
+              <div class="space-y-3">
+                
+                <!-- Slot 5 -->
+                <div class="bg-white p-3.5 rounded-2xl border border-borderSub shadow-sm">
+                  <div class="flex justify-between items-center mb-1.5">
+                    <span class="text-xs font-bold text-textMain">Slot 5 • Hôm nay (24/09/2026)</span>
+                    <span class="text-[11px] font-bold ${state.slot5Closed ? 'text-emerald-700 bg-emerald-50' : 'text-amber-700 bg-amber-50'} px-2 py-0.5 rounded">
+                      ${state.slot5Closed ? 'Đã chốt' : 'Đang điểm danh'}
+                    </span>
+                  </div>
+                  <div class="text-xs text-textSub mb-3">Thời gian 2: 09:30 - 11:45 • 26 P, ${state.slot5Closed ? '4 A' : '4 Chưa ghi'}</div>
+                  <button class="w-full py-2.5 rounded-xl ${state.slot5Closed ? 'bg-primary text-white' : 'border border-primary text-primary'} text-xs font-bold clickable" onclick="navigateTo('${state.slot5Closed ? 'S09' : 'S04_ACTIVE'}')">
+                    ${state.slot5Closed ? 'Xuất kết quả Slot 5' : 'Tiếp tục điểm danh Slot 5'}
+                  </button>
+                </div>
+
+                <!-- Slot 4 (Target for Flow 3) -->
+                <div class="bg-white p-3.5 rounded-2xl border-2 border-primary/20 shadow-sm">
+                  <div class="flex justify-between items-center mb-1.5">
+                    <span class="text-xs font-bold text-textMain">Slot 4 • Thứ Hai (21/09/2026)</span>
+                    <span class="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">Đã chốt</span>
+                  </div>
+                  <div class="text-xs text-textSub mb-3">28 P • 2 A • Có 1 kết quả chỉnh sửa</div>
+                  <div class="flex gap-2">
+                    <button class="flex-1 py-2.5 rounded-xl border border-slate-300 text-textMain text-xs font-semibold clickable" onclick="navigateTo('S08_SLOT_RESULTS')">
+                      Xem chi tiết (Roster)
+                    </button>
+                    <button class="flex-1 py-2.5 rounded-xl bg-primary text-white text-xs font-bold shadow-sm clickable" onclick="navigateTo('S09')">
+                      Xuất kết quả
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Slot 3 -->
+                <div class="bg-white p-3.5 rounded-2xl border border-borderSub shadow-sm opacity-90">
+                  <div class="flex justify-between items-center mb-1.5">
+                    <span class="text-xs font-bold text-textMain">Slot 3 • Thứ Năm (17/09/2026)</span>
+                    <span class="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">Đã chốt</span>
+                  </div>
+                  <div class="text-xs text-textSub">29 P • 1 A (SE180123 vắng) • 96,7%</div>
+                </div>
+
+                <!-- Slot 2 -->
+                <div class="bg-white p-3.5 rounded-2xl border border-borderSub shadow-sm opacity-90">
+                  <div class="flex justify-between items-center mb-1.5">
+                    <span class="text-xs font-bold text-textMain">Slot 2 • Thứ Hai (14/09/2026)</span>
+                    <span class="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">Đã chốt</span>
+                  </div>
+                  <div class="text-xs text-textSub">29 P • 1 A • 96,7%</div>
+                </div>
+
+              </div>
+
+              <p class="text-center text-[11px] text-textSub pt-3">Đã ghi nhận 5/20 slot • Đã chốt 4/20 slot</p>
+            </div>
+          `;
+          break;
+
+        // ==============================================
+        // S08: Danh sách kết quả Slot 4 (Trung gian đến S07)
+        // ==============================================
+        case 'S08_SLOT_RESULTS':
+          viewport.innerHTML = `
+            <div class="bg-primary px-4 py-3 text-white flex items-center justify-between sticky top-0 z-30 shadow">
+              <div class="flex items-center gap-3">
+                <button class="text-white text-base clickable" onclick="goBack()"><i class="fa-solid fa-arrow-left"></i></button>
+                <div>
+                  <h2 class="font-bold text-base">Kết quả Slot 4</h2>
+                  <p class="text-[11px] text-white/80">PRN232 • Lớp SE1920 • 21/09/2026</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="p-4 space-y-3">
+              <div class="bg-white p-3 rounded-xl border border-borderSub text-xs flex justify-between items-center">
+                <span>Tổng số: <b>30 sinh viên</b></span>
+                <span class="text-emerald-700 font-bold">28 Có mặt • 2 Vắng</span>
+              </div>
+
+              <div class="space-y-2">
+                <!-- Target Student: Bảo Long -->
+                <div class="bg-white p-3.5 rounded-2xl border-2 border-primary/30 shadow-sm flex items-center justify-between clickable" onclick="navigateTo('S07')">
+                  <div>
+                    <div class="font-bold text-xs text-textMain">Nguyễn Hoàng Bảo Long</div>
+                    <div class="text-[11px] text-textSub">SE180123</div>
+                    <span class="inline-block mt-1 text-[10px] bg-orange-100 text-primary px-2 py-0.5 rounded font-semibold">
+                      <i class="fa-regular fa-note-sticky"></i> Có ghi chú chỉnh sửa
+                    </span>
+                  </div>
+                  <div class="text-right">
+                    <span class="text-xs font-bold px-2 py-1 bg-emerald-100 text-emerald-800 rounded-lg">P · Có mặt</span>
+                    <span class="block text-[11px] text-primary mt-1 font-semibold">Chi tiết <i class="fa-solid fa-chevron-right text-[9px]"></i></span>
+                  </div>
+                </div>
+
+                <!-- Student 2 -->
+                <div class="bg-white p-3 rounded-xl border border-borderSub flex items-center justify-between">
+                  <div>
+                    <div class="font-bold text-xs text-textMain">Lê Hoàng Nam</div>
+                    <div class="text-[11px] text-textSub">SE180124</div>
+                  </div>
+                  <span class="text-xs font-bold px-2 py-1 bg-emerald-100 text-emerald-800 rounded-lg">P · Có mặt</span>
+                </div>
+
+                <!-- Student 3 -->
+                <div class="bg-white p-3 rounded-xl border border-borderSub flex items-center justify-between">
+                  <div>
+                    <div class="font-bold text-xs text-textMain">Phạm Quốc Bảo</div>
+                    <div class="text-[11px] text-textSub">SE180789</div>
+                  </div>
+                  <span class="text-xs font-bold px-2 py-1 bg-red-100 text-red-800 rounded-lg">A · Vắng</span>
+                </div>
+              </div>
+            </div>
+          `;
+          break;
+
+        // ==============================================
+        // S07: Chi tiết sinh viên (Bảo Long SE180123)
+        // ==============================================
+        case 'S07':
+          viewport.innerHTML = `
+            <div class="bg-primary px-4 py-3 text-white flex items-center justify-between sticky top-0 z-30 shadow">
+              <div class="flex items-center gap-3">
+                <button class="text-white text-base clickable" onclick="goBack()"><i class="fa-solid fa-arrow-left"></i></button>
+                <div>
+                  <h2 class="font-bold text-base">Chi tiết sinh viên</h2>
+                  <p class="text-[11px] text-white/80">PRN232 • Lớp SE1920</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="p-4 space-y-4">
+              <!-- Student Profile Card -->
+              <div class="bg-white p-4 rounded-2xl border border-borderSub shadow-sm">
+                <div class="flex items-center gap-3 mb-3">
+                  <div class="w-12 h-12 rounded-full bg-primary text-white font-bold text-sm flex items-center justify-center">NL</div>
+                  <div>
+                    <h3 class="font-bold text-base text-textMain">Nguyễn Hoàng Bảo Long</h3>
+                    <p class="text-xs text-textSub">MSSV: SE180123 • longnhse180123@fpt.edu.vn</p>
+                  </div>
+                </div>
+                <div class="grid grid-cols-3 gap-2 text-center pt-3 border-t border-slate-100 text-xs">
+                  <div class="bg-emerald-50 p-2 rounded-xl">
+                    <span class="text-textSub block">Có mặt</span>
+                    <span class="font-bold text-emerald-700 text-sm">4 slot</span>
+                  </div>
+                  <div class="bg-red-50 p-2 rounded-xl">
+                    <span class="text-textSub block">Vắng</span>
+                    <span class="font-bold text-red-700 text-sm">1 slot</span>
+                  </div>
+                  <div class="bg-slate-50 p-2 rounded-xl">
+                    <span class="text-textSub block">Tỷ lệ vắng</span>
+                    <span class="font-bold text-textMain text-sm">5,0%</span>
+                  </div>
+                </div>
+                <p class="text-[11px] text-textSub mt-2 italic text-center">* Tỷ lệ vắng tính trên toàn bộ 20 slot đã lên lịch (1/20).</p>
+              </div>
+
+              <!-- Student Slot Attendance History -->
+              <div>
+                <span class="text-xs font-bold text-textMain uppercase tracking-wide block mb-2 px-1">Lịch sử điểm danh cá nhân</span>
+                <div class="space-y-2.5">
+                  
+                  <!-- Slot 5 (Active) -->
+                  <div class="bg-white p-3 rounded-xl border border-borderSub flex justify-between items-center text-xs">
+                    <div>
+                      <span class="font-bold text-textMain">Slot 5 • 24/09/2026</span>
+                      <p class="text-[11px] text-textSub">Hôm nay (Đang diễn ra)</p>
+                    </div>
+                    <span class="font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg">P · Có mặt</span>
+                  </div>
+
+                  <!-- Slot 4 (Editable & Viewable Note) -->
+                  <div class="bg-white p-3.5 rounded-2xl border-2 border-primary/30 shadow-sm space-y-2">
+                    <div class="flex justify-between items-center text-xs">
+                      <div>
+                        <span class="font-bold text-textMain">Slot 4 • 21/09/2026</span>
+                        <p class="text-[11px] text-textSub">Đã chốt • Thời gian 2</p>
+                      </div>
+                      <span class="font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg">P · Có mặt</span>
+                    </div>
+
+                    <div class="bg-orange-50/70 p-2 rounded-xl border border-orange-100 text-xs text-textMain italic flex items-start gap-2">
+                      <i class="fa-solid fa-quote-left text-primary mt-0.5"></i>
+                      <span>"${state.studentNoteReason}"</span>
+                    </div>
+
+                    <div class="flex gap-2 pt-1">
+                      <button class="flex-1 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-textMain clickable" onclick="openOverlay('VIEW_NOTE')">
+                        <i class="fa-regular fa-eye"></i> Xem ghi chú
+                      </button>
+                      <button class="flex-1 py-2 rounded-xl bg-primary text-white text-xs font-bold clickable" onclick="openOverlay('EDIT_STUDENT')">
+                        <i class="fa-solid fa-pen"></i> Sửa P/A
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Slot 3 -->
+                  <div class="bg-white p-3 rounded-xl border border-borderSub flex justify-between items-center text-xs">
+                    <div>
+                      <span class="font-bold text-textMain">Slot 3 • 17/09/2026</span>
+                      <p class="text-[11px] text-textSub">Đã chốt</p>
+                    </div>
+                    <span class="font-bold text-red-700 bg-red-50 px-2.5 py-1 rounded-lg">A · Vắng</span>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+          `;
+          break;
+
+        // ==============================================
+        // S09: Xuất kết quả
+        // ==============================================
+        case 'S09':
+          viewport.innerHTML = `
+            <div class="bg-primary px-4 py-3 text-white flex items-center justify-between sticky top-0 z-30 shadow">
+              <div class="flex items-center gap-3">
+                <button class="text-white text-base clickable" onclick="goBack()"><i class="fa-solid fa-arrow-left"></i></button>
+                <h2 class="font-bold text-base">Xuất kết quả điểm danh</h2>
+              </div>
+            </div>
+
+            <div class="p-4 space-y-4">
+              <!-- Context Card -->
+              <div class="bg-white p-4 rounded-2xl border border-borderSub shadow-sm">
+                <div class="flex justify-between items-center mb-1">
+                  <h3 class="font-bold text-base text-textMain">PRN232 • Lớp SE1920</h3>
+                  <span class="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">Đã chốt</span>
+                </div>
+                <p class="text-xs text-textSub">Slot 4 • Thứ Hai, 21/09/2026 • Thời gian 2 (09:30 - 11:45)</p>
+                <div class="mt-2.5 pt-2 border-t border-slate-100 flex gap-4 text-xs">
+                  <span class="text-emerald-700 font-bold">28 Có mặt (P)</span>
+                  <span class="text-red-600 font-bold">2 Vắng (A)</span>
+                  <span class="text-textSub">0 Chưa ghi nhận</span>
+                </div>
+              </div>
+
+              <!-- Format Choice -->
+              <div class="bg-white p-4 rounded-2xl border border-borderSub shadow-sm space-y-3">
+                <span class="text-xs font-bold text-textMain uppercase tracking-wide">1. Định dạng tệp tin</span>
+                
+                <label class="flex items-start gap-3 p-3 rounded-xl border border-primary/40 bg-orange-50/30 cursor-pointer">
+                  <input type="radio" name="exportFmt" value="json" checked onchange="state.exportFormat = 'json'" class="mt-0.5 text-primary">
+                  <div>
+                    <span class="text-xs font-bold text-textMain">JSON — Dùng với Chrome Extension</span>
+                    <span class="ml-2 text-[10px] bg-primary text-white font-bold px-1.5 py-0.2 rounded">Khuyến dùng</span>
+                    <p class="text-[11px] text-textSub mt-0.5">Tự động điền dữ liệu điểm danh vào cổng FAP trên máy tính.</p>
+                  </div>
+                </label>
+
+                <label class="flex items-start gap-3 p-3 rounded-xl border border-slate-200 cursor-pointer">
+                  <input type="radio" name="exportFmt" value="csv" onchange="state.exportFormat = 'csv'" class="mt-0.5 text-primary">
+                  <div>
+                    <span class="text-xs font-bold text-textMain">CSV — Trao đổi dữ liệu</span>
+                    <p class="text-[11px] text-textSub mt-0.5">Dùng lưu trữ bảng tính Excel, đối chiếu và chia sẻ với bộ môn.</p>
+                  </div>
+                </label>
+
+                <!-- File preview -->
+                <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px]">
+                  <span class="text-textSub block">Tên file dự kiến:</span>
+                  <span class="font-mono text-textMain font-bold">attendance_FA26_PRN232_SE1920_slot04_2026-09-21.json</span>
+                </div>
+              </div>
+
+              <!-- Storage & Cloud -->
+              <div class="bg-white p-4 rounded-2xl border border-borderSub shadow-sm space-y-3 text-xs">
+                <span class="font-bold text-textMain uppercase tracking-wide">2. Nơi lưu & Sao lưu</span>
+
+                <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <div class="flex items-center gap-2.5">
+                    <i class="fa-solid fa-mobile-screen text-textSub text-lg"></i>
+                    <div>
+                      <span class="font-bold text-textMain">Lưu trên thiết bị (Local-first)</span>
+                      <p class="text-[11px] text-textSub">FAP Attendance/FA26/classes/PRN232_SE1920/exports/</p>
+                    </div>
+                  </div>
+                  <span class="text-[10px] bg-slate-200 text-textSub font-bold px-2 py-0.5 rounded">Mặc định</span>
+                </div>
+
+                <div class="flex items-center justify-between p-3 rounded-xl border border-slate-200">
+                  <div class="flex items-center gap-2.5">
+                    <input type="checkbox" checked id="driveChk" onchange="state.backupDrive = this.checked" class="rounded text-primary">
+                    <label for="driveChk">
+                      <span class="font-bold text-textMain">Sao lưu thêm lên Google Drive</span>
+                      <p class="text-[11px] text-textSub">gv.demo@example.com</p>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Action buttons -->
+              <div class="pt-2 space-y-2">
+                <button class="w-full py-4 rounded-xl bg-primary text-white font-bold text-sm shadow-lg shadow-primary/25 flex items-center justify-center gap-2 clickable" onclick="navigateTo('S09_SUCCESS')">
+                  <i class="fa-solid fa-file-arrow-down"></i> Xuất file
+                </button>
+                <button class="w-full py-3 rounded-xl border border-slate-300 text-textMain font-semibold text-xs flex items-center justify-center gap-1.5 clickable" onclick="navigateTo('S10')">
+                  <i class="fa-brands fa-google-drive text-amber-600"></i> Quản lý Google Drive
+                </button>
+              </div>
+            </div>
+          `;
+          break;
+
+        // ==============================================
+        // S09: Xuất thành công
+        // ==============================================
+        case 'S09_SUCCESS':
+          viewport.innerHTML = `
+            <div class="bg-primary px-4 py-3 text-white flex items-center justify-between sticky top-0 z-30 shadow">
+              <div class="flex items-center gap-3">
+                <button class="text-white text-base clickable" onclick="navigateTo('S08')"><i class="fa-solid fa-arrow-left"></i></button>
+                <h2 class="font-bold text-base">Kết quả xuất file</h2>
+              </div>
+            </div>
+
+            <div class="p-5 flex flex-col justify-between min-h-[calc(100%-60px)]">
+              <div class="space-y-4">
+                <div class="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 text-3xl flex items-center justify-center mx-auto my-2">
+                  <i class="fa-solid fa-check"></i>
+                </div>
+                <h3 class="text-center font-bold text-lg text-textMain">Đã lưu file trên thiết bị an toàn</h3>
+                
+                <!-- Local storage card -->
+                <div class="bg-white p-4 rounded-2xl border border-borderSub shadow-sm space-y-2 text-xs">
+                  <div class="flex justify-between">
+                    <span class="text-textSub">Tên tệp tin:</span>
+                    <span class="font-mono font-bold text-textMain">attendance_slot04.json</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-textSub">Dung lượng:</span>
+                    <span class="font-semibold text-textMain">4.2 KB</span>
+                  </div>
+                  <div class="pt-2 border-t border-slate-100 text-[11px] text-textSub">
+                    Đường dẫn: FAP Attendance/FA26/classes/PRN232_SE1920/exports/
+                  </div>
+                </div>
+
+                <!-- Drive card -->
+                <div class="bg-white p-4 rounded-2xl border border-borderSub shadow-sm text-xs flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <i class="fa-brands fa-google-drive text-2xl text-emerald-600"></i>
+                    <div>
+                      <span class="font-bold text-textMain">Bản sao Google Drive</span>
+                      <p class="text-[11px] text-emerald-700 font-semibold">Đã đồng bộ lên Drive thành công</p>
+                    </div>
+                  </div>
+                  <i class="fa-solid fa-circle-check text-emerald-600 text-lg"></i>
+                </div>
+              </div>
+
+              <div class="space-y-2.5 pt-4">
+                <button class="w-full py-3.5 rounded-xl bg-primary text-white font-bold text-sm shadow-md shadow-primary/20 flex items-center justify-center gap-2 clickable" onclick="showToast('Mở trình chia sẻ tệp Android')">
+                  <i class="fa-solid fa-share-nodes"></i> Chia sẻ tệp
+                </button>
+                <button class="w-full py-3 rounded-xl border border-slate-300 text-textMain font-semibold text-xs flex items-center justify-center gap-1 clickable" onclick="navigateTo('S08')">
+                  <i class="fa-solid fa-clock-rotate-left"></i> Quay lại lịch sử điểm danh
+                </button>
+              </div>
+            </div>
+          `;
+          break;
+
+        // ==============================================
+        // S10: Google Drive và đồng bộ
+        // ==============================================
+        case 'S10':
+          viewport.innerHTML = `
+            <div class="bg-primary px-4 py-3 text-white flex items-center justify-between sticky top-0 z-30 shadow">
+              <div class="flex items-center gap-3">
+                <h2 class="font-bold text-base">Google Drive và đồng bộ</h2>
+              </div>
+              <span class="text-xs bg-white/20 px-2 py-0.5 rounded text-white font-medium">Offline sẵn sàng</span>
+            </div>
+
+            <div class="p-4 space-y-4">
+              <!-- Account card -->
+              <div class="bg-white p-4 rounded-2xl border border-borderSub shadow-sm flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-full bg-orange-100 text-primary font-bold text-sm flex items-center justify-center">GV</div>
+                  <div>
+                    <span class="text-xs font-bold text-textMain block">gv.demo@example.com</span>
+                    <span class="text-[11px] text-emerald-700 font-semibold flex items-center gap-1">
+                      <i class="fa-solid fa-circle-check"></i> Đã kết nối tài khoản
+                    </span>
+                  </div>
+                </div>
+                <button class="text-xs text-red-600 font-semibold border border-red-200 px-2.5 py-1 rounded-lg clickable" onclick="showToast('Ngắt kết nối mô phỏng')">Ngắt</button>
+              </div>
+
+              <!-- Sync Status Card -->
+              <div class="bg-white p-4 rounded-2xl border border-borderSub shadow-sm space-y-3">
+                <div class="flex justify-between items-center">
+                  <span class="text-xs font-bold text-textMain uppercase tracking-wide">Tình trạng đồng bộ</span>
+                  <span class="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">Đã đồng bộ</span>
+                </div>
+
+                <div class="space-y-1 text-xs text-textSub">
+                  <div class="flex justify-between">
+                    <span>Đã lưu trên máy:</span>
+                    <b class="text-textMain">Bộ nhớ thiết bị (Local-first)</b>
+                  </div>
+                  <div class="flex justify-between">
+                    <span>Lần đồng bộ gần nhất:</span>
+                    <b class="text-textMain">Hôm nay, 10:20</b>
+                  </div>
+                  <div class="flex justify-between">
+                    <span>Tệp chờ tải lên:</span>
+                    <b class="text-textMain">0 tệp còn chờ</b>
+                  </div>
+                </div>
+
+                <button class="w-full py-3 rounded-xl bg-orange-50 border border-orange-200 text-primary font-bold text-xs flex items-center justify-center gap-2 clickable" onclick="showToast('Đang kiểm tra và đồng bộ lại...')">
+                  <i class="fa-solid fa-arrows-rotate"></i> Đồng bộ ngay
+                </button>
+              </div>
+
+              <!-- Conflict Rules Info Card -->
+              <div class="bg-white p-4 rounded-2xl border border-borderSub shadow-sm space-y-2">
+                <div class="flex items-center gap-2 text-primary font-bold text-xs">
+                  <i class="fa-solid fa-shield-halved"></i> Quy tắc xử lý ngoại lệ & Xung đột
+                </div>
+                <p class="text-xs text-textSub leading-relaxed">
+                  Thiết bị hoạt động theo cơ chế <b>Local-first</b>. Mọi phiên điểm danh luôn được lưu trữ an toàn trên máy trước. Nếu có xung đột, hệ thống tạo bản backup trên Drive và thông báo kiểm tra thủ công, tuyệt đối không tự ý ghi đè.
+                </p>
+              </div>
+
+              <div class="p-3 bg-slate-100 rounded-xl text-center text-xs text-textSub">
+                Đường dẫn Drive: <b>Drive của tôi / FAP_Attendance / FA26 / PRN232</b>
+              </div>
+            </div>
+          `;
+          break;
+      }
+    }
+
+    // Initialize application at Flow 1 by default
+    renderCurrentScreen();
+  </script>
+</body></html>

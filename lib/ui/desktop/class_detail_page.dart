@@ -6,6 +6,7 @@ import '../../application/attendance_controller.dart';
 import '../../domain/models.dart';
 import '../theme.dart';
 import 'qr_session_page.dart';
+import 'shared_qr_page.dart';
 import 'schedule_settings_dialog.dart';
 
 class ClassDetailPage extends StatefulWidget {
@@ -13,10 +14,12 @@ class ClassDetailPage extends StatefulWidget {
     super.key,
     required this.controller,
     required this.classId,
+    this.initialMeetingId,
   });
 
   final AttendanceController controller;
   final String classId;
+  final String? initialMeetingId;
 
   @override
   State<ClassDetailPage> createState() => _ClassDetailPageState();
@@ -24,6 +27,12 @@ class ClassDetailPage extends StatefulWidget {
 
 class _ClassDetailPageState extends State<ClassDetailPage> {
   String? selectedMeetingId;
+
+  @override
+  void initState() {
+    super.initState();
+    selectedMeetingId = widget.initialMeetingId;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -333,18 +342,38 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
                     ),
                   ),
                   ...courseClass.meetings.map((meeting) {
-                    final status =
-                        courseClass
-                            .recordFor(meeting.id, student.rollNumber)
-                            ?.status ??
-                        AttendanceStatus.unmarked;
+                    final record = courseClass.recordFor(
+                      meeting.id,
+                      student.rollNumber,
+                    );
+                    final status = record?.status ?? AttendanceStatus.unmarked;
+                    final noteEvents = courseClass.auditEvents
+                        .where(
+                          (event) =>
+                              event.meetingId == meeting.id &&
+                              event.rollNumber == student.rollNumber,
+                        )
+                        .toList();
+                    final hasNote =
+                        (record?.note?.trim().isNotEmpty ?? false) ||
+                        noteEvents.isNotEmpty;
                     final editable =
                         meeting.state == MeetingState.closed ||
                         (meeting.state == MeetingState.active &&
                             meeting.isOnDate(now));
                     return DataCell(
-                      Center(child: _statusBadge(status)),
-                      onTap: editable
+                      Center(child: _statusBadge(status, hasNote: hasNote)),
+                      onTap: hasNote
+                          ? () => _showNote(
+                              courseClass,
+                              meeting,
+                              student,
+                              status,
+                              record,
+                              noteEvents,
+                              editable: editable,
+                            )
+                          : editable
                           ? () => _editStatus(
                               courseClass,
                               meeting,
@@ -363,25 +392,142 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
     );
   }
 
-  Widget _statusBadge(AttendanceStatus status) {
+  Widget _statusBadge(AttendanceStatus status, {required bool hasNote}) {
     final color = switch (status) {
       AttendanceStatus.present => AppColors.success,
       AttendanceStatus.absent => AppColors.danger,
       AttendanceStatus.unmarked => AppColors.muted,
     };
-    return Container(
-      width: 32,
-      height: 32,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: .12),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        attendanceCode(status).isEmpty ? '–' : attendanceCode(status),
-        style: TextStyle(color: color, fontWeight: FontWeight.bold),
+    return Tooltip(
+      message: hasNote ? 'Có ghi chú chỉnh sửa — bấm để xem' : '',
+      child: SizedBox(
+        width: 44,
+        height: 38,
+        child: Stack(
+          children: [
+            Positioned(
+              left: 2,
+              bottom: 1,
+              child: Container(
+                width: 32,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: .12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  attendanceCode(status).isEmpty ? '–' : attendanceCode(status),
+                  style: TextStyle(color: color, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+            if (hasNote)
+              const Positioned(
+                right: 0,
+                top: 0,
+                child: Icon(
+                  Icons.sticky_note_2_outlined,
+                  size: 17,
+                  color: AppColors.orangeDark,
+                ),
+              ),
+          ],
+        ),
       ),
     );
+  }
+
+  Future<void> _showNote(
+    CourseClass courseClass,
+    Meeting meeting,
+    Student student,
+    AttendanceStatus status,
+    AttendanceRecord? record,
+    List<AuditEvent> noteEvents, {
+    required bool editable,
+  }) async {
+    final events = [...noteEvents]
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final latestNote = record?.note?.trim().isNotEmpty == true
+        ? record!.note!.trim()
+        : events.first.reason;
+    final editAgain = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Ghi chú chỉnh sửa điểm danh'),
+        content: SizedBox(
+          width: 440,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 400),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('${student.rollNumber} · ${student.fullName}'),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Slot ${meeting.number} · ${DateFormat('dd/MM/yyyy').format(meeting.startAt)} · ${attendanceCode(status)}',
+                    style: const TextStyle(color: AppColors.muted),
+                  ),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'Ghi chú gần nhất',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(latestNote),
+                  if (events.isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    const Divider(),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Lịch sử chỉnh sửa',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 8),
+                    ...events.map(
+                      (event) => Padding(
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${DateFormat('dd/MM/yyyy HH:mm').format(event.createdAt.toLocal())} · ${event.oldValue ?? '–'} → ${event.newValue ?? '–'}',
+                              style: const TextStyle(
+                                color: AppColors.muted,
+                                fontSize: 12,
+                              ),
+                            ),
+                            Text(event.reason),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Đóng'),
+          ),
+          if (editable)
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(context, true),
+              icon: const Icon(Icons.edit_outlined),
+              label: const Text('Sửa tiếp'),
+            ),
+        ],
+      ),
+    );
+    if (editAgain == true && mounted) {
+      await _editStatus(courseClass, meeting, student, status);
+    }
   }
 
   Meeting _defaultMeeting(CourseClass courseClass) {
@@ -406,7 +552,9 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Chọn chế độ QR'),
-        content: const Text('Mã bí mật đổi cùng QR sau mỗi 15 giây.'),
+        content: const Text(
+          'QR đổi mỗi 15 giây. Mã bí mật giữ nguyên trong lần bật QR + mã bí mật này.',
+        ),
         actions: [
           OutlinedButton(
             onPressed: () => Navigator.pop(context, QrMode.normal),
@@ -433,12 +581,19 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
   void _openQr(CourseClass courseClass, Meeting meeting, QrMode mode) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => QrSessionPage(
-          controller: widget.controller,
-          classId: courseClass.id,
-          meetingId: meeting.id,
-          initialMode: mode,
-        ),
+        builder: (_) => widget.controller.sharedLinks != null
+            ? SharedQrPage(
+                controller: widget.controller,
+                classId: courseClass.id,
+                meetingId: meeting.id,
+                mode: mode,
+              )
+            : QrSessionPage(
+                controller: widget.controller,
+                classId: courseClass.id,
+                meetingId: meeting.id,
+                initialMode: mode,
+              ),
       ),
     );
   }

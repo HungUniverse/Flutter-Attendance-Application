@@ -8,8 +8,6 @@ enum AttendanceSource { scan, manual, finalize, simulator }
 
 enum QrMode { normal, otp }
 
-enum SyncState { localOnly, pendingSync, synced, conflict }
-
 String attendanceCode(AttendanceStatus status) => switch (status) {
   AttendanceStatus.present => 'P',
   AttendanceStatus.absent => 'A',
@@ -342,7 +340,6 @@ class TeacherWorkspace {
     required this.classes,
     this.schemaVersion = 1,
     this.teacherEmail = '',
-    this.syncState = SyncState.localOnly,
     this.updatedAt,
   });
 
@@ -352,13 +349,11 @@ class TeacherWorkspace {
   final DateTime semesterStart;
   final String teacherEmail;
   final List<CourseClass> classes;
-  final SyncState syncState;
   final DateTime? updatedAt;
 
   TeacherWorkspace copyWith({
     List<CourseClass>? classes,
     String? teacherEmail,
-    SyncState? syncState,
     DateTime? updatedAt,
   }) => TeacherWorkspace(
     schemaVersion: schemaVersion,
@@ -367,7 +362,6 @@ class TeacherWorkspace {
     semesterStart: semesterStart,
     teacherEmail: teacherEmail ?? this.teacherEmail,
     classes: classes ?? this.classes,
-    syncState: syncState ?? this.syncState,
     updatedAt: updatedAt ?? this.updatedAt,
   );
 
@@ -378,7 +372,6 @@ class TeacherWorkspace {
     'semesterStart': semesterStart.toIso8601String(),
     'teacherEmail': teacherEmail,
     'classes': classes.map((e) => e.toJson()).toList(),
-    'syncState': syncState.name,
     'updatedAt': updatedAt?.toIso8601String(),
   };
 
@@ -396,9 +389,6 @@ class TeacherWorkspace {
               (e) => CourseClass.fromJson((e as Map).cast<String, Object?>()),
             )
             .toList(),
-        syncState: SyncState.values.byName(
-          (json['syncState'] as String?) ?? SyncState.localOnly.name,
-        ),
         updatedAt: json['updatedAt'] == null
             ? null
             : DateTime.parse(json['updatedAt']! as String),

@@ -1,10 +1,8 @@
 import { parseAttendanceCsv } from './csv';
 import { parseAttendanceJson } from './attendance_json';
-import { pickCsvFromDrive } from './drive_picker';
 import type { AttendanceCsvRow, MappingPreview } from './types';
 
 const file = document.querySelector<HTMLInputElement>('#attendanceFile')!;
-const drive = document.querySelector<HTMLButtonElement>('#driveFile')!;
 const previewElement = document.querySelector<HTMLElement>('#preview')!;
 const confirmRow = document.querySelector<HTMLElement>('#confirmRow')!;
 const confirm = document.querySelector<HTMLInputElement>('#confirm')!;
@@ -23,10 +21,6 @@ file.addEventListener('change', async () => {
     await prepare(selected.name.toLowerCase().endsWith('.json')
       ? parseAttendanceJson(source) : parseAttendanceCsv(source));
   } catch (error) { fail(error); }
-});
-drive.addEventListener('click', async () => {
-  resetSelection();
-  try { await prepare(parseAttendanceCsv(await pickCsvFromDrive())); } catch (error) { fail(error); }
 });
 confirm.addEventListener('change', () => submit.disabled = !confirm.checked);
 submit.addEventListener('click', async () => {

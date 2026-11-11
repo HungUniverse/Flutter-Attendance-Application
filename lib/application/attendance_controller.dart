@@ -2,14 +2,15 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:googleapis/drive/v3.dart' as drive;
-import 'package:googleapis_auth/auth_io.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../data/attendance_csv_exporter.dart';
-import '../data/drive_sync_service.dart';
-import '../data/google_drive_auth.dart';
+import '../data/desktop_teacher_auth.dart';
+import '../data/shared_workspace_sync.dart';
+import '../data/synced_desktop_store.dart';
+import '../lab3/services/attendance_link_service.dart';
+import '../lab3/services/contracts.dart';
 import '../data/roster_importer.dart';
 import '../data/workspace_store.dart';
 import '../domain/attendance_service.dart';
@@ -33,19 +34,133 @@ class AttendanceController extends ChangeNotifier {
   final AttendanceCsvExporter _csvExporter;
   final RosterMergeService _rosterMergeService;
   WorkspaceStore? _store;
-  final GoogleDriveAuth _driveAuth = GoogleDriveAuth();
-  AutoRefreshingAuthClient? _driveClient;
-  DriveSyncService? _driveSync;
-  Timer? _syncDebounce;
-  Timer? _leaseRenewal;
   Timer? _calendarReconciliation;
-  Future<void>? _syncOperation;
   bool _reconcilingCalendar = false;
 
   TeacherWorkspace? workspace;
   String? workspacePath;
   String? lastMessage;
   bool busy = false;
+  final desktopAuth = DesktopTeacherAuth();
+  SharedWorkspaceSync? sync;
+  TeacherWorkspace? _legacyWorkspace;
+  bool get canMigrateLegacy =>
+      sync != null && workspace == null && _legacyWorkspace != null;
+  Future<void> migrateLegacy() async {
+    if (!canMigrateLegacy || busy) return;
+    busy = true;
+    notifyListeners();
+    try {
+      final remote = await sync!.api.request('GET', '/api/workspaces');
+      if (remote['data'] != null) {
+        throw const AppProblem(
+          'Tài khoản đã có dữ liệu. Đồng bộ trước để đối chiếu, không ghi đè dữ liệu cũ.',
+        );
+      }
+      final value = _legacyWorkspace!.copyWith(
+        teacherEmail: desktopAuth.current!.email,
+      );
+      await sync!.save(value);
+      workspace = value;
+      _legacyWorkspace = null;
+      lastMessage = sync!.status;
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+  }
+
+  HttpAttendanceLinkService? sharedLinks;
+  String get syncLabel => sync?.status ?? 'Lưu trên thiết bị';
+  Future<void> disconnectAccount() async {
+    if (busy) return;
+    busy = true;
+    try {
+      await desktopAuth.signOut();
+    } finally {
+      sync?.removeListener(notifyListeners);
+      sync?.dispose();
+      sync = null;
+      sharedLinks = null;
+      workspace = null;
+      workspacePath = null;
+      final documents = await getApplicationDocumentsDirectory();
+      _store = WorkspaceStore(Directory('${documents.path}/FAP Attendance'));
+      busy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> connectAccount() async {
+    if (busy) return;
+    busy = true;
+    notifyListeners();
+    try {
+      await desktopAuth.signIn();
+      if (sync == null) _legacyWorkspace = workspace;
+      final documents = await getApplicationDocumentsDirectory();
+      sync?.removeListener(notifyListeners);
+      sync?.dispose();
+      sync = SharedWorkspaceSync(
+        SharedApi(desktopAuth),
+        Directory('${documents.path}/FAP Attendance Shared'),
+      );
+      sync!.addListener(notifyListeners);
+      _store = SyncedDesktopStore(sync!, desktopAuth.current!.uid);
+      sharedLinks = HttpAttendanceLinkService(desktopAuth);
+      workspace = await _store!.loadMostRecentWorkspace();
+      lastMessage =
+          'Đã đăng nhập ${desktopAuth.current!.email}. Dữ liệu cũ trên máy được giữ riêng; import vào tài khoản nếu cần.';
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> refreshShared({bool useServer = false}) async {
+    if (sync == null || busy) return;
+    busy = true;
+    notifyListeners();
+    try {
+      workspace = useServer && workspace != null
+          ? await sync!.useServer(workspace!.semester)
+          : await sync!.load(semester: workspace?.semester);
+      lastMessage = sync!.status;
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<LinkUpdate> sharedResults(LinkSession session) async {
+    await refreshShared();
+    final update = await sharedLinks!.poll(session);
+    final c = classById(session.classId);
+    if (meetingById(c.id, session.meetingId).state == MeetingState.closed) {
+      return update;
+    }
+    var updated = c;
+    for (final submission in update.submissions) {
+      final student = c.students
+          .where((s) => s.normalizedEmail == submission.email)
+          .firstOrNull;
+      if (student != null &&
+          updated.recordFor(session.meetingId, student.rollNumber) == null) {
+        updated = _attendanceService.markPresent(
+          updated,
+          meetingId: session.meetingId,
+          email: submission.email,
+          source: AttendanceSource.scan,
+          now: submission.at,
+        );
+      }
+    }
+    if (!identical(c, updated)) {
+      _replaceClass(updated);
+      await save();
+    }
+    return update;
+  }
 
   Future<void> initialize() async {
     final documents = await getApplicationDocumentsDirectory();
@@ -149,148 +264,21 @@ class AttendanceController extends ChangeNotifier {
     }
   }
 
-  Future<void> save() async {
+  Future<void> save({({String classId, String meetingId})? closing}) async {
     final value = workspace;
     if (value == null || _store == null) return;
-    final updated = value.copyWith(
-      syncState: _driveSync == null
-          ? (value.syncState == SyncState.synced
-                ? SyncState.pendingSync
-                : value.syncState)
-          : SyncState.pendingSync,
-      updatedAt: DateTime.now().toUtc(),
-    );
+    final updated = value.copyWith(updatedAt: DateTime.now().toUtc());
     workspace = updated;
-    final file = await _store!.saveWorkspace(updated);
-    workspacePath = file.path;
-    _scheduleDriveSync();
+    final shared = sync;
+    if (shared != null && closing != null) {
+      workspace = await shared.save(updated, closing: closing);
+      workspacePath =
+          '${_store!.rootDirectory.path}${Platform.pathSeparator}${updated.semester}${Platform.pathSeparator}workspace.json';
+    } else {
+      final file = await _store!.saveWorkspace(updated);
+      workspacePath = file.path;
+    }
     notifyListeners();
-  }
-
-  bool get driveConnected => _driveSync != null;
-  bool get syncingDrive => _syncOperation != null;
-
-  Future<List<DriveSourceFile>> driveSourceFiles() async {
-    if (_driveSync == null) throw StateError('Hãy kết nối Google Drive trước.');
-    return _driveSync!.listSourceFiles();
-  }
-
-  Future<Uint8List> downloadDriveSource(String fileId) async {
-    if (_driveSync == null) throw StateError('Hãy kết nối Google Drive trước.');
-    return Uint8List.fromList(await _driveSync!.downloadSource(fileId));
-  }
-
-  Future<void> connectDrive({
-    required String clientId,
-    required String clientSecret,
-  }) async {
-    if (clientId.trim().isEmpty) {
-      throw StateError('Thiếu GOOGLE_OAUTH_CLIENT_ID.');
-    }
-    busy = true;
-    notifyListeners();
-    try {
-      _driveClient =
-          await _driveAuth.restore(
-            clientId: clientId,
-            clientSecret: clientSecret,
-          ) ??
-          await _driveAuth.signIn(
-            clientId: clientId,
-            clientSecret: clientSecret,
-          );
-      _driveSync = DriveSyncService(drive.DriveApi(_driveClient!));
-      await syncNow();
-      _leaseRenewal?.cancel();
-      _leaseRenewal = Timer.periodic(const Duration(minutes: 1), (_) async {
-        final value = workspace;
-        if (value == null) return;
-        try {
-          await _driveSync?.acquireLease(value.id);
-        } on Object {
-          // Lần đồng bộ kế tiếp sẽ hiển thị lỗi lease cho giảng viên.
-        }
-      });
-    } finally {
-      busy = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> syncNow() {
-    final active = _syncOperation;
-    if (active != null) return active;
-    final value = workspace;
-    if (value == null || _store == null || _driveSync == null) {
-      return Future.value();
-    }
-    _syncDebounce?.cancel();
-    _syncDebounce = null;
-    late final Future<void> operation;
-    operation = _performSync(value).whenComplete(() {
-      if (identical(_syncOperation, operation)) {
-        _syncOperation = null;
-        notifyListeners();
-      }
-    });
-    _syncOperation = operation;
-    notifyListeners();
-    return operation;
-  }
-
-  Future<void> _performSync(TeacherWorkspace value) async {
-    try {
-      final result = await _driveSync!.syncDirectory(
-        semesterDirectory: _store!.semesterDirectory(value.semester),
-        workspaceId: value.id,
-      );
-      final latest = workspace;
-      if (latest == null || latest.id != value.id) return;
-      final changedDuringSync = !_sameUpdatedAt(
-        latest.updatedAt,
-        value.updatedAt,
-      );
-      workspace = latest.copyWith(
-        syncState: changedDuringSync ? SyncState.pendingSync : SyncState.synced,
-      );
-      await _store!.saveWorkspace(workspace!);
-      lastMessage = changedDuringSync
-          ? 'Dữ liệu thay đổi trong lúc đồng bộ; app sẽ đồng bộ thêm một lượt.'
-          : 'Đã đồng bộ Google Drive: ${result.uploaded} file cập nhật, ${result.unchanged} file không đổi${result.cleanedFolders == 0 ? '' : ', đã dọn ${result.cleanedFolders} thư mục cũ sai cấu trúc'}${result.cleanedFiles == 0 ? '' : ', đã dọn ${result.cleanedFiles} file phiên bản cũ'}.';
-      if (changedDuringSync) _scheduleDriveSync();
-    } on DriveConflictException catch (error) {
-      final latest = workspace;
-      if (latest != null && latest.id == value.id) {
-        workspace = latest.copyWith(syncState: SyncState.conflict);
-        await _store!.saveWorkspace(workspace!);
-      }
-      lastMessage = '$error Các bản Drive được lưu với đuôi .drive-conflict.';
-      rethrow;
-    } on Object {
-      final latest = workspace;
-      if (latest != null && latest.id == value.id) {
-        workspace = latest.copyWith(syncState: SyncState.pendingSync);
-        await _store!.saveWorkspace(workspace!);
-      }
-      rethrow;
-    }
-  }
-
-  bool _sameUpdatedAt(DateTime? first, DateTime? second) {
-    if (first == null || second == null) return first == second;
-    return first.isAtSameMomentAs(second);
-  }
-
-  void _scheduleDriveSync() {
-    if (_driveSync == null) return;
-    _syncDebounce?.cancel();
-    _syncDebounce = Timer(const Duration(seconds: 10), () async {
-      try {
-        await syncNow();
-      } on Object {
-        // Trạng thái pending/conflict đã được cập nhật để thử lại về sau.
-      }
-    });
   }
 
   Future<void> loadSemester(String semester) async {
@@ -402,18 +390,29 @@ class AttendanceController extends ChangeNotifier {
   }
 
   Future<void> closeMeeting(String classId, String meetingId) async {
+    if (sharedLinks != null) {
+      final session = await sharedLinks!.current();
+      if (session != null &&
+          session.classId == classId &&
+          session.meetingId == meetingId) {
+        await sharedLinks!.stop(session);
+        await sharedResults(session);
+      }
+    }
     final updated = _attendanceService.closeMeeting(
       classById(classId),
       meetingId,
     );
     _replaceClass(updated);
+    if (sync != null) {
+      await save(closing: (classId: classId, meetingId: meetingId));
+    }
     await _store?.saveFinalVersion(
       workspace!,
-      updated,
+      classById(classId),
       meetingById(classId, meetingId),
     );
-    await save();
-    await _syncCritical();
+    if (sync == null) await save();
   }
 
   Future<void> overrideStatus({
@@ -455,18 +454,7 @@ class AttendanceController extends ChangeNotifier {
     );
     lastMessage = 'Đã xuất ${file.path}';
     notifyListeners();
-    await _syncCritical();
     return file;
-  }
-
-  Future<void> _syncCritical() async {
-    _syncDebounce?.cancel();
-    if (_driveSync == null) return;
-    try {
-      await syncNow();
-    } on Object {
-      // Dữ liệu local vẫn an toàn và sẽ được thử lại ở lần đồng bộ kế tiếp.
-    }
   }
 
   Meeting meetingById(String classId, String meetingId) =>
@@ -512,7 +500,6 @@ class AttendanceController extends ChangeNotifier {
     lastMessage =
         'Đã xóa lớp ${courseClass.courseCode} · ${courseClass.classCode} khỏi workspace.';
     await save();
-    await _syncCritical();
   }
 
   void _replaceClass(CourseClass updated) {
@@ -530,10 +517,9 @@ class AttendanceController extends ChangeNotifier {
 
   @override
   void dispose() {
-    _syncDebounce?.cancel();
-    _leaseRenewal?.cancel();
+    sync?.removeListener(notifyListeners);
+    sync?.dispose();
     _calendarReconciliation?.cancel();
-    _driveClient?.close();
     super.dispose();
   }
 }

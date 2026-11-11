@@ -3,13 +3,11 @@
   "name": "FAP Attendance Importer",
   "version": "1.0.0",
   "description": "Đọc JSON/CSV điểm danh, đối chiếu MSSV và nhập P/A lên trang FAP hoặc trang demo.",
-  "permissions": ["activeTab", "identity"],
+  "permissions": ["activeTab"],
   "host_permissions": [
     "https://fap.fpt.edu.vn/*",
     "http://localhost/*",
-    "http://127.0.0.1/*",
-    "https://www.googleapis.com/*",
-    "https://accounts.google.com/*"
+    "http://127.0.0.1/*"
   ],
   "action": {
     "default_popup": "popup.html"
@@ -21,15 +19,7 @@
       "run_at": "document_idle"
     }
   ],
-  "sandbox": {
-    "pages": ["picker.html"]
-  },
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'",
-    "sandbox": "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' https://apis.google.com; child-src https://docs.google.com https://drive.google.com"
-  },
-  "oauth2": {
-    "client_id": "REPLACE_WITH_EXTENSION_OAUTH_CLIENT_ID.apps.googleusercontent.com",
-    "scopes": ["https://www.googleapis.com/auth/drive.file"]
+    "extension_pages": "script-src 'self'; object-src 'self'"
   }
 }

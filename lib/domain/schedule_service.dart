@@ -33,6 +33,7 @@ class ScheduleService {
       throw const FormatException('Mã lịch phải nằm trong khoảng 11–34.');
     }
     if (rule.weeks < 1 ||
+        rule.weeks > 52 ||
         rule.meetingsPerWeek < 1 ||
         rule.meetingsPerWeek > 2) {
       throw const FormatException(

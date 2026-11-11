@@ -4,6 +4,13 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// A source checkout builds a setup screen until the owner's Firebase file exists.
+// No placeholder credentials are embedded in the app.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
+}
+
 android {
     namespace = "vn.edu.fpt.fap_attendance"
     compileSdk = flutter.compileSdkVersion
