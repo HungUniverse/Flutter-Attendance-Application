@@ -67,6 +67,26 @@ class RollingQrIssuer {
   RollingQrIssuer({String? secret}) : _secret = secret ?? _randomToken(32);
 
   final String _secret;
+  String _activationId = _randomToken(16);
+  QrMode? _activeMode;
+  String? _activeOtp;
+
+  String? get activeOtp => _activeMode == QrMode.otp ? _activeOtp : null;
+
+  void _activate(QrMode mode) {
+    if (_activeMode == mode) return;
+    _activeMode = mode;
+    _activationId = _randomToken(16);
+    if (mode == QrMode.otp) {
+      final previous = _activeOtp;
+      do {
+        _activeOtp = Random.secure()
+            .nextInt(1000000)
+            .toString()
+            .padLeft(6, '0');
+      } while (_activeOtp == previous);
+    }
+  }
 
   QrPayload issue({
     required String endpoint,
@@ -76,10 +96,13 @@ class RollingQrIssuer {
     required QrMode mode,
     DateTime? now,
   }) {
+    _activate(mode);
     final at = (now ?? DateTime.now()).toUtc();
     final window =
         at.millisecondsSinceEpoch ~/ const Duration(seconds: 15).inMilliseconds;
-    final token = _hmac('$classId|$meetingId|$window');
+    final token = _hmac(
+      '$classId|$meetingId|${mode.name}|$_activationId|$window',
+    );
     return QrPayload(
       endpoint: endpoint,
       classId: classId,
@@ -93,15 +116,15 @@ class RollingQrIssuer {
   }
 
   String otpFor(QrPayload payload) {
-    final value = int.parse(
-      _hmac('otp|${payload.token}').substring(0, 8),
-      radix: 16,
-    );
-    return (value % 1000000).toString().padLeft(6, '0');
+    if (payload.mode != QrMode.otp || _activeMode != QrMode.otp) {
+      throw StateError('QR không ở chế độ mã bí mật.');
+    }
+    return _activeOtp!;
   }
 
   bool verify(QrPayload payload, {DateTime? now}) {
     final at = (now ?? DateTime.now()).toUtc();
+    if (payload.mode != _activeMode) return false;
     if (at.isAfter(payload.expiresAt.toUtc())) return false;
     final windows = [
       payload.issuedAt.toUtc().millisecondsSinceEpoch ~/ 15000,
@@ -111,7 +134,9 @@ class RollingQrIssuer {
     return windows.any(
       (window) => _constantTimeEquals(
         payload.token,
-        _hmac('${payload.classId}|${payload.meetingId}|$window'),
+        _hmac(
+          '${payload.classId}|${payload.meetingId}|${payload.mode.name}|$_activationId|$window',
+        ),
       ),
     );
   }

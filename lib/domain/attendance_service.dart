@@ -50,6 +50,11 @@ class AttendanceService {
         .where((s) => s.normalizedEmail == normalized)
         .firstOrNull;
     if (student == null) throw StateError('Email không thuộc danh sách lớp.');
+    // A repeated link submission never erases a teacher's decision or its note.
+    final previous = courseClass.recordFor(meetingId, student.rollNumber);
+    if (previous != null && previous.status != AttendanceStatus.unmarked) {
+      return courseClass;
+    }
     final attendance = _deepCopy(courseClass.attendance);
     attendance.putIfAbsent(meetingId, () => {});
     attendance[meetingId]![student.rollNumber] = AttendanceRecord(
@@ -69,14 +74,14 @@ class AttendanceService {
     final records = attendance.putIfAbsent(meetingId, () => {});
     final recordedAt = now ?? DateTime.now();
     for (final student in courseClass.students) {
-      records.putIfAbsent(
-        student.rollNumber,
-        () => AttendanceRecord(
+      if (records[student.rollNumber] == null ||
+          records[student.rollNumber]!.status == AttendanceStatus.unmarked) {
+        records[student.rollNumber] = AttendanceRecord(
           status: AttendanceStatus.absent,
           source: AttendanceSource.finalize,
           recordedAt: recordedAt,
-        ),
-      );
+        );
+      }
     }
     return courseClass.copyWith(
       attendance: attendance,
@@ -87,6 +92,35 @@ class AttendanceService {
           )
           .toList(),
     );
+  }
+
+  CourseClass markManual(
+    CourseClass courseClass, {
+    required String meetingId,
+    required String rollNumber,
+    required AttendanceStatus status,
+    DateTime? now,
+  }) {
+    final meeting = courseClass.meetings.singleWhere((m) => m.id == meetingId);
+    final at = now ?? DateTime.now();
+    if (meeting.state != MeetingState.active || !meeting.isOnDate(at)) {
+      throw StateError('Chỉ điểm danh trực tiếp buổi đang mở hôm nay.');
+    }
+    if (status == AttendanceStatus.unmarked ||
+        !courseClass.students.any((s) => s.rollNumber == rollNumber)) {
+      throw ArgumentError('Sinh viên hoặc kết quả không hợp lệ.');
+    }
+    final previous = courseClass.recordFor(meetingId, rollNumber);
+    if (previous != null && previous.status != AttendanceStatus.unmarked) {
+      throw StateError('Kết quả đã ghi. Hãy sửa với lý do.');
+    }
+    final attendance = _deepCopy(courseClass.attendance);
+    attendance.putIfAbsent(meetingId, () => {})[rollNumber] = AttendanceRecord(
+      status: status,
+      source: AttendanceSource.manual,
+      recordedAt: at,
+    );
+    return courseClass.copyWith(attendance: attendance);
   }
 
   CourseClass finalizeOverdueMeetings(
@@ -114,6 +148,10 @@ class AttendanceService {
     DateTime? now,
   }) {
     if (reason.trim().isEmpty) throw ArgumentError('Cần nhập lý do chỉnh sửa.');
+    if (status == AttendanceStatus.unmarked ||
+        !courseClass.students.any((s) => s.rollNumber == rollNumber)) {
+      throw ArgumentError('Sinh viên hoặc kết quả không hợp lệ.');
+    }
     final meeting = courseClass.meetings.singleWhere((m) => m.id == meetingId);
     if (meeting.state == MeetingState.upcoming) {
       throw StateError('Không thể sửa slot chưa bắt đầu hoặc đã quá hạn.');

@@ -302,6 +302,56 @@ void main() {
     );
   });
 
+  test(
+    'secret code stays fixed across QR rotations and changes on re-enable',
+    () {
+      final issuer = RollingQrIssuer(secret: 'stable-otp-test-secret');
+      final store = ChallengeStore(issuer);
+      final now = DateTime.utc(2026, 9, 7, 0, 0);
+
+      QrPayload issue(QrMode mode, Duration offset) => issuer.issue(
+        endpoint: 'https://127.0.0.1:8787',
+        classId: 'c1',
+        meetingId: 'm1',
+        certificateFingerprint: 'abc',
+        mode: mode,
+        now: now.add(offset),
+      );
+
+      final first = issue(QrMode.otp, Duration.zero);
+      final firstCode = issuer.otpFor(first);
+      final second = issue(QrMode.otp, const Duration(seconds: 15));
+      expect(second.token, isNot(first.token));
+      expect(issuer.otpFor(second), firstCode);
+      final scanned = store.create(
+        second,
+        'phone-1',
+        now: now.add(const Duration(seconds: 15)),
+      );
+      expect(scanned.otp, firstCode);
+
+      issue(QrMode.normal, const Duration(seconds: 16));
+      expect(issuer.activeOtp, isNull);
+      expect(
+        issuer.verify(second, now: now.add(const Duration(seconds: 16))),
+        isFalse,
+      );
+      final renewed = issue(QrMode.otp, const Duration(seconds: 17));
+      expect(issuer.otpFor(renewed), isNot(firstCode));
+      expect(
+        store
+            .validate(
+              scanned.id,
+              deviceId: 'phone-1',
+              otp: firstCode,
+              now: now.add(const Duration(seconds: 18)),
+            )
+            .id,
+        scanned.id,
+      );
+    },
+  );
+
   test('generates a pinned LAN certificate', () {
     final certificate = LanCertificate.create('192.168.1.20');
     expect(certificate.fingerprint.replaceAll(':', ''), hasLength(40));

@@ -538,40 +538,8 @@
     });
   }
 
-  // src/drive_picker.ts
-  var apiKey = "REPLACE_WITH_GOOGLE_PICKER_API_KEY";
-  async function pickCsvFromDrive() {
-    const token = await chrome.identity.getAuthToken({ interactive: true });
-    const accessToken = typeof token === "string" ? token : token.token;
-    if (!accessToken) throw new Error("Kh\xF4ng l\u1EA5y \u0111\u01B0\u1EE3c quy\u1EC1n Google Drive.");
-    const fileId = await new Promise((resolve, reject) => {
-      const picker = window.open(chrome.runtime.getURL("picker.html"), "fap-drive-picker", "width=900,height=650");
-      if (!picker) return reject(new Error("Tr\xECnh duy\u1EC7t \u0111\xE3 ch\u1EB7n c\u1EEDa s\u1ED5 Google Picker."));
-      const listener = (event) => {
-        if (event.source !== picker || event.data?.source !== "fap-picker") return;
-        if (event.data.fileId) {
-          cleanup();
-          resolve(event.data.fileId);
-        }
-        if (event.data.cancelled || event.data.error) {
-          cleanup();
-          reject(new Error(event.data.error || "\u0110\xE3 h\u1EE7y ch\u1ECDn file."));
-        }
-      };
-      const cleanup = () => window.removeEventListener("message", listener);
-      window.addEventListener("message", listener);
-      setTimeout(() => picker.postMessage({ source: "fap-popup", accessToken, apiKey }, "*"), 500);
-    });
-    const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-      headers: { authorization: `Bearer ${accessToken}` }
-    });
-    if (!response.ok) throw new Error("Kh\xF4ng t\u1EA3i \u0111\u01B0\u1EE3c CSV t\u1EEB Drive.");
-    return response.text();
-  }
-
   // src/popup.ts
   var file = document.querySelector("#attendanceFile");
-  var drive = document.querySelector("#driveFile");
   var previewElement = document.querySelector("#preview");
   var confirmRow = document.querySelector("#confirmRow");
   var confirm = document.querySelector("#confirm");
@@ -587,14 +555,6 @@
     try {
       const source = await selected.text();
       await prepare(selected.name.toLowerCase().endsWith(".json") ? parseAttendanceJson(source) : parseAttendanceCsv(source));
-    } catch (error) {
-      fail(error);
-    }
-  });
-  drive.addEventListener("click", async () => {
-    resetSelection();
-    try {
-      await prepare(parseAttendanceCsv(await pickCsvFromDrive()));
     } catch (error) {
       fail(error);
     }

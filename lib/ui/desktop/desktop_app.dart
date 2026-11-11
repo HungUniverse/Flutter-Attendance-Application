@@ -5,12 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../application/attendance_controller.dart';
-import '../../data/drive_sync_service.dart';
 import '../../domain/models.dart';
 import '../../domain/schedule_service.dart';
 import '../theme.dart';
 import 'class_detail_page.dart';
 import 'schedule_settings_dialog.dart';
+import 'weekly_timetable.dart';
 
 class DesktopHomePage extends StatefulWidget {
   const DesktopHomePage({super.key, required this.controller});
@@ -36,6 +36,119 @@ class _DesktopHomePageState extends State<DesktopHomePage> {
       builder: (context, _) {
         final workspace = widget.controller.workspace;
         return Scaffold(
+          persistentFooterButtons: [
+            Text(widget.controller.syncLabel),
+            if (widget.controller.desktopAuth.current == null)
+              FilledButton.icon(
+                onPressed: widget.controller.busy
+                    ? null
+                    : () async {
+                        try {
+                          await widget.controller.connectAccount();
+                        } on Object catch (e) {
+                          if (mounted) _showError('$e');
+                        }
+                      },
+                icon: const Icon(Icons.account_circle),
+                label: const Text('Đăng nhập Google để đồng bộ'),
+              ),
+            if (widget.controller.sync != null) ...[
+              Text(widget.controller.desktopAuth.current!.email),
+              if (widget.controller.canMigrateLegacy)
+                OutlinedButton(
+                  onPressed: widget.controller.busy
+                      ? null
+                      : () async {
+                          final ok = await showDialog<bool>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text(
+                                'Chuyển dữ liệu desktop vào tài khoản?',
+                              ),
+                              content: const Text(
+                                'Đưa học kỳ, danh sách lớp và lịch sử điểm danh hiện có lên tài khoản đang đăng nhập. Bản desktop cũ vẫn được giữ.',
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(context, false),
+                                  child: const Text('Hủy'),
+                                ),
+                                FilledButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: const Text('Chuyển dữ liệu'),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (ok == true) {
+                            try {
+                              await widget.controller.migrateLegacy();
+                            } on Object catch (e) {
+                              if (mounted) _showError('$e');
+                            }
+                          }
+                        },
+                  child: const Text('Chuyển dữ liệu desktop cũ'),
+                ),
+              TextButton(
+                onPressed: widget.controller.busy
+                    ? null
+                    : () async {
+                        try {
+                          await widget.controller.disconnectAccount();
+                        } on Object catch (e) {
+                          if (mounted) _showError('$e');
+                        }
+                      },
+                child: const Text('Đăng xuất'),
+              ),
+              OutlinedButton(
+                onPressed: widget.controller.busy
+                    ? null
+                    : () async {
+                        try {
+                          await widget.controller.refreshShared();
+                        } on Object catch (e) {
+                          if (mounted) _showError('$e');
+                        }
+                      },
+                child: const Text('Đồng bộ ngay'),
+              ),
+              if (widget.controller.sync!.conflict)
+                OutlinedButton(
+                  onPressed: () async {
+                    final ok = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Nhận bản máy chủ?'),
+                        content: const Text(
+                          'Bản đang chờ trên máy sẽ được giữ trong tệp đối chiếu trước khi nhận dữ liệu mới.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Hủy'),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Nhận bản máy chủ'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (ok == true) {
+                      try {
+                        await widget.controller.refreshShared(useServer: true);
+                      } on Object catch (e) {
+                        if (mounted) _showError('$e');
+                      }
+                    }
+                  },
+                  child: const Text('Xử lý xung đột'),
+                ),
+            ],
+          ],
           backgroundColor: workspace == null
               ? Colors.white
               : AppColors.creamLight,
@@ -57,87 +170,19 @@ class _DesktopHomePageState extends State<DesktopHomePage> {
                     ],
                   ),
                   actions: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8),
                       child: Chip(
-                        avatar: widget.controller.syncingDrive
-                            ? const SizedBox.square(
-                                dimension: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(
-                                Icons.cloud_upload_outlined,
-                                size: 18,
-                                color: AppColors.info,
-                              ),
-                        label: Text(
-                          widget.controller.syncingDrive
-                              ? 'Đang đồng bộ...'
-                              : switch (workspace.syncState) {
-                                  SyncState.localOnly => 'Chỉ lưu local',
-                                  SyncState.pendingSync => 'Chờ đồng bộ Drive',
-                                  SyncState.synced => 'Đã đồng bộ',
-                                  SyncState.conflict => 'Có xung đột Drive',
-                                },
-                        ),
-                      ),
-                    ),
-                    if (widget.controller.driveConnected)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: OutlinedButton.icon(
-                          onPressed:
-                              widget.controller.busy ||
-                                  widget.controller.syncingDrive
-                              ? null
-                              : _importFromDrive,
-                          icon: const Icon(
-                            Icons.cloud_download_outlined,
-                            color: AppColors.info,
-                          ),
-                          label: const Text('Cập nhật từ Drive'),
-                        ),
-                      ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: OutlinedButton.icon(
-                        onPressed:
-                            widget.controller.busy ||
-                                widget.controller.syncingDrive
-                            ? null
-                            : _drive,
-                        icon: widget.controller.syncingDrive
-                            ? const SizedBox.square(
-                                dimension: 17,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(
-                                Icons.add_to_drive,
-                                color: AppColors.info,
-                              ),
-                        label: Text(
-                          widget.controller.syncingDrive
-                              ? 'Đang đồng bộ...'
-                              : widget.controller.driveConnected
-                              ? 'Đồng bộ ngay'
-                              : 'Kết nối Drive',
-                        ),
+                        avatar: Icon(Icons.save_outlined, size: 18),
+                        label: Text('Lưu trên thiết bị'),
                       ),
                     ),
                     Padding(
                       padding: const EdgeInsets.only(right: 20),
                       child: FilledButton.icon(
-                        onPressed:
-                            widget.controller.busy ||
-                                widget.controller.syncingDrive
-                            ? null
-                            : _import,
+                        onPressed: widget.controller.busy ? null : _import,
                         icon: const Icon(Icons.upload_file),
-                        label: const Text('Cập nhật markbook'),
+                        label: const Text('Cập nhật danh sách lớp'),
                       ),
                     ),
                   ],
@@ -211,35 +256,6 @@ class _DesktopHomePageState extends State<DesktopHomePage> {
                           ),
                     icon: const Icon(Icons.arrow_forward_rounded),
                     label: const Text('Tiếp tục với markbook'),
-                  ),
-                ),
-                const SizedBox(height: 22),
-                const Row(
-                  children: [
-                    Expanded(child: Divider()),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 14),
-                      child: Text(
-                        'HOẶC',
-                        style: TextStyle(
-                          color: AppColors.muted,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    Expanded(child: Divider()),
-                  ],
-                ),
-                const SizedBox(height: 22),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: widget.controller.busy
-                        ? null
-                        : _signInWithGoogleDrive,
-                    icon: const Icon(Icons.add_to_drive, color: AppColors.info),
-                    label: const Text('Tiếp tục bằng Google Drive'),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -379,7 +395,7 @@ class _DesktopHomePageState extends State<DesktopHomePage> {
       child: Align(
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1180),
+          constraints: const BoxConstraints(maxWidth: 1500),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -450,52 +466,29 @@ class _DesktopHomePageState extends State<DesktopHomePage> {
                   ),
                 ],
               ),
-              const SizedBox(height: 30),
-              _sectionHeading(
-                'Lịch dạy hôm nay',
-                todayClasses.isEmpty
-                    ? 'Không có slot học'
-                    : '${todayClasses.length} slot theo lịch',
-              ),
-              const SizedBox(height: 12),
-              if (todayClasses.isEmpty)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(22),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(color: AppColors.border),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(
-                        Icons.event_available_outlined,
-                        color: AppColors.muted,
-                      ),
-                      SizedBox(width: 12),
-                      Text('Hôm nay không có lớp trong lịch đã cấu hình.'),
-                    ],
-                  ),
-                )
-              else
-                ...todayClasses.map((item) {
-                  final (courseClass, meeting) = item;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: _todayClassRow(courseClass, meeting, today),
-                  );
-                }),
               const SizedBox(height: 24),
-              _sectionHeading(
-                'Tất cả lớp',
-                'Chọn một lớp để xem danh sách điểm danh',
+              WeeklyTimetable(
+                classes: workspace.classes,
+                onOpenMeeting: (course, meeting) =>
+                    _openClass(course.id, meetingId: meeting.id),
               ),
-              const SizedBox(height: 12),
-              ...workspace.classes.map(
-                (courseClass) => Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: _classRow(courseClass),
+              const SizedBox(height: 24),
+              Card(
+                child: ExpansionTile(
+                  title: const Text('Quản lý lớp'),
+                  subtitle: const Text(
+                    'Xem tất cả lớp, chỉnh lịch hoặc xóa lớp',
+                  ),
+                  leading: const Icon(Icons.school_outlined),
+                  childrenPadding: const EdgeInsets.all(16),
+                  children: workspace.classes
+                      .map(
+                        (course) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _classRow(course),
+                        ),
+                      )
+                      .toList(),
                 ),
               ),
               if (widget.controller.lastMessage != null) ...[
@@ -548,51 +541,6 @@ class _DesktopHomePageState extends State<DesktopHomePage> {
           ],
         ),
       ),
-    ),
-  );
-
-  Widget _sectionHeading(String title, String subtitle) => Row(
-    crossAxisAlignment: CrossAxisAlignment.end,
-    children: [
-      Expanded(
-        child: Text(title, style: Theme.of(context).textTheme.titleLarge),
-      ),
-      Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
-    ],
-  );
-
-  Widget _todayClassRow(
-    CourseClass courseClass,
-    Meeting meeting,
-    DateTime now,
-  ) => Card(
-    child: ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 7),
-      onTap: () => _openClass(courseClass.id),
-      leading: Container(
-        width: 46,
-        height: 46,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: AppColors.orangeSoft,
-          borderRadius: BorderRadius.circular(13),
-        ),
-        child: Text(
-          'S${courseClass.scheduleRule.dailySlot}',
-          style: const TextStyle(
-            color: AppColors.orangeDark,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ),
-      title: Text(
-        '${courseClass.courseCode} · ${courseClass.classCode}',
-        style: const TextStyle(fontWeight: FontWeight.w800),
-      ),
-      subtitle: Text(
-        '${DateFormat('HH:mm').format(meeting.startAt)}–${DateFormat('HH:mm').format(meeting.endAt)} · Slot ${meeting.number}',
-      ),
-      trailing: _meetingStatus(meeting, now),
     ),
   );
 
@@ -815,23 +763,6 @@ class _DesktopHomePageState extends State<DesktopHomePage> {
     }
   }
 
-  Widget _meetingStatus(Meeting meeting, DateTime now) {
-    final text = now.isBefore(meeting.startAt)
-        ? 'Sắp tới'
-        : now.isAfter(meeting.endAt)
-        ? 'Đã qua'
-        : 'Đang học';
-    final color = now.isBefore(meeting.startAt)
-        ? AppColors.orange
-        : now.isAfter(meeting.endAt)
-        ? AppColors.muted
-        : AppColors.success;
-    return Chip(
-      avatar: Icon(Icons.circle, size: 9, color: color),
-      label: Text(text),
-    );
-  }
-
   Future<void> _import({String? suggestedTeacherEmail}) async {
     final picked = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -875,96 +806,14 @@ class _DesktopHomePageState extends State<DesktopHomePage> {
     }
   }
 
-  Future<void> _drive() async {
-    try {
-      if (widget.controller.driveConnected) {
-        await widget.controller.syncNow();
-      } else {
-        await widget.controller.connectDrive(
-          clientId: const String.fromEnvironment('GOOGLE_OAUTH_CLIENT_ID'),
-          clientSecret: const String.fromEnvironment(
-            'GOOGLE_OAUTH_CLIENT_SECRET',
-          ),
-        );
-      }
-    } on Object catch (error) {
-      if (mounted) _showError(error.toString());
-    }
-  }
-
-  Future<void> _signInWithGoogleDrive() async {
-    await _drive();
-    if (!mounted || !widget.controller.driveConnected) return;
-    await _importFromDrive(suggestedTeacherEmail: _welcomeEmail.text);
-  }
-
-  Future<void> _importFromDrive({String? suggestedTeacherEmail}) async {
-    try {
-      final sources = await widget.controller.driveSourceFiles();
-      if (!mounted) return;
-      if (sources.isEmpty) {
-        _showError('Drive chưa có markbook nào do ứng dụng tải lên.');
-        return;
-      }
-      final selected = await showDialog<DriveSourceFile>(
-        context: context,
-        builder: (context) => SimpleDialog(
-          title: const Text('Chọn markbook từ Drive'),
-          children: sources
-              .map(
-                (source) => SimpleDialogOption(
-                  onPressed: () => Navigator.pop(context, source),
-                  child: ListTile(
-                    leading: const Icon(Icons.table_view_outlined),
-                    title: Text(source.name),
-                  ),
-                ),
-              )
-              .toList(),
-        ),
-      );
-      if (selected == null || !mounted) return;
-      final settings = await showDialog<_ImportSettings>(
-        context: context,
-        builder: (context) =>
-            _ImportDialog(initialTeacherEmail: suggestedTeacherEmail ?? ''),
-      );
-      if (settings == null) return;
-      final bytes = await widget.controller.downloadDriveSource(selected.id);
-      final warnings = await widget.controller.importRoster(
-        bytes: bytes,
-        fileName: selected.name,
-        semester: settings.semester,
-        semesterStart: settings.start,
-        teacherEmail: settings.teacherEmail,
-        weeks: settings.weeks,
-        meetingsPerWeek: settings.meetingsPerWeek,
-      );
-      if (warnings.isNotEmpty && mounted) {
-        await showDialog<void>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Import hoàn tất với cảnh báo'),
-            content: SelectableText(warnings.join('\n')),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Đóng'),
-              ),
-            ],
-          ),
-        );
-      }
-    } on Object catch (error) {
-      if (mounted) _showError(error.toString());
-    }
-  }
-
-  void _openClass(String classId) {
+  void _openClass(String classId, {String? meetingId}) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) =>
-            ClassDetailPage(controller: widget.controller, classId: classId),
+        builder: (_) => ClassDetailPage(
+          controller: widget.controller,
+          classId: classId,
+          initialMeetingId: meetingId,
+        ),
       ),
     );
   }

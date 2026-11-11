@@ -3,6 +3,8 @@ const portrait = `<svg viewBox="0 0 70 90" aria-hidden="true"><circle cx="35" cy
 const finalizedStorageKey = 'fap-demo-finalized-v1';
 let roster = [];
 let markbookClasses = [];
+let classListSource = '';
+let classListRequest = 0;
 let activeClassIndex = -1;
 let activeSessionKey = '';
 
@@ -32,6 +34,7 @@ function makeElement(tag, className, content) {
 }
 
 function renderDashboard() {
+  $('#dashboardSource').textContent = classListSource;
   $('#dashboardClassCount').textContent = String(markbookClasses.length);
   $('#dashboardStudentCount').textContent = String(markbookClasses.reduce((sum, course) => sum + course.students.length, 0));
   $('#dashboardFinalizedCount').textContent = String(markbookClasses.reduce((sum, course) => sum + finalizedCount(course), 0));
@@ -183,7 +186,15 @@ function render(session, source) {
   $('#submit').textContent = 'Submit điểm danh';
   $('#result').textContent = '';
   $('#result').className = '';
-  if (isFinalized) showFinalized(saved);
+  if (isFinalized) {
+    showFinalized(saved);
+  } else if (saved) {
+    document.querySelectorAll('#students input[type=checkbox]').forEach((input) => {
+      input.disabled = true;
+    });
+    $('#submit').disabled = true;
+    $('#result').textContent = 'Slot đã chốt với danh sách lớp trước đó. Hãy chọn slot khác.';
+  }
 }
 
 function renderMarkbookSelection() {
@@ -196,13 +207,60 @@ function renderMarkbookSelection() {
     scheduleCode: course.scheduleCode,
     meeting,
     attendance: course.students,
-  }, 'Nguồn: FA26_Markbook.ods');
+  }, classListSource);
+}
+
+async function loadClassList(options, fileName) {
+  const requestId = ++classListRequest;
+  $('#dashboardStatus').textContent = 'Đang đọc danh sách lớp…';
+  try {
+    const format = fileName?.split('.').at(-1)?.toLowerCase();
+    const endpoint = '/markbook-rosters.json';
+    const response = await fetch(format ? `${endpoint}?format=${encodeURIComponent(format)}` : endpoint, options);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Không đọc được danh sách lớp.');
+    if (!Array.isArray(data.classes) || !data.classes.length) {
+      throw new Error('Tệp không có lớp hợp lệ.');
+    }
+    if (requestId !== classListRequest) return;
+    markbookClasses = data.classes;
+    classListSource = `Nguồn: ${fileName ?? data.sourceName ?? 'Danh sách lớp mặc định'}`;
+    if (fileName) showDashboard();
+    else renderDashboard();
+    $('#dashboardStatus').textContent = fileName ? `Đã nạp ${data.classes.length} lớp.` : '';
+  } catch (error) {
+    if (requestId === classListRequest) {
+      $('#dashboardStatus').textContent = error.message || String(error);
+    }
+  }
 }
 
 $('#backDashboard').addEventListener('click', showDashboard);
 $('#returnDashboard').addEventListener('click', showDashboard);
 $('#meetingSelect').addEventListener('change', renderMarkbookSelection);
-$('#rosterFile').addEventListener('change', async (event) => {
+$('#pickClassList').addEventListener('click', () => $('#classListFile').click());
+$('#classListFile').addEventListener('change', async (event) => {
+  const file = event.target.files?.[0];
+  event.target.value = '';
+  if (!file) return;
+  if (file.size > 20 * 1024 * 1024) {
+    $('#dashboardStatus').textContent = 'Tệp danh sách lớp tối đa 20 MB.';
+    return;
+  }
+  const buttons = ['#pickClassList', '#pickSession'].map($);
+  buttons.forEach((button) => { button.disabled = true; });
+  try {
+    await loadClassList({
+      method: 'POST',
+      headers: { 'content-type': 'application/octet-stream' },
+      body: file,
+    }, file.name);
+  } finally {
+    buttons.forEach((button) => { button.disabled = false; });
+  }
+});
+$('#pickSession').addEventListener('click', () => $('#sessionFile').click());
+$('#sessionFile').addEventListener('change', async (event) => {
   const file = event.target.files?.[0];
   if (!file) return;
   try {
@@ -249,12 +307,27 @@ $('#submit').addEventListener('click', () => {
   }
 });
 
-fetch('/markbook-rosters.json').then(async (response) => {
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Không đọc được markbook.');
-  if (!Array.isArray(data.classes) || !data.classes.length) throw new Error('Markbook không có lớp hợp lệ.');
-  markbookClasses = data.classes;
+if (new URLSearchParams(window.location.search).get('empty') === '1') {
   renderDashboard();
-}).catch((error) => {
-  $('#dashboardStatus').textContent = error.message || String(error);
-});
+  $('#dashboardStatus').textContent = 'Bấm Nạp danh sách lớp để bắt đầu.';
+  const resetButton = $('#resetDemo');
+  resetButton.hidden = false;
+  resetButton.addEventListener('click', () => {
+    try {
+      localStorage.removeItem(finalizedStorageKey);
+      localStorage.removeItem('fap-demo-last-submit');
+    } catch {
+      $('#dashboardStatus').textContent = 'Không xóa được dữ liệu trong trình duyệt.';
+      return;
+    }
+    classListRequest++;
+    finalized = {};
+    markbookClasses = [];
+    classListSource = '';
+    activeClassIndex = -1;
+    showDashboard();
+    $('#dashboardStatus').textContent = 'Đã xóa dữ liệu demo. Bấm Nạp danh sách lớp để bắt đầu.';
+  });
+} else {
+  void loadClassList();
+}

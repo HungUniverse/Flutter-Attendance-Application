@@ -12,14 +12,20 @@
     <section id="dashboardView">
       <section class="intro">
         <div><div class="eyebrow">HỌC KỲ FA26 · TRANG MÔ PHỎNG</div><h1>Dashboard điểm danh</h1><p>Chọn một lớp để xem danh sách sinh viên và điểm danh theo từng slot.</p></div>
-        <label class="load-button">Mở JSON để demo<input id="rosterFile" type="file" accept=".json,application/json"></label>
+        <div class="load-actions">
+          <button id="pickClassList" type="button">Nạp danh sách lớp</button>
+          <input id="classListFile" type="file" accept=".ods,.xlsx" hidden>
+          <button id="pickSession" type="button">Mở JSON điểm danh</button>
+          <input id="sessionFile" type="file" accept=".json,application/json" hidden>
+          <button id="resetDemo" type="button" hidden>Xóa dữ liệu demo</button>
+        </div>
       </section>
       <section class="dashboard-stats" aria-label="Tổng quan">
         <div><span class="caption">Lớp học</span><strong id="dashboardClassCount">0</strong></div>
         <div><span class="caption">Sinh viên</span><strong id="dashboardStudentCount">0</strong></div>
         <div><span class="caption">Slot đã chốt</span><strong id="dashboardFinalizedCount">0</strong></div>
       </section>
-      <div class="list-heading"><h2>Danh sách lớp</h2><span>Nguồn: FA26_Markbook.ods</span></div>
+      <div class="list-heading"><h2>Danh sách lớp</h2><span id="dashboardSource"></span></div>
       <div id="classList" class="class-list" aria-label="Các lớp trong học kỳ"></div>
       <p id="dashboardStatus" role="status"></p>
     </section>
@@ -31,7 +37,7 @@
       </section>
       <section class="roster-controls" aria-label="Chọn slot học">
         <label>Slot học<select id="meetingSelect"><option value="">Chọn lớp trước</option></select></label>
-        <span id="sourceInfo">Nguồn: FA26_Markbook.ods</span>
+        <span id="sourceInfo"></span>
       </section>
       <section class="context" aria-label="Thông tin lớp">
         <div><span class="caption">Môn học</span><strong id="course">—</strong></div>
@@ -50,7 +56,7 @@
         <div class="sheet-footer"><span id="summary">P: 0 · A: 0</span><button id="submit" type="button" disabled>Submit điểm danh</button></div>
       </section>
       <div id="result" role="status" aria-live="polite"></div>
-      <p class="notice">Chỉ MSSV và họ tên được lấy từ markbook; file không có ảnh thẻ nên trang hiển thị hình thay thế. Nút Submit chỉ lưu trong trình duyệt hiện tại, không gửi dữ liệu đến FAP của trường.</p>
+      <p class="notice">Trang lấy MSSV và họ tên từ tệp danh sách lớp. Kết quả điểm danh demo được lưu trong trình duyệt này.</p>
     </section>
   </main>
   <script src="/app.js"></script>

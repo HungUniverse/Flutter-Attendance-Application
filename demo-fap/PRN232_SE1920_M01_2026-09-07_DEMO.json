@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "demo": true,
-  "demoNote": "Roster lấy từ FA26_Markbook.ods; trạng thái điểm danh P/A là dữ liệu giả để demo.",
+  "demoNote": "Danh sách sinh viên và trạng thái điểm danh đều là dữ liệu giả lập.",
   "sessionId": "demo-FA26-PRN232-SE1920-M01-2026-09-07",
   "revision": 1,
   "state": "final",
@@ -21,8 +21,8 @@
   "updatedAt": "2026-09-07T14:45:00+07:00",
   "attendance": [
     {
-      "rollNumber": "SE194909",
-      "fullName": "Lâm Thiên Hải Anh",
+      "rollNumber": "DEMO03001",
+      "fullName": "Sinh viên Demo 03-001",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -30,8 +30,8 @@
       }
     },
     {
-      "rollNumber": "SE196327",
-      "fullName": "Hoàng Quốc Bảo",
+      "rollNumber": "DEMO03002",
+      "fullName": "Sinh viên Demo 03-002",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -39,8 +39,8 @@
       }
     },
     {
-      "rollNumber": "SE194347",
-      "fullName": "Lê Phan Gia Bảo",
+      "rollNumber": "DEMO03003",
+      "fullName": "Sinh viên Demo 03-003",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -48,8 +48,8 @@
       }
     },
     {
-      "rollNumber": "SE183271",
-      "fullName": "Nguyễn Trần Gia Bảo",
+      "rollNumber": "DEMO03004",
+      "fullName": "Sinh viên Demo 03-004",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -57,8 +57,8 @@
       }
     },
     {
-      "rollNumber": "SE183011",
-      "fullName": "Dương Hòa Bình",
+      "rollNumber": "DEMO03005",
+      "fullName": "Sinh viên Demo 03-005",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -66,8 +66,8 @@
       }
     },
     {
-      "rollNumber": "SE180400",
-      "fullName": "Nguyễn Đức Bổn",
+      "rollNumber": "DEMO03006",
+      "fullName": "Sinh viên Demo 03-006",
       "attendance": {
         "status": "A",
         "source": "finalize",
@@ -75,8 +75,8 @@
       }
     },
     {
-      "rollNumber": "SE194941",
-      "fullName": "Dương Hạo Cơ",
+      "rollNumber": "DEMO03007",
+      "fullName": "Sinh viên Demo 03-007",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -84,8 +84,8 @@
       }
     },
     {
-      "rollNumber": "SE190622",
-      "fullName": "Trần Duy Đạt",
+      "rollNumber": "DEMO03008",
+      "fullName": "Sinh viên Demo 03-008",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -93,8 +93,8 @@
       }
     },
     {
-      "rollNumber": "SE182072",
-      "fullName": "Trần Tiến Đạt",
+      "rollNumber": "DEMO03009",
+      "fullName": "Sinh viên Demo 03-009",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -102,8 +102,8 @@
       }
     },
     {
-      "rollNumber": "SE192160",
-      "fullName": "Trang Thuận Đức",
+      "rollNumber": "DEMO03010",
+      "fullName": "Sinh viên Demo 03-010",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -111,8 +111,8 @@
       }
     },
     {
-      "rollNumber": "SE194673",
-      "fullName": "Dương Thành Thanh Duy",
+      "rollNumber": "DEMO03011",
+      "fullName": "Sinh viên Demo 03-011",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -120,8 +120,8 @@
       }
     },
     {
-      "rollNumber": "SE192427",
-      "fullName": "Lê Hoàng Duy",
+      "rollNumber": "DEMO03012",
+      "fullName": "Sinh viên Demo 03-012",
       "attendance": {
         "status": "A",
         "source": "finalize",
@@ -129,8 +129,8 @@
       }
     },
     {
-      "rollNumber": "SE196610",
-      "fullName": "Trần Trung Hải",
+      "rollNumber": "DEMO03013",
+      "fullName": "Sinh viên Demo 03-013",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -138,8 +138,8 @@
       }
     },
     {
-      "rollNumber": "SE180374",
-      "fullName": "Bùi Quang Hiếu",
+      "rollNumber": "DEMO03014",
+      "fullName": "Sinh viên Demo 03-014",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -147,8 +147,8 @@
       }
     },
     {
-      "rollNumber": "SE196624",
-      "fullName": "Đặng Minh Hoàng",
+      "rollNumber": "DEMO03015",
+      "fullName": "Sinh viên Demo 03-015",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -156,8 +156,8 @@
       }
     },
     {
-      "rollNumber": "SE183095",
-      "fullName": "Đỗ Việt Hoàng",
+      "rollNumber": "DEMO03016",
+      "fullName": "Sinh viên Demo 03-016",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -165,8 +165,8 @@
       }
     },
     {
-      "rollNumber": "SE193324",
-      "fullName": "Vũ Đức Hùng",
+      "rollNumber": "DEMO03017",
+      "fullName": "Sinh viên Demo 03-017",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -174,8 +174,8 @@
       }
     },
     {
-      "rollNumber": "HE170876",
-      "fullName": "Vũ Ngọc Hưng",
+      "rollNumber": "DEMO03018",
+      "fullName": "Sinh viên Demo 03-018",
       "attendance": {
         "status": "A",
         "source": "finalize",
@@ -183,8 +183,8 @@
       }
     },
     {
-      "rollNumber": "SE196437",
-      "fullName": "Đỗ Nhất Huy",
+      "rollNumber": "DEMO03019",
+      "fullName": "Sinh viên Demo 03-019",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -192,8 +192,8 @@
       }
     },
     {
-      "rollNumber": "SE161632",
-      "fullName": "Nguyễn Đức Huy",
+      "rollNumber": "DEMO03020",
+      "fullName": "Sinh viên Demo 03-020",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -201,8 +201,8 @@
       }
     },
     {
-      "rollNumber": "SE196250",
-      "fullName": "Trần Nguyễn Nam Khánh",
+      "rollNumber": "DEMO03021",
+      "fullName": "Sinh viên Demo 03-021",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -210,8 +210,8 @@
       }
     },
     {
-      "rollNumber": "SE194466",
-      "fullName": "Nguyễn Hoàng Anh Khôi",
+      "rollNumber": "DEMO03022",
+      "fullName": "Sinh viên Demo 03-022",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -219,8 +219,8 @@
       }
     },
     {
-      "rollNumber": "SE184144",
-      "fullName": "Trần Hoài Khôi",
+      "rollNumber": "DEMO03023",
+      "fullName": "Sinh viên Demo 03-023",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -228,8 +228,8 @@
       }
     },
     {
-      "rollNumber": "SE180629",
-      "fullName": "Nguyễn Thành Minh",
+      "rollNumber": "DEMO03024",
+      "fullName": "Sinh viên Demo 03-024",
       "attendance": {
         "status": "A",
         "source": "finalize",
@@ -237,8 +237,8 @@
       }
     },
     {
-      "rollNumber": "SE180338",
-      "fullName": "Hoàng Thanh Nguyên",
+      "rollNumber": "DEMO03025",
+      "fullName": "Sinh viên Demo 03-025",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -246,8 +246,8 @@
       }
     },
     {
-      "rollNumber": "SE196296",
-      "fullName": "Nguyễn Bảo Nguyên",
+      "rollNumber": "DEMO03026",
+      "fullName": "Sinh viên Demo 03-026",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -255,8 +255,8 @@
       }
     },
     {
-      "rollNumber": "SE184226",
-      "fullName": "Lâm Hoàng Nhân",
+      "rollNumber": "DEMO03027",
+      "fullName": "Sinh viên Demo 03-027",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -264,8 +264,8 @@
       }
     },
     {
-      "rollNumber": "SE184265",
-      "fullName": "Lê Trường Phúc",
+      "rollNumber": "DEMO03028",
+      "fullName": "Sinh viên Demo 03-028",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -273,8 +273,8 @@
       }
     },
     {
-      "rollNumber": "SE180299",
-      "fullName": "Tô Thiên Phước",
+      "rollNumber": "DEMO03029",
+      "fullName": "Sinh viên Demo 03-029",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -282,8 +282,8 @@
       }
     },
     {
-      "rollNumber": "SE180447",
-      "fullName": "Nguyễn Văn Phú Quý",
+      "rollNumber": "DEMO03030",
+      "fullName": "Sinh viên Demo 03-030",
       "attendance": {
         "status": "A",
         "source": "finalize",
@@ -291,8 +291,8 @@
       }
     },
     {
-      "rollNumber": "SE183201",
-      "fullName": "Nguyễn Phạm Xuân Sơn",
+      "rollNumber": "DEMO03031",
+      "fullName": "Sinh viên Demo 03-031",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -300,8 +300,8 @@
       }
     },
     {
-      "rollNumber": "SE192024",
-      "fullName": "Dương Quốc Thái",
+      "rollNumber": "DEMO03032",
+      "fullName": "Sinh viên Demo 03-032",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -309,8 +309,8 @@
       }
     },
     {
-      "rollNumber": "SE194001",
-      "fullName": "Nguyễn Huỳnh Nhật Thịnh",
+      "rollNumber": "DEMO03033",
+      "fullName": "Sinh viên Demo 03-033",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -318,8 +318,8 @@
       }
     },
     {
-      "rollNumber": "SE184988",
-      "fullName": "Vũ Đức Tuấn",
+      "rollNumber": "DEMO03034",
+      "fullName": "Sinh viên Demo 03-034",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -327,8 +327,8 @@
       }
     },
     {
-      "rollNumber": "SE183051",
-      "fullName": "Thân Lê Thành Vinh",
+      "rollNumber": "DEMO03035",
+      "fullName": "Sinh viên Demo 03-035",
       "attendance": {
         "status": "P",
         "source": "simulator",
@@ -336,8 +336,8 @@
       }
     },
     {
-      "rollNumber": "SE196401",
-      "fullName": "Trương Quốc Vương",
+      "rollNumber": "DEMO03036",
+      "fullName": "Sinh viên Demo 03-036",
       "attendance": {
         "status": "A",
         "source": "finalize",

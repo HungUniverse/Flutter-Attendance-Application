@@ -1,0 +1,21 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Read legacy flat reports and the new hierarchy, only for their owner.
+    match /reports/{uid}/{reportPath=**} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+    }
+    match /reports/{uid}/{semester}/{course}/{classCode}/{meeting}/{filename} {
+      allow write: if request.auth != null && request.auth.uid == uid
+        && semester.matches('[A-Za-z0-9_-]+')
+        && course.matches('[A-Za-z0-9_-]+')
+        && classCode.matches('[A-Za-z0-9_-]+')
+        && meeting.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}_Slot-[0-9]{2,}')
+        && filename.matches('[A-Za-z0-9][A-Za-z0-9_.-]*[.](json|csv)')
+        && (request.resource == null ||
+          (request.resource.size < 20 * 1024 * 1024
+            && request.resource.metadata.ownerUid == uid
+            && request.resource.contentType.matches('(application/json|text/csv)')));
+    }
+  }
+}

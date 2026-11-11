@@ -1,12 +1,17 @@
 import { build } from 'esbuild';
 import { cp, mkdir, rm } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-await rm('dist', { recursive: true, force: true });
-await mkdir('dist', { recursive: true });
+const projectRoot = resolve(fileURLToPath(new URL('.', import.meta.url)));
+const outputDir = resolve(projectRoot, 'dist');
+if (dirname(outputDir) !== projectRoot) throw new Error('Build output must stay inside the extension directory.');
+await rm(outputDir, { recursive: true, force: true });
+await mkdir(outputDir, { recursive: true });
 await build({
-  entryPoints: ['src/popup.ts', 'src/content.ts', 'src/picker_bridge.ts'],
+  entryPoints: ['src/popup.ts', 'src/content.ts'],
   bundle: true,
-  outdir: 'dist',
+  outdir: outputDir,
   format: 'iife',
   target: 'chrome120',
   sourcemap: true,
@@ -15,5 +20,4 @@ await Promise.all([
   cp('public/manifest.json', 'dist/manifest.json'),
   cp('public/popup.html', 'dist/popup.html'),
   cp('public/popup.css', 'dist/popup.css'),
-  cp('public/picker.html', 'dist/picker.html'),
 ]);

@@ -32,4 +32,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .finalized-banner button{background:#16835d}
 .choices input:disabled{cursor:not-allowed}
 .choices label:has(input:disabled){cursor:default;opacity:.72}
+.load-actions{display:flex;flex-wrap:wrap;gap:10px}
+.load-actions button:disabled{opacity:.65;cursor:wait}
+@media(max-width:750px){.load-actions{margin-top:18px}}
 @media(max-width:750px){.dashboard-stats{grid-template-columns:1fr}.class-card{grid-template-columns:minmax(0,1fr) auto;gap:12px}.class-card-progress{grid-column:1}.class-card-arrow{grid-column:2;grid-row:1/3}.finalized-banner{align-items:stretch;flex-direction:column}.finalized-banner button{width:100%}}

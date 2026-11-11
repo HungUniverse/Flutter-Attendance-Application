@@ -49,13 +49,33 @@ endfunction()
 set(FLUTTER_MANAGED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/flutter")
 add_subdirectory(${FLUTTER_MANAGED_DIR})
 
+# Desktop authentication and synchronization use the HTTPS backend. Native
+# FlutterFire plugins belong to Android, so do not download/link Firebase C++
+# into this desktop executable. Keep generated Flutter files untouched.
+option(FAP_WINDOWS_NATIVE_FIREBASE "Enable native Firebase on Windows" OFF)
+set(DESKTOP_PLUGIN_REGISTRANT "${FLUTTER_MANAGED_DIR}/generated_plugin_registrant.cc")
+if(NOT FAP_WINDOWS_NATIVE_FIREBASE)
+  file(READ "${DESKTOP_PLUGIN_REGISTRANT}" desktop_registrant)
+  string(REGEX REPLACE "#include <firebase_[^\n]*\n" "" desktop_registrant "${desktop_registrant}")
+  string(REGEX REPLACE "  Firebase[A-Za-z0-9_]+RegisterWithRegistrar\\([^;]*;[\r\n]*" "" desktop_registrant "${desktop_registrant}")
+  set(DESKTOP_PLUGIN_REGISTRANT "${CMAKE_CURRENT_BINARY_DIR}/desktop_plugin_registrant.cc")
+  file(WRITE "${DESKTOP_PLUGIN_REGISTRANT}" "${desktop_registrant}")
+endif()
+
 # Application build; see runner/CMakeLists.txt.
 add_subdirectory("runner")
 
 
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
-include(flutter/generated_plugins.cmake)
+if(FAP_WINDOWS_NATIVE_FIREBASE)
+  include(flutter/generated_plugins.cmake)
+else()
+  file(READ "${FLUTTER_MANAGED_DIR}/generated_plugins.cmake" desktop_plugins)
+  string(REPLACE "set(PLUGIN_BUNDLED_LIBRARIES)" "list(FILTER FLUTTER_PLUGIN_LIST EXCLUDE REGEX \"^firebase_\")\nset(PLUGIN_BUNDLED_LIBRARIES)" desktop_plugins "${desktop_plugins}")
+  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/desktop_plugins.cmake" "${desktop_plugins}")
+  include("${CMAKE_CURRENT_BINARY_DIR}/desktop_plugins.cmake")
+endif()
 
 
 # === Installation ===

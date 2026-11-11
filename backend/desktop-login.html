@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Đăng nhập giảng viên · FAP Attendance</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Arial, "Segoe UI", sans-serif;
+      color: #25314a;
+      background: #f5f8fc;
+      --blue: #345eaa;
+      --border: #dbe4f1;
+      --muted: #52617a;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; }
+    .topbar { background: #fff; border-bottom: 1px solid var(--border); }
+    .topbar-inner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 64px;
+      max-width: 1340px;
+      margin: auto;
+      padding: 10px 20px;
+      color: var(--blue);
+      font-weight: 700;
+    }
+    .mark {
+      padding: 7px 10px;
+      border-radius: 5px;
+      background: var(--blue);
+      color: #fff;
+      font-size: 18px;
+    }
+    main {
+      display: grid;
+      justify-items: center;
+      min-height: calc(100vh - 65px);
+      padding: clamp(32px, 10vh, 96px) 16px 32px;
+      background: radial-gradient(ellipse at 50% 0, #e9f0ff, transparent 58%);
+    }
+    .card {
+      align-self: start;
+      width: min(100%, 488px);
+      padding: clamp(24px, 6vw, 40px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: 0 8px 28px #1e3f7510;
+    }
+    .icon {
+      display: grid;
+      place-items: center;
+      width: 52px;
+      height: 52px;
+      margin-bottom: 22px;
+      border-radius: 12px;
+      background: #e9f0ff;
+      color: var(--blue);
+    }
+    .eyebrow {
+      margin: 0;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .12em;
+    }
+    h1 { margin: 9px 0 12px; font-size: clamp(26px, 5vw, 34px); }
+    .description { margin: 0; color: var(--muted); line-height: 1.55; }
+    #login {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      min-height: 48px;
+      margin-top: 26px;
+      padding: 12px 16px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--blue);
+      color: #fff;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    #login:hover:enabled { background: #284d90; }
+    #login:focus-visible { outline: 3px solid #668bd0; outline-offset: 4px; }
+    #login:disabled { background: #e9f0ff; color: #40587e; cursor: default; }
+    .status {
+      margin: 14px 0 0;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #f5f8fc;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .status:empty { display: none; }
+    .status[data-tone="error"] { background: #fff3ed; border-color: #f1d1ae; color: #87401f; }
+    .status[data-tone="success"] { background: #edf9f3; border-color: #a7ddc0; color: #126b4a; }
+    .hint {
+      margin: 22px 0 0;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <span class="mark" aria-hidden="true">FAP</span>
+      <span>FAP Attendance</span>
+    </div>
+  </header>
+  <main>
+    <section class="card" aria-labelledby="page-title">
+      <div class="icon" aria-hidden="true">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="12" rx="2"/>
+          <path d="M12 16v4m-4 0h8"/>
+        </svg>
+      </div>
+      <p class="eyebrow">ỨNG DỤNG DESKTOP</p>
+      <h1 id="page-title">Đăng nhập giảng viên</h1>
+      <p class="description">Dùng tài khoản Google của giảng viên để đồng bộ danh sách lớp và kết quả điểm danh với Android.</p>
+      <button id="login" type="button" disabled>
+        <svg aria-hidden="true" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 4h7a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-7m-5-8h9m-4-4 4 4-4 4"/>
+        </svg>
+        <span id="login-label">Đăng nhập với Google</span>
+      </button>
+      <p id="result" class="status" role="status" aria-live="polite"></p>
+      <p class="hint">Hãy mở trang này từ FAP Attendance trên máy tính. Sau khi đăng nhập, quay lại ứng dụng để tiếp tục.</p>
+      <noscript><p class="status" data-tone="error">Bật JavaScript rồi mở lại trang từ ứng dụng desktop.</p></noscript>
+    </section>
+  </main>
+  <script type="module">
+    const button = document.getElementById('login');
+    const label = document.getElementById('login-label');
+    const result = document.getElementById('result');
+    const ticket = location.hash.slice(1);
+    history.replaceState(null, '', location.pathname);
+
+    function showStatus(message, tone = 'info') {
+      result.textContent = message;
+      result.dataset.tone = tone;
+    }
+
+    async function prepareLogin() {
+      if (!/^[a-f0-9]{64}$/.test(ticket)) {
+        showStatus('Để bắt đầu, bấm Đăng nhập Google để đồng bộ trong ứng dụng desktop.', 'error');
+        return;
+      }
+
+      showStatus('Đang kết nối dịch vụ đăng nhập…');
+      try {
+        const [appSdk, authSdk, configResponse] = await Promise.all([
+          import('https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js'),
+          import('https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js'),
+          fetch('/web-config'),
+        ]);
+        if (!configResponse.ok) throw new Error('Firebase configuration unavailable');
+        const auth = authSdk.getAuth(appSdk.initializeApp(await configResponse.json()));
+        await authSdk.setPersistence(auth, authSdk.inMemoryPersistence);
+
+        button.onclick = async () => {
+          button.disabled = true;
+          label.textContent = 'Đang đăng nhập…';
+          showStatus('Chọn tài khoản trong cửa sổ đăng nhập Google.');
+          try {
+            const { user } = await authSdk.signInWithPopup(auth, new authSdk.GoogleAuthProvider());
+            showStatus('Đang xác nhận với ứng dụng desktop…');
+            const response = await fetch('/api/desktop-login/complete', {
+              method: 'POST',
+              headers: {
+                'content-type': 'application/json',
+                authorization: `Bearer ${await user.getIdToken()}`,
+              },
+              body: JSON.stringify({ ticket }),
+            });
+            if (response.status === 410) {
+              label.textContent = 'Lượt đăng nhập đã hết hạn';
+              showStatus('Quay lại ứng dụng desktop và bấm đăng nhập để mở lượt mới.', 'error');
+              return;
+            }
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Không xác nhận được đăng nhập.');
+            label.textContent = 'Đã đăng nhập';
+            showStatus('Đăng nhập thành công. Quay lại FAP Attendance trên máy tính để tiếp tục.', 'success');
+          } catch (error) {
+            const messages = {
+              'auth/popup-closed-by-user': 'Bạn đã đóng cửa sổ đăng nhập. Bấm nút để thử lại.',
+              'auth/popup-blocked': 'Trình duyệt đã chặn cửa sổ Google. Cho phép mở cửa sổ bật lên rồi thử lại.',
+              'auth/network-request-failed': 'Kết nối bị gián đoạn. Kiểm tra mạng và thử lại.',
+            };
+            showStatus(messages[error.code] || error.message || 'Không đăng nhập được. Hãy thử lại.', 'error');
+            label.textContent = 'Đăng nhập với Google';
+            button.disabled = false;
+          }
+        };
+
+        showStatus('');
+        button.disabled = false;
+      } catch {
+        showStatus('Chưa kết nối được dịch vụ đăng nhập. Quay lại ứng dụng desktop để mở lượt mới.', 'error');
+      }
+    }
+
+    void prepareLogin();
+  </script>
+</body>
+</html>

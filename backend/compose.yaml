@@ -1,0 +1,28 @@
+services:
+  backend:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      HOST: 0.0.0.0
+      DATA_DIR: /data
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase-admin.json
+    volumes:
+      - attendance-data:/data
+      - ./secrets/firebase-admin.json:/run/secrets/firebase-admin.json:ro
+  https:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      ATTENDANCE_DOMAIN: ${ATTENDANCE_DOMAIN:?Set ATTENDANCE_DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on:
+      - backend
+volumes:
+  attendance-data:
+  caddy-data:

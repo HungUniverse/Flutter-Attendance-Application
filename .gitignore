@@ -33,6 +33,17 @@ migrate_working_dir/
 /build/
 /coverage/
 extension/node_modules/
+backend/node_modules/
+backend/data/
+backend/.env
+backend/secrets/
+**/*service-account*.json
+**/*serviceAccount*.json
+**/*firebase-adminsdk*.json
+android/app/google-services.json
+android/key.properties
+*.jks
+*.keystore
 
 # Symbolication related
 app.*.symbols

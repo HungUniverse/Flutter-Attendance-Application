@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
-import { delimiter, dirname, join, resolve } from 'node:path';
+import { basename, delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
@@ -14,6 +14,7 @@ const files = new Map([
   ['/app.js', ['app.js', 'text/javascript; charset=utf-8']],
 ]);
 const port = Number(process.env.FAP_DEMO_PORT || 4173);
+const maxRosterBytes = 20 * 1024 * 1024;
 let rosterCache;
 let dartPathPromise;
 
@@ -54,31 +55,76 @@ async function markbookRoster() {
   if (rosterCache?.key !== key) {
     rosterCache = {
       key,
-      promise: dartExecutable().then((dart) => execFileAsync(dart, ['run', 'demo-fap/markbook_rosters.dart', source], {
-        cwd: projectRoot,
-        windowsHide: true,
-        timeout: 30000,
-        maxBuffer: 8 * 1024 * 1024,
-      })).then(({ stdout }) => JSON.parse(stdout)),
+      promise: parseClassList([source]).then((data) => ({
+        ...data, sourceName: basename(source),
+      })),
     };
   }
   try { return await rosterCache.promise; }
   catch (error) { rosterCache = undefined; throw error; }
 }
 
+async function parseClassList(args, bytes) {
+  const dart = await dartExecutable();
+  const run = execFileAsync(dart, ['run', 'demo-fap/markbook_rosters.dart', ...args], {
+    cwd: projectRoot,
+    windowsHide: true,
+    timeout: 30000,
+    maxBuffer: 8 * 1024 * 1024,
+  });
+  const stdin = run.child.stdin;
+  // The process may exit before it finishes reading an invalid file.
+  stdin.on('error', () => {});
+  stdin.end(bytes);
+  return JSON.parse((await run).stdout);
+}
+
+function sendJson(response, status, data) {
+  response.writeHead(status, {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff',
+  }).end(JSON.stringify(data));
+}
+
+async function uploadClassList(request, response, format) {
+  if (!['ods', 'xlsx'].includes(format) ||
+      request.headers['content-type'] !== 'application/octet-stream') {
+    request.resume();
+    sendJson(response, 415, { error: 'Chọn tệp danh sách lớp ODS hoặc XLSX.' });
+    return;
+  }
+  try {
+    const chunks = [];
+    let length = 0;
+    for await (const chunk of request.iterator({ destroyOnReturn: false })) {
+      length += chunk.length;
+      if (length > maxRosterBytes) {
+        request.resume();
+        sendJson(response, 413, { error: 'Tệp danh sách lớp tối đa 20 MB.' });
+        return;
+      }
+      chunks.push(chunk);
+    }
+    const roster = await parseClassList(['--stdin', `roster.${format}`], Buffer.concat(chunks));
+    sendJson(response, 200, roster);
+  } catch {
+    sendJson(response, 422, { error: 'Không đọc được danh sách lớp. Kiểm tra định dạng và các cột của tệp.' });
+  }
+}
+
 createServer(async (request, response) => {
-  const pathname = new URL(request.url || '/', 'http://localhost').pathname;
-  if (pathname === '/markbook-rosters.json') {
+  const url = new URL(request.url || '/', 'http://localhost');
+  const { pathname } = url;
+  if (pathname === '/markbook-rosters.json' && request.method === 'POST') {
+    await uploadClassList(request, response, url.searchParams.get('format'));
+    return;
+  }
+  if (pathname === '/markbook-rosters.json' && request.method === 'GET') {
     try {
-      const body = JSON.stringify(await markbookRoster());
-      response.writeHead(200, {
-        'content-type': 'application/json; charset=utf-8',
-        'cache-control': 'no-store',
-        'x-content-type-options': 'nosniff',
-      }).end(body);
-    } catch (error) {
-      response.writeHead(500, { 'content-type': 'application/json; charset=utf-8' })
-        .end(JSON.stringify({ error: `Không đọc được markbook: ${error.message}` }));
+      sendJson(response, 200, await markbookRoster());
+    } catch {
+      sendJson(response, 500, { error: 'Không đọc được danh sách lớp mặc định. Hãy chọn một tệp ODS hoặc XLSX.' });
     }
     return;
   }

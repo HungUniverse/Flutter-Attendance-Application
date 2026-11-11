@@ -32,13 +32,12 @@ class QrSessionPage extends StatefulWidget {
 class _QrSessionPageState extends State<QrSessionPage> {
   late QrMode mode = widget.initialMode;
   final issuer = RollingQrIssuer();
-  final email = TextEditingController();
-  final publicUrl = TextEditingController();
   final tunnel = QuickTunnel();
   late Timer timer;
   late final AttendanceLanServer server;
   String? serverError;
   String? tunnelError;
+  String? publicOrigin;
   bool serverReady = false;
   bool tunnelStarting = false;
 
@@ -65,8 +64,6 @@ class _QrSessionPageState extends State<QrSessionPage> {
     timer.cancel();
     unawaited(server.stop());
     unawaited(tunnel.stop());
-    email.dispose();
-    publicUrl.dispose();
     super.dispose();
   }
 
@@ -92,9 +89,9 @@ class _QrSessionPageState extends State<QrSessionPage> {
         : null;
     String? joinUrl;
     String? joinError;
-    if (payload != null && publicUrl.text.trim().isNotEmpty) {
+    if (payload != null && publicOrigin != null) {
       try {
-        joinUrl = server.joinUrl(payload, publicOrigin: publicUrl.text);
+        joinUrl = server.joinUrl(payload, publicOrigin: publicOrigin);
       } on Object catch (error) {
         joinError = error.toString().replaceFirst('Bad state: ', '');
       }
@@ -105,6 +102,12 @@ class _QrSessionPageState extends State<QrSessionPage> {
     final present = records.values
         .where((r) => r.status == AttendanceStatus.present)
         .length;
+    final presentStudents = courseClass.students
+        .where(
+          (student) =>
+              records[student.rollNumber]?.status == AttendanceStatus.present,
+        )
+        .toList();
     final seconds = 15 - (DateTime.now().second % 15);
     return Scaffold(
       backgroundColor: AppColors.creamLight,
@@ -114,7 +117,7 @@ class _QrSessionPageState extends State<QrSessionPage> {
           SegmentedButton<QrMode>(
             segments: const [
               ButtonSegment(value: QrMode.normal, label: Text('QR thường')),
-              ButtonSegment(value: QrMode.otp, label: Text('QR + OTP')),
+              ButtonSegment(value: QrMode.otp, label: Text('QR + mã bí mật')),
             ],
             selected: {mode},
             onSelectionChanged: expired
@@ -190,9 +193,9 @@ class _QrSessionPageState extends State<QrSessionPage> {
                         if (!expired && serverReady) ...[
                           const SizedBox(height: 10),
                           Text(
-                            publicUrl.text.trim().isEmpty
-                                ? 'Đang cấp link công khai cho điện thoại…'
-                                : 'QR công khai: điện thoại có thể dùng mạng khác.',
+                            publicOrigin == null
+                                ? 'Đang chuẩn bị QR cho điện thoại…'
+                                : 'Sẵn sàng để sinh viên quét QR',
                             textAlign: TextAlign.center,
                           ),
                         ],
@@ -206,7 +209,10 @@ class _QrSessionPageState extends State<QrSessionPage> {
                                   letterSpacing: 12,
                                 ),
                           ),
-                          const Text('Mã bí mật của lượt QR hiện tại'),
+                          const Text(
+                            'Mã bí mật giữ nguyên cho đến khi bật lại chế độ này',
+                            textAlign: TextAlign.center,
+                          ),
                         ],
                         const SizedBox(height: 18),
                         Chip(
@@ -227,97 +233,90 @@ class _QrSessionPageState extends State<QrSessionPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Mô phỏng Lab 1',
-                      style: Theme.of(context).textTheme.headlineSmall,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Sinh viên đã điểm danh',
+                            style: Theme.of(context).textTheme.headlineSmall,
+                          ),
+                        ),
+                        Chip(
+                          avatar: tunnelStarting
+                              ? const SizedBox.square(
+                                  dimension: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Icon(
+                                  publicOrigin == null
+                                      ? Icons.wifi_tethering_error_rounded
+                                      : Icons.wifi_tethering_rounded,
+                                  size: 17,
+                                  color: publicOrigin == null
+                                      ? AppColors.danger
+                                      : AppColors.success,
+                                ),
+                          label: Text(
+                            tunnelStarting
+                                ? 'Đang chuẩn bị'
+                                : publicOrigin == null
+                                ? 'Chưa kết nối'
+                                : 'Sẵn sàng',
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Để sinh viên dùng 4G/mạng khác: chạy Cloudflare Quick Tunnel tới địa chỉ bên dưới, rồi dán URL HTTPS được cấp vào ô này.',
-                    ),
-                    const SizedBox(height: 8),
-                    SelectableText(
-                      serverReady ? server.tunnelOrigin : 'Đang mở server…',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: serverReady && !tunnelStarting
-                          ? _startTunnel
-                          : null,
-                      icon: tunnelStarting
-                          ? const SizedBox.square(
-                              dimension: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.public),
-                      label: Text(
-                        tunnelStarting
-                            ? 'Đang cấp URL công khai…'
-                            : tunnel.url == null
-                            ? 'Bật link công khai cho mọi mạng'
-                            : 'Link công khai đã sẵn sàng',
-                      ),
-                    ),
-                    if (tunnelError != null) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        tunnelError!,
-                        style: const TextStyle(color: AppColors.danger),
+                    Text('$present/${courseClass.students.length} có mặt'),
+                    if (tunnelError != null || serverError != null) ...[
+                      const SizedBox(height: 12),
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: AppColors.orangeSoft,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            children: [
+                              const Expanded(
+                                child: Text(
+                                  'Chưa tạo được QR cho điện thoại. Kiểm tra Internet rồi thử lại.',
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: serverReady && !tunnelStarting
+                                    ? _startTunnel
+                                    : null,
+                                child: const Text('Thử lại'),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ],
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: publicUrl,
-                      onChanged: (_) => setState(() => serverError = null),
-                      decoration: const InputDecoration(
-                        labelText: 'URL HTTPS công khai từ tunnel (tùy chọn)',
-                        hintText: 'https://abc.trycloudflare.com',
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Divider(),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Nhập email có trong roster để mô phỏng lượt quét từ mobile (Lab 1).',
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: email,
-                      decoration: const InputDecoration(
-                        labelText: 'Email sinh viên',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    FilledButton.icon(
-                      onPressed: expired ? null : _simulate,
-                      icon: const Icon(Icons.how_to_reg),
-                      label: const Text('Ghi nhận Present'),
-                    ),
-                    const SizedBox(height: 24),
-                    const Divider(),
                     const SizedBox(height: 12),
                     Expanded(
-                      child: ListView(
-                        children: courseClass.students
-                            .where(
-                              (s) =>
-                                  records[s.rollNumber]?.status ==
-                                  AttendanceStatus.present,
+                      child: presentStudents.isEmpty
+                          ? const Center(
+                              child: Text('Chưa có sinh viên điểm danh.'),
                             )
-                            .map(
-                              (student) => ListTile(
-                                dense: true,
-                                leading: const Icon(
-                                  Icons.check_circle,
-                                  color: AppColors.success,
-                                ),
-                                title: Text(student.fullName),
-                                subtitle: Text(student.rollNumber),
-                              ),
-                            )
-                            .toList(),
-                      ),
+                          : ListView(
+                              children: presentStudents
+                                  .map(
+                                    (student) => ListTile(
+                                      dense: true,
+                                      leading: const Icon(
+                                        Icons.check_circle,
+                                        color: AppColors.success,
+                                      ),
+                                      title: Text(student.fullName),
+                                      subtitle: Text(student.rollNumber),
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
                     ),
                     SizedBox(
                       width: double.infinity,
@@ -337,32 +336,15 @@ class _QrSessionPageState extends State<QrSessionPage> {
     );
   }
 
-  Future<void> _simulate() async {
-    try {
-      await widget.controller.markPresent(
-        widget.classId,
-        widget.meetingId,
-        email.text,
-      );
-      email.clear();
-    } on Object catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$error')));
-      }
-    }
-  }
-
   Future<void> _startServer() async {
     try {
       await server.start();
       if (mounted) setState(() => serverReady = true);
       unawaited(_startTunnel());
-    } on Object catch (error) {
+    } on Object {
       if (mounted) {
         setState(() {
-          serverError =
-              'Không mở được HTTPS LAN. Kiểm tra Wi-Fi và cổng 8787.\n$error';
+          serverError = 'Không thể khởi động dịch vụ điểm danh.';
         });
       }
     }
@@ -377,14 +359,11 @@ class _QrSessionPageState extends State<QrSessionPage> {
     try {
       final url = await tunnel.start(server.tunnelOrigin);
       if (mounted) {
-        setState(() => publicUrl.text = url);
+        setState(() => publicOrigin = url);
       }
-    } on Object catch (error) {
+    } on Object {
       if (mounted) {
-        setState(
-          () => tunnelError =
-              'Không mở được tunnel. Kiểm tra Internet/cloudflared. $error',
-        );
+        setState(() => tunnelError = 'Không thể tạo link điểm danh công khai.');
       }
     } finally {
       if (mounted) setState(() => tunnelStarting = false);
