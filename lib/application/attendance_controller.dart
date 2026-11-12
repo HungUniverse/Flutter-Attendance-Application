@@ -51,7 +51,7 @@ class AttendanceController extends ChangeNotifier {
     busy = true;
     notifyListeners();
     try {
-      final remote = await sync!.api.request('GET', '/api/workspaces');
+      final remote = await sync!.api.readWorkspace();
       if (remote['data'] != null) {
         throw const AppProblem(
           'Tài khoản đã có dữ liệu. Đồng bộ trước để đối chiếu, không ghi đè dữ liệu cũ.',

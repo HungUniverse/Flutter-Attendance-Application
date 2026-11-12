@@ -11,13 +11,27 @@ import '../domain/models.dart';
 import '../lab3/services/contracts.dart';
 import 'workspace_store.dart';
 
-class SharedApi {
+abstract class WorkspaceRemote {
+  AuthService get auth;
+  Future<Map<String, dynamic>> readWorkspace({String? semester});
+  Future<Map<String, dynamic>> writeWorkspace(Map<String, dynamic> pending);
+}
+
+class SharedApi implements WorkspaceRemote {
   SharedApi(this.auth, {String? baseUrl, http.Client? client})
     : base = baseUrl ?? const String.fromEnvironment('ATTENDANCE_API_URL'),
       client = client ?? http.Client();
   final AuthService auth;
   final String base;
   final http.Client client;
+  @override
+  Future<Map<String, dynamic>> readWorkspace({String? semester}) => request(
+    'GET',
+    '/api/workspaces${semester == null ? '' : '?semester=${Uri.encodeComponent(semester)}'}',
+  );
+  @override
+  Future<Map<String, dynamic>> writeWorkspace(Map<String, dynamic> pending) =>
+      request('PUT', '/api/workspaces', pending);
   bool get configured =>
       Uri.tryParse(base)?.scheme == 'https' &&
       Uri.tryParse(base)?.host.isNotEmpty == true;
@@ -77,7 +91,7 @@ class SyncConflict extends AppProblem {
 /// another device. One queue serializes polling, local edits and retries.
 class SharedWorkspaceSync extends ChangeNotifier {
   SharedWorkspaceSync(this.api, this.root);
-  final SharedApi api;
+  final WorkspaceRemote api;
   final Directory root;
   String status = 'Chưa đồng bộ';
   bool conflict = false;
@@ -131,18 +145,14 @@ class SharedWorkspaceSync extends ChangeNotifier {
     if (uid != owner) throw const AppProblem('Tài khoản đã thay đổi.');
     Map<String, dynamic> result;
     try {
-      result = await api.request('PUT', '/api/workspaces', pending);
+      result = await api.writeWorkspace(pending);
     } on SyncConflict {
       final closing = pending['closing'] as Map?;
       if (closing == null) rethrow;
       final localWorkspace = TeacherWorkspace.fromJson(
         (pending['workspace'] as Map).cast<String, Object?>(),
       );
-      final semester = Uri.encodeComponent(localWorkspace.semester);
-      final latest = await api.request(
-        'GET',
-        '/api/workspaces?semester=$semester',
-      );
+      final latest = await api.readWorkspace(semester: localWorkspace.semester);
       final row = latest['data'] as Map?;
       if (row == null) rethrow;
       final serverWorkspace = TeacherWorkspace.fromJson(
@@ -161,7 +171,7 @@ class SharedWorkspaceSync extends ChangeNotifier {
         'revision': row['revision'],
       };
       if (uid != owner) throw const AppProblem('Tài khoản đã thay đổi.');
-      result = await api.request('PUT', '/api/workspaces', retry);
+      result = await api.writeWorkspace(retry);
     }
     final row = result['data'] as Map;
     TeacherWorkspace? confirmed;
@@ -343,10 +353,7 @@ class SharedWorkspaceSync extends ChangeNotifier {
         }
       }
       try {
-        final result = await api.request(
-          'GET',
-          '/api/workspaces${key == null ? '' : '?semester=${Uri.encodeComponent(key)}'}',
-        );
+        final result = await api.readWorkspace(semester: key);
         final row = result['data'] as Map?;
         if (row == null) {
           _status('Chưa có bản trên máy chủ');
@@ -381,10 +388,7 @@ class SharedWorkspaceSync extends ChangeNotifier {
     return _serial(() async {
       if (uid != owner) throw const AppProblem('Tài khoản đã thay đổi.');
       final file = _meta(uid, semester);
-      final result = await api.request(
-        'GET',
-        '/api/workspaces?semester=${Uri.encodeComponent(semester)}',
-      );
+      final result = await api.readWorkspace(semester: semester);
       final row = result['data'] as Map?;
       if (row == null) throw const AppProblem('Không có bản trên máy chủ.');
       final state = await _read(file);
