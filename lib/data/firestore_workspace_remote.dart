@@ -28,17 +28,17 @@ class FirestoreWorkspaceRemote implements WorkspaceRemote {
       auth.current?.uid ?? (throw const AppProblem('Vui lòng đăng nhập.'));
 
   Future<void> requireTeacher() async {
+    final email = auth.current?.email.trim().toLowerCase();
+    if (email == null || email.isEmpty) throw const WorkspaceAccessDenied();
+    final directory = await db
+        .doc('teacherDirectory/$email')
+        .get(const GetOptions(source: Source.server));
+    if (directory.data()?['status'] == 'active') return;
     final profile = await db
         .doc('users/$owner')
         .get(const GetOptions(source: Source.server));
     if (profile.data()?['role'] == 'admin') return;
-    final email = auth.current?.email.trim().toLowerCase();
-    if (email == null || email.isEmpty) throw const WorkspaceAccessDenied();
-    final directory = await db.doc('teacherDirectory/$email')
-        .get(const GetOptions(source: Source.server));
-    if (directory.data()?['status'] != 'active') {
-      throw const WorkspaceAccessDenied();
-    }
+    throw const WorkspaceAccessDenied();
   }
 
   @override
