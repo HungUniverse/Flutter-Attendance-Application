@@ -7,7 +7,8 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs && npm run test:ui",
+    "test:ui": "node --experimental-test-module-mocks --test test-dom/*.test.mjs"
   },
   "dependencies": {
     "firebase": "^13.3.0"
@@ -16,6 +17,7 @@
     "@grpc/grpc-js": "^1.14.7"
   },
   "devDependencies": {
+    "happy-dom": "^21.0.4",
     "vite": "^7.0.0"
   }
 }
