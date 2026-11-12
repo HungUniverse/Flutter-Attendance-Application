@@ -98,7 +98,16 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
                     PopupMenuItem(value: 'pdf', child: Text('Xuất PDF')),
                     PopupMenuItem(value: 'csv', child: Text('Xuất CSV')),
                   ],
-                  child: const Padding(padding: EdgeInsets.all(12), child: Row(children: [Icon(Icons.download), SizedBox(width: 8), Text('Xuất báo cáo')])),
+                  child: const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        Icon(Icons.download),
+                        SizedBox(width: 8),
+                        Text('Xuất báo cáo'),
+                      ],
+                    ),
+                  ),
                 )
               else if (isPast && selected.state == MeetingState.active)
                 FilledButton.icon(
@@ -554,7 +563,13 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
   ) async {
     if (widget.controller.finalFirebase) {
       await widget.controller.startMeeting(courseClass.id, meeting.id);
-      if (mounted) _openQr(courseClass, widget.controller.meetingById(courseClass.id, meeting.id), QrMode.normal);
+      if (mounted) {
+        _openQr(
+          courseClass,
+          widget.controller.meetingById(courseClass.id, meeting.id),
+          QrMode.normal,
+        );
+      }
       return;
     }
     final mode = await showDialog<QrMode>(

@@ -20,8 +20,13 @@ Future<void> main() async {
   if (!legacy) await initializeMobileFirebase();
   final controller = AttendanceController(
     finalFirebase: !legacy,
-    teacherAuth: legacy ? null : FirebaseDesktopAuth(FirebaseAuth.instance,
-      hostingUrl: 'https://${FirebaseAuth.instance.app.options.projectId}.web.app'),
+    teacherAuth: legacy
+        ? null
+        : FirebaseDesktopAuth(
+            FirebaseAuth.instance,
+            hostingUrl:
+                'https://${FirebaseAuth.instance.app.options.projectId}.web.app',
+          ),
   );
   await controller.initialize();
   runApp(FapAttendanceApp(controller: controller));
