@@ -20,6 +20,7 @@ const sessionId = location.pathname.match(
   /^\/join\/([A-Za-z0-9_-]{1,128})\/?$/,
 )?.[1];
 const desktop = location.pathname === "/desktop-login";
+if (sessionId) document.getElementById("student-link").href = `/student?session=${encodeURIComponent(sessionId)}`;
 let session,
   submitted = false,
   working = false,

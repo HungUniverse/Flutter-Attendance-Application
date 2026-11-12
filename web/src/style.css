@@ -179,6 +179,8 @@ button:disabled {
 [hidden] {
   display: none !important;
 }
+.role-links a { color: #98614a; text-decoration: none; line-height: 1.9; }
+.role-links a:hover { text-decoration: underline; }
 @media (max-width: 480px) {
   .brand {
     padding: 22px 20px;
