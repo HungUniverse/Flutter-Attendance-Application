@@ -119,7 +119,7 @@ export class AdminRepository {
       throw new AdminError(
         "Mã môn và mã lớp chỉ gồm chữ, số, gạch ngang hoặc gạch dưới.",
       );
-    const localId = `${semester}_${input.scheduleCode}_${courseCode}_${classCode}`;
+    const localId = `${semester}_${courseCode}_${classCode}`;
     const workspaceId = await hashId(`${this.uid}/${semester}`);
     const classId = await hashId(`${this.uid}/${semester}/${localId}`);
     const weeks = Number(input.weeks),
@@ -158,6 +158,7 @@ export class AdminRepository {
               updatedAt: null,
             },
           };
+      if (!Object.keys(workspace.layout).length) workspace.data={...workspace.data,semesterStart:`${start}T00:00:00.000`};
       this.advance(tx, workspace, {
         layout: { ...workspace.layout, [classId]: meetings.map((m) => m.id) },
       });
@@ -189,7 +190,7 @@ export class AdminRepository {
           dayStart: Timestamp.fromDate(m.dayStart),
           dayEnd: Timestamp.fromDate(m.dayEnd),
         });
-      return { workspaceId, classId };
+      return { workspaceId, classId, revision:workspace.revision+1 };
     });
   }
   async editClass(course, students, input, expectedRevision) {

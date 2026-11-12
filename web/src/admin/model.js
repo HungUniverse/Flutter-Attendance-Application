@@ -17,7 +17,7 @@ export function semesterCode(value) {
     throw new AdminError("Học kỳ chỉ gồm chữ và số, ví dụ FA26.");
   return code;
 }
-export function parseRoster(text, previous = []) {
+export function parseRoster(text, previous = [], expectedClass = "") {
   const members = new Map(
     previous.map((s) => [s.rollNumber, s.memberCode || ""]),
   );
@@ -25,18 +25,21 @@ export function parseRoster(text, previous = []) {
     emails = new Set();
   const rows = String(text)
     .split(/\r?\n/)
-    .filter((line) => line.trim());
+    .filter((line) => line.trim())
+    .filter(line => !/^\s*Class\s*[|\t]\s*RollNumber\s*[|\t]/i.test(line));
   if (!rows.length || rows.length > 200)
     throw new AdminError("Danh sách cần từ 1 đến 200 sinh viên.");
   return rows.map((line, index) => {
     const cells = line
       .split(line.includes("\t") ? "\t" : "|")
       .map((v) => v.trim());
-    if (cells.length !== 3)
+    if (cells.length !== 3 && cells.length < 5)
       throw new AdminError(
-        `Dòng ${index + 1}: dùng MSSV | Họ tên | Email hoặc ba cột từ Excel.`,
+        `Dòng ${index + 1}: dùng năm cột Class | RollNumber | Email | MemberCode | FullName.`,
       );
-    const [roll, name, address] = cells;
+    const standard=cells.length>=5;
+    if(standard && expectedClass && cells[0].toUpperCase()!==expectedClass.trim().toUpperCase())throw new AdminError(`Dòng ${index+1}: cột Class phải là ${expectedClass}.`);
+    const [roll, name, address] = standard ? [cells[1],cells[4],cells[2]] : cells;
     const rollNumber = required(
       roll,
       `MSSV dòng ${index + 1}`,
@@ -61,13 +64,13 @@ export function parseRoster(text, previous = []) {
       rollNumber,
       fullName,
       email,
-      memberCode: members.get(rollNumber) || "",
+      memberCode: standard ? cells[3] : members.get(rollNumber) || "",
     };
   });
 }
-export const rosterText = (students) =>
+export const rosterText = (students, classCode = "") =>
   (students || [])
-    .map((s) => `${s.rollNumber} | ${s.fullName} | ${s.email}`)
+    .map((s) => `${classCode} | ${s.rollNumber} | ${s.email} | ${s.memberCode || ""} | ${s.fullName}`)
     .join("\n");
 export const rosterMap = (students) =>
   Object.fromEntries(students.map((s) => [s.email, s.rollNumber]));
