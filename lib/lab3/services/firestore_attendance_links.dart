@@ -39,7 +39,9 @@ class FirestoreAttendanceLinks implements LiveAttendanceLinks {
   @override
   Future<LinkSession?> forMeeting(CourseClass course, Meeting meeting) async {
     final id = _idFor(course, meeting);
-    final snapshot = await db.doc('attendanceSessions/$id').get(const GetOptions(source: Source.server));
+    final snapshot = await db
+        .doc('attendanceSessions/$id')
+        .get(const GetOptions(source: Source.server));
     return snapshot.exists ? _session(id, snapshot.data()!) : null;
   }
 
@@ -54,23 +56,25 @@ class FirestoreAttendanceLinks implements LiveAttendanceLinks {
 
   @override
   Future<LinkSession> create(CourseClass course, Meeting meeting) async {
-    if (!configured || semester() == null)
+    if (!configured || semester() == null) {
       throw const AppProblem('Chưa có cấu hình Hosting hoặc học kỳ.');
+    }
     final uid = _uid;
     final classId = firestoreClassId(uid, semester()!, course.id);
     // One session per meeting makes retries and reopening idempotent. Existing
     // check-ins remain immutable across every displayed QR for this meeting.
-    final id = sha256.convert(utf8.encode('$classId/${meeting.id}')).toString();
+    final id = _idFor(course, meeting);
     final ref = db.doc('attendanceSessions/$id');
     final result = await db.runTransaction((tx) async {
       final storedMeeting = (await tx.get(
         db.doc('classes/$classId/meetings/${meeting.id}'),
       )).data();
       final old = (await tx.get(ref)).data();
-      if (storedMeeting?['state'] != 'active')
+      if (storedMeeting?['state'] != 'active') {
         throw const AppProblem(
           'Buổi học chưa mở trên Firestore. Hãy đồng bộ trước.',
         );
+      }
       final now = DateTime.now();
       if (old != null &&
           old['receiving'] == true &&
