@@ -52,6 +52,26 @@ Backend dùng Firebase Admin Auth và Firestore. Cài đủ dependencies, bao g�
 `@google-cloud/firestore` đi kèm Firebase Admin; không dùng `--omit=optional`.
 Kiểm tra `npm audit` khi cập nhật dependency.
 
+## Kiểm thử và bảo trì
+
+Chạy `npm test` từ `backend/` để kiểm thử thuật toán và relay qua HTTP localhost.
+Khi môi trường giới hạn kết nối loopback, chạy cùng các ca kiểm thử relay trực
+tiếp qua request handler bằng PowerShell:
+
+```powershell
+$env:RELAY_TEST_TRANSPORT = 'in-process'
+npm test
+Remove-Item Env:RELAY_TEST_TRANSPORT
+```
+
+Chế độ này vẫn dùng file tạm thật và kiểm tra được lỗi ghi đĩa, gửi lại và ghi đồng
+thời. Dùng chế độ mặc định khi cần kiểm tra kết nối HTTP qua socket.
+
+Các request đọc và cấp challenge vẫn đọc `sessions.json`, còn thao tác đổi dữ liệu
+mới thay file. Nếu lưu điểm danh thất bại, client có thể gửi lại với challenge đó
+trong thời hạn còn hiệu lực. Theo dõi dung lượng file và độ trễ polling nếu lưu
+nhiều phiên trên cùng một volume.
+
 ## Kết nối Android
 
 Sau khi cấu hình HTTPS thật, build/chạy app với:
