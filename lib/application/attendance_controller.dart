@@ -31,6 +31,8 @@ class AttendanceController extends ChangeNotifier {
     RosterMergeService? rosterMergeService,
     AuthService? teacherAuth,
     this.finalFirebase = false,
+    this.firestore,
+    this.documentsDirectory,
   }) : _importer = importer ?? RosterImporter(),
        _attendanceService = attendanceService ?? AttendanceService(),
        _csvExporter = csvExporter ?? AttendanceCsvExporter(),
@@ -51,6 +53,11 @@ class AttendanceController extends ChangeNotifier {
   bool busy = false;
   final AuthService desktopAuth;
   final bool finalFirebase;
+  final FirebaseFirestore? firestore;
+  final Directory? documentsDirectory;
+  FirebaseFirestore get _database => firestore ?? FirebaseFirestore.instance;
+  Future<Directory> _documents() async =>
+      documentsDirectory ?? await getApplicationDocumentsDirectory();
   SharedWorkspaceSync? sync;
   TeacherWorkspace? _legacyWorkspace;
   bool get canMigrateLegacy =>
@@ -106,7 +113,7 @@ class AttendanceController extends ChangeNotifier {
       sharedLinks = null;
       workspace = null;
       workspacePath = null;
-      final documents = await getApplicationDocumentsDirectory();
+      final documents = await _documents();
       _store = WorkspaceStore(Directory('${documents.path}/FAP Attendance'));
     } finally {
       busy = false;
@@ -129,7 +136,7 @@ class AttendanceController extends ChangeNotifier {
 
   Future<void> _attachAccount() async {
     final remote = finalFirebase
-        ? FirestoreWorkspaceRemote(FirebaseFirestore.instance, desktopAuth)
+        ? FirestoreWorkspaceRemote(_database, desktopAuth)
         : null;
     if (remote != null) {
       try {
@@ -140,7 +147,7 @@ class AttendanceController extends ChangeNotifier {
       }
     }
     if (sync == null && workspace != null) _legacyWorkspace = workspace;
-    final documents = await getApplicationDocumentsDirectory();
+    final documents = await _documents();
     sync?.removeListener(notifyListeners);
     sync?.dispose();
     sync = SharedWorkspaceSync(
@@ -151,11 +158,10 @@ class AttendanceController extends ChangeNotifier {
     _store = SyncedDesktopStore(sync!, desktopAuth.current!.uid);
     sharedLinks = finalFirebase
         ? FirestoreAttendanceLinks(
-            FirebaseFirestore.instance,
+            _database,
             desktopAuth,
             () => workspace?.semester,
-            hostingUrl:
-                'https://${FirebaseFirestore.instance.app.options.projectId}.web.app',
+            hostingUrl: 'https://${_database.app.options.projectId}.web.app',
           )
         : HttpAttendanceLinkService(desktopAuth);
     workspace = await _store!.loadMostRecentWorkspace();
@@ -208,7 +214,7 @@ class AttendanceController extends ChangeNotifier {
   }
 
   Future<void> initialize() async {
-    final documents = await getApplicationDocumentsDirectory();
+    final documents = await _documents();
     final root = Directory(
       '${documents.path}${Platform.pathSeparator}FAP Attendance',
     );
@@ -557,10 +563,7 @@ class AttendanceController extends ChangeNotifier {
           );
     lastMessage = 'Đã xuất ${file.path}';
     if (finalFirebase && sync != null) {
-      final reports = FirestoreReportMetadata(
-        FirebaseFirestore.instance,
-        sync!.root,
-      );
+      final reports = FirestoreReportMetadata(_database, sync!.root);
       await reports.record(
         desktopAuth.current!.uid,
         workspace!,
