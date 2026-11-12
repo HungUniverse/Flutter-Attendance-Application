@@ -444,8 +444,10 @@
     }
     preview(csv) {
       const pageRows = this.rows();
-      const primaryKeys = csv.map((row) => row.roll_number);
-      const allCsvIds = new Set(csv.flatMap((row) => [row.roll_number, row.member_code].filter(Boolean)));
+      const primaryKeys = csv.map((row) => normalizeId(row.roll_number));
+      const allCsvIds = new Set(
+        csv.flatMap((row) => [normalizeId(row.roll_number), normalizeId(row.member_code ?? "")].filter(Boolean))
+      );
       const duplicates = primaryKeys.filter((id, index) => primaryKeys.indexOf(id) !== index);
       const first = csv[0];
       const rawPageText = this.document.body.innerText ?? this.document.body.textContent ?? "";
@@ -455,32 +457,36 @@
       if (metadata?.attendanceFinalized === "true") {
         warnings.push("Slot n\xE0y \u0111\xE3 ch\u1ED1t danh s\xE1ch; kh\xF4ng th\u1EC3 \u0111i\u1EC1n l\u1EA1i.");
       }
-      const visibleClassCodes = rawPageText.toUpperCase().match(/\b[A-Z]{2,5}\d{4}/g) ?? [];
-      if (metadata?.attendanceClass && normalizeId(metadata.attendanceClass) !== normalizeId(first.class_code)) {
-        warnings.push(`Trang \u0111ang m\u1EDF l\u1EDBp ${metadata.attendanceClass}, file l\xE0 ${first.class_code}.`);
-      } else if (!metadata?.attendanceClass && visibleClassCodes.length && first.class_code && !visibleClassCodes.includes(normalizeId(first.class_code))) {
-        warnings.push(`Kh\xF4ng t\xECm th\u1EA5y m\xE3 l\u1EDBp ${first.class_code} tr\xEAn trang.`);
-      }
-      const visibleDates = rawPageText.match(/\b(?:\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4})\b/g) ?? [];
-      if (metadata?.attendanceDate && metadata.attendanceDate !== first.meeting_date) {
-        warnings.push(`Trang \u0111ang m\u1EDF ng\xE0y ${metadata.attendanceDate}, file l\xE0 ${first.meeting_date}.`);
-      } else if (!metadata?.attendanceDate && visibleDates.length && first.meeting_date && !pageText.includes(first.meeting_date) && !pageText.includes(first.meeting_date.split("-").reverse().join("/"))) {
-        warnings.push(`Kh\xF4ng x\xE1c nh\u1EADn \u0111\u01B0\u1EE3c ng\xE0y ${first.meeting_date} tr\xEAn trang.`);
-      }
-      const visibleSlot = /\bslot\s*([1-4])\b/i.exec(rawPageText)?.[1];
-      const expectedSlot = first.schedule_code?.trim().slice(-1);
-      if (metadata?.attendanceSlot && expectedSlot && metadata.attendanceSlot !== expectedSlot) {
-        warnings.push(`Trang \u0111ang m\u1EDF slot ${metadata.attendanceSlot}, file l\xE0 slot ${expectedSlot}.`);
-      }
-      if (!metadata?.attendanceSlot && visibleSlot && expectedSlot && visibleSlot !== expectedSlot) {
-        warnings.push(`CSV l\xE0 slot ${expectedSlot} nh\u01B0ng trang FAP l\xE0 slot ${visibleSlot}.`);
+      if (!first) {
+        warnings.push("Danh s\xE1ch \u0111i\u1EC3m danh tr\u1ED1ng.");
+      } else {
+        const visibleClassCodes = rawPageText.toUpperCase().match(/\b[A-Z]{2,5}\d{4}\b/g) ?? [];
+        if (metadata?.attendanceClass && normalizeId(metadata.attendanceClass) !== normalizeId(first.class_code)) {
+          warnings.push(`Trang \u0111ang m\u1EDF l\u1EDBp ${metadata.attendanceClass}, file l\xE0 ${first.class_code}.`);
+        } else if (!metadata?.attendanceClass && visibleClassCodes.length && first.class_code && !visibleClassCodes.includes(normalizeId(first.class_code))) {
+          warnings.push(`Kh\xF4ng t\xECm th\u1EA5y m\xE3 l\u1EDBp ${first.class_code} tr\xEAn trang.`);
+        }
+        const visibleDates = rawPageText.match(/\b(?:\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4})\b/g) ?? [];
+        if (metadata?.attendanceDate && metadata.attendanceDate !== first.meeting_date) {
+          warnings.push(`Trang \u0111ang m\u1EDF ng\xE0y ${metadata.attendanceDate}, file l\xE0 ${first.meeting_date}.`);
+        } else if (!metadata?.attendanceDate && visibleDates.length && first.meeting_date && !pageText.includes(first.meeting_date) && !pageText.includes(first.meeting_date.split("-").reverse().join("/"))) {
+          warnings.push(`Kh\xF4ng x\xE1c nh\u1EADn \u0111\u01B0\u1EE3c ng\xE0y ${first.meeting_date} tr\xEAn trang.`);
+        }
+        const visibleSlot = /\bslot\s*([1-4])\b/i.exec(rawPageText)?.[1];
+        const expectedSlot = first.schedule_code?.trim().slice(-1);
+        if (metadata?.attendanceSlot && expectedSlot && metadata.attendanceSlot !== expectedSlot) {
+          warnings.push(`Trang \u0111ang m\u1EDF slot ${metadata.attendanceSlot}, file l\xE0 slot ${expectedSlot}.`);
+        }
+        if (!metadata?.attendanceSlot && visibleSlot && expectedSlot && visibleSlot !== expectedSlot) {
+          warnings.push(`CSV l\xE0 slot ${expectedSlot} nh\u01B0ng trang FAP l\xE0 slot ${visibleSlot}.`);
+        }
       }
       return {
         pageCount: pageRows.length,
         csvCount: csv.length,
         present: csv.filter((row) => row.status === "P").length,
         absent: csv.filter((row) => row.status === "A").length,
-        missingOnPage: csv.filter((record) => !pageRows.some((row) => this.rowMatches(row, record))).map((record) => record.roll_number),
+        missingOnPage: csv.filter((record) => !pageRows.some((row) => this.rowMatches(row, record))).map((record) => normalizeId(record.roll_number)),
         missingInCsv: pageRows.filter((row) => !row.ids.some((id) => allCsvIds.has(id))).map((row) => row.ids[0]),
         duplicates: [...new Set(duplicates)],
         metadataWarnings: warnings
@@ -533,7 +539,9 @@
       return [...row.querySelectorAll("td")].map((cell) => normalizeId(cell.textContent ?? "")).filter((value) => /^[A-Z]{2,6}\d{4,9}$/.test(value));
     }
     rowMatches(row, record) {
-      return row.ids.includes(record.roll_number) || Boolean(record.member_code && row.ids.includes(record.member_code));
+      const roll = normalizeId(record.roll_number);
+      const member = normalizeId(record.member_code ?? "");
+      return row.ids.includes(roll) || Boolean(member && row.ids.includes(member));
     }
     setStatus(row, status) {
       const present = this.presentCheckbox(row);
@@ -552,7 +560,7 @@
         return;
       }
       const select = row.querySelector("select");
-      const option = select && [...select.options].find((item) => this.valueStatus(item.value + item.text) === status);
+      const option = select && [...select.options].find((item) => this.valueStatus(`${item.value} ${item.text}`) === status);
       if (select && option) {
         select.value = option.value;
         select.dispatchEvent(new Event("input", { bubbles: true }));
@@ -567,7 +575,9 @@
       const selected = row.querySelector("input[type=radio]:checked");
       if (selected) return this.controlStatus(selected);
       const select = row.querySelector("select");
-      return select ? this.valueStatus(select.value) : null;
+      if (!select) return null;
+      const current = select.selectedOptions?.[0];
+      return this.valueStatus(`${select.value} ${current?.text ?? ""}`);
     }
     presentCheckbox(row) {
       return [...row.querySelectorAll("input[type=checkbox]")].find((control) => this.controlStatus(control) === "P");
@@ -578,8 +588,8 @@
     }
     valueStatus(value) {
       const normalized = value.trim().toUpperCase();
-      if (/\b(P|PRESENT|CÓ MẶT)\b/.test(normalized)) return "P";
-      if (/\b(A|ABSENT|VẮNG)\b/.test(normalized)) return "A";
+      if (/\b(P|PRESENT)\b|CÓ MẶT/.test(normalized)) return "P";
+      if (/\b(A|ABSENT)\b|VẮNG/.test(normalized)) return "A";
       return null;
     }
   };
