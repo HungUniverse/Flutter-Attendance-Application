@@ -1,8 +1,166 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // All workspace access goes through the authenticated teacher API.
-    // Admin SDK authorization is enforced by the backend, not these rules.
+    function signedIn() { return request.auth != null; }
+    function googleUser() {
+      return signedIn() && request.auth.token.email_verified == true
+        && request.auth.token.firebase.sign_in_provider == 'google.com';
+    }
+    function teacher() {
+      return googleUser() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher';
+    }
+    function ownsClass(classId) {
+      return teacher() && get(/databases/$(database)/documents/classes/$(classId)).data.ownerUid == request.auth.uid;
+    }
+    function rosterMember(classId) {
+      let course = get(/databases/$(database)/documents/classes/$(classId)).data;
+      return googleUser() && course.archived == false
+        && request.auth.token.email.lower() in course.roster;
+    }
+    function workspaceAdvanced(id) {
+      let path = /databases/$(database)/documents/workspaces/$(id);
+      return getAfter(path).data.ownerUid == request.auth.uid
+        && ((!exists(path) && getAfter(path).data.revision == 1)
+          || getAfter(path).data.revision == get(path).data.revision + 1);
+    }
+    function validMeeting(d, id) {
+      return d.keys().hasOnly(['id', 'number', 'startAt', 'endAt', 'state', 'dayStart', 'dayEnd', 'records', 'auditEvents'])
+        && d.id == id && d.number is int && d.number > 0
+        && d.startAt is string && d.endAt is string
+        && d.state in ['upcoming', 'active', 'closed']
+        && d.dayStart is timestamp && d.dayEnd is timestamp && d.dayEnd > d.dayStart
+        && d.records is map && d.auditEvents is list;
+    }
+    function correction(d) {
+      let old = resource.data;
+      let changed = d.records.diff(old.records).affectedKeys();
+      let audit = d.auditEvents[d.auditEvents.size() - 1];
+      return d.state == 'closed' && changed.size() == 1
+        && d.auditEvents.size() == old.auditEvents.size() + 1
+        && d.auditEvents.hasAll(old.auditEvents)
+        && audit.reason is string && audit.reason.matches('.*\\S.*')
+        && audit.meetingId == old.id && audit.rollNumber in changed
+        && audit.newValue in ['P', 'A']
+        && audit.oldValue == old.records[audit.rollNumber].status
+        && audit.newValue == d.records[audit.rollNumber].status
+        && d.records[audit.rollNumber].source == 'manual'
+        && d.records[audit.rollNumber].note == audit.reason
+        && d.diff(old).affectedKeys().hasOnly(['records', 'auditEvents']);
+    }
+    match /users/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+      // Privileged profiles are provisioned using Admin SDK by the project owner.
+      allow list, create, update, delete: if false;
+    }
+    match /workspaces/{id} {
+      allow get: if teacher() && (!exists(/databases/$(database)/documents/workspaces/$(id)) || resource.data.ownerUid == request.auth.uid);
+      allow list: if teacher() && resource.data.ownerUid == request.auth.uid;
+      allow create, update: if teacher()
+        && request.resource.data.keys().hasOnly(['ownerUid', 'revision', 'mutationId', 'data', 'layout', 'updatedAt'])
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.revision is int
+        && request.resource.data.mutationId is string
+        && request.resource.data.data is map && request.resource.data.layout is map
+        && request.resource.data.updatedAt == request.time
+        && ((!exists(/databases/$(database)/documents/workspaces/$(id)) && request.resource.data.revision == 1)
+          || (resource.data.ownerUid == request.auth.uid && request.resource.data.revision == resource.data.revision + 1));
+      allow delete: if false;
+    }
+    match /classes/{classId} {
+      allow get: if teacher() && (!exists(/databases/$(database)/documents/classes/$(classId)) || resource.data.ownerUid == request.auth.uid);
+      allow list: if teacher() && resource.data.ownerUid == request.auth.uid;
+      allow create, update: if teacher()
+        && request.resource.data.keys().hasOnly(['ownerUid', 'workspaceId', 'archived', 'data', 'roster'])
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.workspaceId is string
+        && request.resource.data.archived is bool
+        && request.resource.data.data is map && request.resource.data.roster is map
+        && workspaceAdvanced(request.resource.data.workspaceId)
+        && (!exists(/databases/$(database)/documents/classes/$(classId))
+          || (resource.data.ownerUid == request.auth.uid && request.resource.data.workspaceId == resource.data.workspaceId));
+      allow delete: if false;
+      match /meetings/{meetingId} {
+        allow get: if (teacher() && !exists(/databases/$(database)/documents/classes/$(classId)/meetings/$(meetingId))) || ownsClass(classId);
+        allow list: if ownsClass(classId);
+        allow create: if teacher()
+          && getAfter(/databases/$(database)/documents/classes/$(classId)).data.ownerUid == request.auth.uid
+          && workspaceAdvanced(getAfter(/databases/$(database)/documents/classes/$(classId)).data.workspaceId)
+          && validMeeting(request.resource.data, meetingId)
+          && (request.resource.data.state in ['upcoming', 'closed']
+            || (request.resource.data.state == 'active' && request.time >= request.resource.data.dayStart && request.time < request.resource.data.dayEnd));
+        allow update: if ownsClass(classId)
+          && workspaceAdvanced(get(/databases/$(database)/documents/classes/$(classId)).data.workspaceId)
+          && validMeeting(request.resource.data, meetingId)
+          && ((resource.data.state == 'closed' && correction(request.resource.data))
+            || (resource.data.state == 'active'
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state', 'records', 'auditEvents'])
+              && request.resource.data.state in ['active', 'closed'])
+            || (resource.data.state == 'upcoming'
+              && (request.resource.data.state == 'upcoming'
+                || (request.resource.data.state == 'active' && request.time >= resource.data.dayStart && request.time < resource.data.dayEnd)
+                || (request.resource.data.state == 'closed' && request.time >= resource.data.dayEnd))));
+        allow delete: if false;
+      }
+    }
+    match /attendanceSessions/{sessionId} {
+      function active(d) {
+        let meeting = get(/databases/$(database)/documents/classes/$(d.classId)/meetings/$(d.meetingId)).data;
+        return meeting.state == 'active' && request.time >= meeting.dayStart && request.time < meeting.dayEnd;
+      }
+      function valid(d) {
+        return d.keys().hasOnly(['ownerUid', 'classId', 'localClassId', 'meetingId', 'label', 'receiving', 'expiresAt', 'createdAt', 'updatedAt'])
+          && d.ownerUid == request.auth.uid && d.classId is string
+          && d.localClassId is string && d.meetingId is string && d.label is string
+          && d.receiving is bool && d.expiresAt is timestamp && d.createdAt is timestamp
+          && d.updatedAt == request.time;
+      }
+      allow get: if googleUser();
+      allow list: if teacher() && resource.data.ownerUid == request.auth.uid;
+      allow create: if valid(request.resource.data) && ownsClass(request.resource.data.classId)
+        && active(request.resource.data) && request.resource.data.createdAt == request.time
+        && request.resource.data.receiving == true && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt <= request.time + duration.value(2, 'm');
+      allow update: if valid(request.resource.data) && ownsClass(resource.data.classId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['receiving', 'expiresAt', 'updatedAt'])
+        && (request.resource.data.receiving == false
+          || (active(resource.data) && request.resource.data.expiresAt > request.time
+            && request.resource.data.expiresAt <= request.time + duration.value(2, 'm')));
+      allow delete: if false;
+      match /checkIns/{uid} {
+        function session() { return get(/databases/$(database)/documents/attendanceSessions/$(sessionId)).data; }
+        allow get: if googleUser() && (uid == request.auth.uid || ownsClass(session().classId));
+        allow list: if ownsClass(session().classId);
+        allow create: if googleUser() && uid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['uid', 'email', 'at'])
+          && request.resource.data.uid == uid
+          && request.resource.data.email == request.auth.token.email.lower()
+          && request.resource.data.at == request.time
+          && session().receiving == true && request.time < session().expiresAt
+          && active(session()) && rosterMember(session().classId);
+        allow update, delete: if false;
+      }
+    }
+    match /announcements/{id} {
+      allow read: if googleUser() && (resource.data.recipientUid == request.auth.uid || resource.data.ownerUid == request.auth.uid);
+      allow create: if teacher()
+        && request.resource.data.keys().hasOnly(['ownerUid', 'recipientUid', 'title', 'body', 'at', 'classId', 'meetingId'])
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.recipientUid is string
+        && request.resource.data.title is string && request.resource.data.title.size() > 0
+        && request.resource.data.body is string && request.resource.data.at == request.time
+        && ownsClass(request.resource.data.classId);
+      allow update, delete: if false;
+    }
+    match /reportMetadata/{id} {
+      allow read: if teacher() && resource.data.ownerUid == request.auth.uid;
+      allow create: if teacher()
+        && request.resource.data.keys().hasOnly(['ownerUid', 'classId', 'meetingId', 'fileName', 'format', 'bytes', 'at'])
+        && request.resource.data.ownerUid == request.auth.uid && ownsClass(request.resource.data.classId)
+        && get(/databases/$(database)/documents/classes/$(request.resource.data.classId)/meetings/$(request.resource.data.meetingId)).data.state == 'closed'
+        && request.resource.data.fileName is string && request.resource.data.format in ['pdf', 'csv', 'json']
+        && request.resource.data.bytes is int && request.resource.data.bytes > 0 && request.resource.data.at == request.time;
+      allow update, delete: if false;
+    }
     match /{document=**} { allow read, write: if false; }
   }
 }
