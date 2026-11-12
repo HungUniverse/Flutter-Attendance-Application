@@ -21,6 +21,9 @@ test('runs the full offline import, reporting, update and export workflow', asyn
     await writeFile(sessions, '["1","2"]');
     await writeFile(attendance, 'studentId,sessionId,status\nA,1,present\nB,1,absent\n');
     const run = (...args) => execFileSync(process.execPath, [cli, ...args], { encoding: 'utf8' });
+    const importPreview = JSON.parse(run('preview-import', roster, sessions, attendance));
+    assert.equal(importPreview.ready, true);
+    assert.equal(importPreview.summary.missing, 2);
     await writeFile(initial, run('init', roster, sessions, attendance));
     const report = JSON.parse(run('report', initial));
     assert.equal(report.missing, 2);

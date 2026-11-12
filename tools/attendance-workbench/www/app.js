@@ -19,6 +19,7 @@ import { reviseSnapshot } from '../revise.mjs';
 import { createScenario, evaluateScenario, parseScenario, removeScenarioChange, scenarioToCsv,
   serializeScenario, setScenarioChange } from '../scenario.mjs';
 import { auditAttendanceSnapshot, auditToCsv } from '../audit.mjs';
+import { previewAttendanceImport } from '../import-preview.mjs';
 
 const labels = {
   overview: ['TỔNG QUAN', 'Tổng quan'],
@@ -320,7 +321,7 @@ function renderAnalysis() {
   const policyRows = policyResults.map((item) => `<tr><td>${personCell(item.student, item.student.id)}</td><td>${statusBadge(item.status)}</td><td>${item.reasons.map(esc).join(', ') || '—'}</td><td>${item.minimumRate === null ? '—' : `${ratePercent(item.minimumRate)} – ${ratePercent(item.maximumRate)}`}</td></tr>`).join('');
   const windows = rolling.flatMap((student) => student.windows.map((window) => ({ student: student.student, ...window }))).slice(0, 12);
   const trendRows = windows.map((item) => `<tr><td>${esc(item.student.name)}</td><td>${esc(item.startSessionId)} – ${esc(item.endSessionId)}</td><td>${item.present} / ${item.present + item.absent}</td><td>${ratePercent(item.attendanceRate)}</td></tr>`).join('');
-  const tools = `<div class="toolbar"><button class="button button-primary" data-scenario>Thử kịch bản</button><button class="button button-secondary" data-audit>Kiểm tra chất lượng</button><button class="button button-secondary" data-edit-policy>⚙ Điều kiện điểm danh</button><button class="button button-secondary" data-analysis-csv>Tải kết quả CSV</button><button class="button button-secondary" data-analysis-html>Tải báo cáo HTML</button></div>`;
+  const tools = `<div class="toolbar"><button class="button button-primary" data-scenario>Thử kịch bản</button><button class="button button-secondary" data-audit>Kiểm tra chất lượng</button><button class="button button-secondary" data-import-preview>Kiểm tra tệp nhập</button><button class="button button-secondary" data-edit-policy>⚙ Điều kiện điểm danh</button><button class="button button-secondary" data-analysis-csv>Tải kết quả CSV</button><button class="button button-secondary" data-analysis-html>Tải báo cáo HTML</button></div>`;
   const summaries = `<div class="metric-grid">${metric('Chuỗi vắng từ 2 buổi', absenceRuns.length, 'chuỗi', '×')}${metric('Điều kiện đạt', policyResults.filter((item) => item.status === 'pass').length, 'sinh viên', '✓')}${metric('Chưa đạt', policyResults.filter((item) => item.status === 'fail').length, 'sinh viên', '！')}${metric('Chưa đủ dữ liệu', policyResults.filter((item) => item.status === 'undetermined').length, 'sinh viên', '…')}</div>`;
   return `${summaries}${tools}<div class="two-col">${panel('Tỷ lệ theo sinh viên', bars || emptyInline('Chưa có sinh viên.'), { description: 'Tính trên kết quả đã ghi nhận.' })}${panel('Điều kiện đang dùng', `<div class="activity-list"><div class="activity-item"><span class="activity-avatar">%</span><span class="activity-name">Tỷ lệ tối thiểu</span><span>${ratePercent(state.policy.minimumRate)}</span></div><div class="activity-item"><span class="activity-avatar">×</span><span class="activity-name">Số buổi vắng tối đa</span><span>${state.policy.maximumAbsences}</span></div><div class="activity-item"><span class="activity-avatar">?</span><span class="activity-name">Cách xử lý dữ liệu thiếu</span><span>Chưa kết luận</span></div></div>`)}</div>${panel('Chuỗi vắng liên tiếp', streakRows ? `<div class="table-wrap"><table><thead><tr><th>SINH VIÊN</th><th>CÁC BUỔI</th><th>SỐ BUỔI</th></tr></thead><tbody>${streakRows}</tbody></table></div>` : emptyInline('Không tìm thấy chuỗi vắng từ 2 buổi liên tiếp.'))}${panel('Xu hướng theo cửa sổ buổi học', trendRows ? `<div class="table-wrap"><table><thead><tr><th>SINH VIÊN</th><th>CỬA SỔ</th><th>CÓ MẶT</th><th>TỶ LỆ</th></tr></thead><tbody>${trendRows}</tbody></table></div>` : emptyInline('Thêm buổi học để xem xu hướng.'))}${panel('Đánh giá theo điều kiện', policyRows ? `<div class="table-wrap"><table><thead><tr><th>SINH VIÊN</th><th>KẾT QUẢ</th><th>LÝ DO</th><th>BIÊN TỶ LỆ</th></tr></thead><tbody>${policyRows}</tbody></table></div>` : emptyInline('Chưa có sinh viên.'))}`;
 }
@@ -357,6 +358,7 @@ function bindViewActions(root) {
   $('[data-edit-policy]', root)?.addEventListener('click', policyDialog);
   $('[data-scenario]', root)?.addEventListener('click', scenarioDialog);
   $('[data-audit]', root)?.addEventListener('click', auditDialog);
+  $('[data-import-preview]', root)?.addEventListener('click', importReviewDialog);
   $('[data-analysis-csv]', root)?.addEventListener('click', exportAnalysisCsv);
   $('[data-analysis-html]', root)?.addEventListener('click', exportHtml);
 }
@@ -649,6 +651,45 @@ function handleSnapshotFile(file) {
   file.text().then((content) => loadSnapshot(content, `Đã mở ${file.name}.`)).catch(showError);
 }
 
+function importReviewDialog() {
+  showDialog(`<div class="modal-head"><div><h2>Kiểm tra bộ tệp nhập</h2><p>Chọn danh sách sinh viên, lịch buổi học và CSV điểm danh. Các tệp chỉ được đọc trong trình duyệt này.</p></div><button type="button" class="icon-button" data-close>×</button></div><div class="form-grid import-file-grid"><div class="form-field"><label for="preview-roster">Danh sách sinh viên · CSV</label><input id="preview-roster" type="file" accept=".csv,text/csv"></div><div class="form-field"><label for="preview-sessions">Mã buổi học · JSON array</label><input id="preview-sessions" type="file" accept=".json,application/json"></div><div class="form-field"><label for="preview-attendance">Kết quả điểm danh · CSV</label><input id="preview-attendance" type="file" accept=".csv,text/csv"></div></div><div class="modal-actions"><button type="button" class="button button-secondary" data-close>Đóng</button><button type="button" class="button button-primary" id="run-import-preview">Kiểm tra bộ tệp</button></div>`, () => {
+    bindModalClose();
+    $('#run-import-preview').addEventListener('click', async () => {
+      const rosterFile = $('#preview-roster').files?.[0];
+      const sessionsFile = $('#preview-sessions').files?.[0];
+      const attendanceFile = $('#preview-attendance').files?.[0];
+      if (!rosterFile || !sessionsFile || !attendanceFile) {
+        showError(new Error('Chọn đủ ba tệp trước khi kiểm tra.')); return;
+      }
+      try {
+        const [rosterCsv, sessions, attendanceCsv] = await Promise.all([
+          rosterFile.text(), sessionsFile.text(), attendanceFile.text(),
+        ]);
+        renderImportPreview(previewAttendanceImport({ rosterCsv, sessions, attendanceCsv }));
+      } catch (error) { showError(error); }
+    });
+  });
+}
+
+function renderImportPreview(preview) {
+  const issues = [
+    ...preview.errors.map((item) => ({ severity: 'error', ...item })),
+    ...preview.warnings.map((item) => ({ severity: 'warning', source: 'summary', line: null, ...item })),
+  ];
+  const rows = issues.map((item) => `<article class="audit-issue audit-${esc(item.severity)}"><div class="audit-issue-top"><span class="audit-severity">${esc(item.severity.toUpperCase())}</span><strong>${esc(item.message)}</strong></div><small>${esc(item.source)}${item.line ? ` · dòng ${item.line}` : ''}${item.code ? ` · ${esc(item.code)}` : ''}</small></article>`).join('');
+  const summary = preview.summary;
+  showDialog(`<div class="modal-head"><div><h2>${preview.ready ? 'Có thể tạo bản sao' : 'Cần sửa tệp nhập'}</h2><p>${preview.ready ? 'Bản xem trước đã kiểm tra toàn bộ mã và trạng thái. Chưa có gì được lưu.' : 'Không tạo bản sao một phần. Hãy sửa lỗi rồi kiểm tra lại cả bộ tệp.'}</p></div><button type="button" class="icon-button" data-close>×</button></div><div class="metric-grid">${metric('Sinh viên', summary.roster.accepted, `${summary.roster.rejected} dòng lỗi`, '♧')}${metric('Buổi học', summary.sessions, 'buổi', '▣')}${metric('Kết quả', summary.recorded, `${summary.attendance.rejected} dòng bị từ chối`, '✓')}${metric('Bao phủ', ratePercent(summary.coverage), `${summary.missing} ô còn thiếu`, '◉')}</div><div class="audit-issue-list">${rows || emptyInline('Không có lỗi hoặc cảnh báo.')}</div><div class="modal-actions"><button type="button" class="button button-secondary" data-close>Đóng</button><button type="button" class="button button-secondary" id="download-import-review">Tải báo cáo kiểm tra</button><button type="button" class="button button-primary" id="use-import-preview" ${preview.ready ? '' : 'disabled'}>Mở bản sao đã kiểm tra</button></div>`, () => {
+    bindModalClose();
+    $('#download-import-review').addEventListener('click', () => download('attendance-import-review.json', `${JSON.stringify({ version: preview.version, ready: preview.ready,
+      summary: preview.summary, errors: preview.errors, warnings: preview.warnings }, null, 2)}\n`));
+    $('#use-import-preview').addEventListener('click', () => {
+      if (!preview.ready) return;
+      closeDialog();
+      loadSnapshot(preview.snapshot, 'Đã mở bản sao từ bộ tệp đã kiểm tra.');
+    });
+  });
+}
+
 function demoSnapshot() {
   const roster = [
     { id: 'SV001', name: 'Nguyễn Minh Anh', email: 'minhanh@example.edu.vn' },
@@ -802,6 +843,7 @@ function loadEventBindings() {
   });
   $('#empty-open').addEventListener('keydown', () => {});
   $('#create-demo').addEventListener('click', demoSnapshot);
+  $('#review-import').addEventListener('click', importReviewDialog);
   $('#download-snapshot').addEventListener('click', exportSnapshot);
   $('#manage-bundle').addEventListener('click', showBundleManager);
   $('#compare-snapshot').addEventListener('click', compareSnapshotFile);

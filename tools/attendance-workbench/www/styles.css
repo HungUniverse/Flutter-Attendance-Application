@@ -241,9 +241,11 @@ td.row-primary { color: #30453b; font-weight: 650; }
 .audit-severity { flex: 0 0 auto; color: #78867e; font-size: 8px; font-weight: 750; letter-spacing: .06em; }
 .audit-issue p { margin: 7px 0 5px; color: #627168; font-size: 10px; line-height: 1.5; }
 .audit-issue small { color: #89958e; font-size: 8px; }
+.import-file-grid .form-field input[type="file"] { height: auto; min-width: 0; padding: 8px; font-size: 9px; }
 
 @media (max-width: 690px) {
   .audit-options { grid-template-columns: 1fr; }
   .audit-options .button { width: 100%; }
+  .import-file-grid { grid-template-columns: 1fr; }
   .modal-actions { flex-wrap: wrap; }
 }

@@ -25,6 +25,7 @@ import { evaluatePolicy } from './policy.mjs';
 import { createScenario, evaluateScenario, parseScenario, removeScenarioChange, scenarioToCsv,
   serializeScenario, setScenarioChange } from './scenario.mjs';
 import { auditAttendanceSnapshot, auditToCsv } from './audit.mjs';
+import { previewAttendanceImport } from './import-preview.mjs';
 
 const usage = `Attendance workbench (Node.js 22+)
 
@@ -42,6 +43,7 @@ const usage = `Attendance workbench (Node.js 22+)
   node cli.mjs scenario-csv SCENARIO.json [CURRENT_SNAPSHOT.json]
   node cli.mjs audit SNAPSHOT.json [OPTIONS.json]
   node cli.mjs audit-csv SNAPSHOT.json [OPTIONS.json]
+  node cli.mjs preview-import ROSTER.csv SESSIONS.json ATTENDANCE.csv
   node cli.mjs apply SNAPSHOT.json CHANGES.json
   node cli.mjs compare BEFORE.json AFTER.json
   node cli.mjs export-csv SNAPSHOT.json
@@ -163,6 +165,11 @@ export async function runCommand(args) {
       ]);
       const result = auditAttendanceSnapshot(data, optionsText ? JSON.parse(optionsText) : {});
       return command === 'audit-csv' ? auditToCsv(result) : json(result);
+    }
+    case 'preview-import': {
+      requireArgs(values, 3);
+      const [rosterCsv, sessions, attendanceCsv] = await Promise.all(values.map(readText));
+      return json(previewAttendanceImport({ rosterCsv, sessions, attendanceCsv }));
     }
     case 'apply': {
       requireArgs(values, 2);

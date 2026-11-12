@@ -13,6 +13,12 @@ array of session IDs in chronological order, and an attendance CSV with
 `studentId,sessionId,status`. Status must be `present` or `absent`. CSV errors
 stop the import, and the command reports their physical line numbers.
 
+`preview-import` reads the same three inputs but returns a review summary first.
+It lists row errors across the files, checks attendance references against the
+roster and session list, and reports coverage. A candidate snapshot is included
+only when the import is valid; incomplete attendance remains a warning for the
+reviewer. The browser offers the same preview before opening the resulting copy.
+
 The `report` command shows coverage and missing pairs. `forecast` estimates
 attendance after the supplied number of future sessions, and leaves students
 with missing historical results without a forecast. `apply` accepts a JSON
