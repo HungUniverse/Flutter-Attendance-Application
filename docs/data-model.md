@@ -2,7 +2,7 @@
 
 ## Danh tính và quyền
 
-Google Sign-In cung cấp Firebase UID, email đã xác minh và provider `google.com`. Giảng viên cần thêm `users/{uid}.role == teacher`. Chủ project cấp hồ sơ bằng `firebase/provision-teacher.mjs`. Security Rules từ chối thao tác tự tạo hoặc sửa vai trò từ client.
+Google Sign-In cung cấp Firebase UID, email đã xác minh và provider `google.com`. Admin cần `users/{uid}.role == admin`, cấp bằng `firebase/provision-admin.mjs`; client không được tự tạo hoặc sửa vai trò admin. Giảng viên cần `teacherDirectory/{email}.status == active`. Admin quản lý danh mục trên web; khóa hoặc xóa hồ sơ chặn quyền Firebase của giảng viên. Vai trò `teacher` cũ trong `users` không còn tự cấp quyền, nên xóa danh mục không làm sống lại quyền cũ.
 
 Sinh viên dùng trang `/join/{sessionId}`. Rules đối chiếu email trong token Google với roster riêng của lớp. MSSV và email tự nhập không tham gia cấp quyền.
 
@@ -11,6 +11,8 @@ Sinh viên dùng trang `/join/{sessionId}`. Rules đối chiếu email trong tok
 | Đường dẫn | Trường và kiểu | Quyền CRUD từ client | Màn sử dụng |
 | --- | --- | --- | --- |
 | `users/{uid}` | `role` string, `email` string, `provisionedAt` timestamp | Người dùng đọc hồ sơ chính mình. Ghi bằng công cụ quản trị có credential của chủ project. | Đăng nhập, khôi phục workspace |
+| `teacherDirectory/{email}` | `email`, `displayName`, `staffCode`, `department`, `status`, `createdBy`, `updatedBy` string; `createdAt`, `updatedAt` timestamp | Admin đọc/liệt kê/thêm/sửa/xóa. Tài khoản Google đọc hồ sơ theo email token của mình. Giảng viên không tự sửa quyền. | Admin CRUD, kiểm tra quyền Android/Windows/web |
+| `teacherAudit/{id}` | `actorUid`, `email`, `action` string, `before`, `after` map, `at` server timestamp | Chỉ admin đọc và tạo. Cấm sửa/xóa từ client. | Lịch sử quản trị |
 | `workspaces/{id}` | `ownerUid` string, `revision` int, `mutationId` string, `data` map, `layout` map, `updatedAt` server timestamp | Giảng viên chủ sở hữu đọc, tạo và cập nhật với revision tăng đúng một. | Import, dashboard, tải lại học kỳ |
 | `classes/{id}` | `ownerUid` string, `workspaceId` string, `archived` bool, `data` map, `roster` map email → MSSV | Giảng viên chủ sở hữu đọc và ghi cùng transaction tăng revision workspace. Lưu trữ bằng `archived`. | Lớp, danh sách, lịch |
 | `classes/{id}/meetings/{meetingId}` | `id`, `startAt`, `endAt` string ISO, `number` int, `state` string, `dayStart`, `dayEnd` timestamp, `records` map, `auditEvents` list | Giảng viên chủ sở hữu đọc và ghi theo chuyển trạng thái. Cập nhật đồng thời revision workspace. | Điểm danh, lịch sử, sửa kết quả |

@@ -39,7 +39,7 @@ Người dùng chọn số tuần và 1 hoặc 2 buổi/tuần. Với 1 buổi/t
 
 - Android: chọn Markbook ODS/XLSX, xem các lớp/số sinh viên và học kỳ tự nhận, kiểm tra ngày bắt đầu/số tuần rồi xác nhận nạp. Bản xem trước lấy lịch, môn và lớp từ tên sheet.
 - Windows: chọn Markbook rồi cấu hình học kỳ. Form nhận mã học kỳ từ tên file, hiển thị các cột nguồn; mốc FA26 mặc định 07/09/2026.
-- Web: `/admin#classes` → **Nạp Markbook** → chọn file → chọn các sheet trong bản xem trước → kiểm tra lịch và xác nhận. Mỗi lớp ghi bằng transaction riêng; lỗi giữa chừng báo số lớp đã lưu. Có thể nhập lại để cập nhật các lớp đã có, giữ lịch sử. Web giữ tối đa 200 sinh viên/lớp.
+- Web giảng viên: `/teacher#classes` → **Nạp Markbook** → chọn file → chọn các sheet trong bản xem trước → kiểm tra lịch và xác nhận. Mỗi lớp ghi bằng transaction riêng; lỗi giữa chừng báo số lớp đã lưu. Có thể nhập lại để cập nhật các lớp đã có, giữ lịch sử. Web giữ tối đa 200 sinh viên/lớp. `/admin` dành cho chủ hệ thống quản lý giảng viên.
 - Form web thủ công dùng `Class | RollNumber | Email | MemberCode | FullName`; hỗ trợ dán năm cột từ Excel và bỏ qua cột điểm phía sau. Định dạng ba cột cũ vẫn đọc được để tương thích, nhưng không còn là mẫu nhập chính.
 
 ## Reset dữ liệu lớp trên Firebase
