@@ -1,0 +1,74 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+const cli = fileURLToPath(new URL('./cli.mjs', import.meta.url));
+
+test('runs the full offline import, reporting, update and export workflow', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'attendance-workbench-'));
+  try {
+    const roster = join(dir, 'roster.csv');
+    const sessions = join(dir, 'sessions.json');
+    const attendance = join(dir, 'attendance.csv');
+    const initial = join(dir, 'initial.json');
+    const updated = join(dir, 'updated.json');
+    const changes = join(dir, 'changes.json');
+    await writeFile(roster, 'id,name,email\nA,An,a@example.com\nB,Binh,b@example.com\n');
+    await writeFile(sessions, '["1","2"]');
+    await writeFile(attendance, 'studentId,sessionId,status\nA,1,present\nB,1,absent\n');
+    const run = (...args) => execFileSync(process.execPath, [cli, ...args], { encoding: 'utf8' });
+    await writeFile(initial, run('init', roster, sessions, attendance));
+    const report = JSON.parse(run('report', initial));
+    assert.equal(report.missing, 2);
+    assert.equal(report.coverage, 0.5);
+    assert.match(run('report-html', initial, 'Class report'), /<title>Class report<\/title>/);
+    assert.equal(JSON.parse(run('forecast', initial, '2', '0.75'))[0].forecast, null);
+    await writeFile(changes, JSON.stringify([
+      { studentId: 'A', sessionId: '2', expected: null, status: 'present' },
+    ]));
+    await writeFile(updated, run('apply', initial, changes));
+    assert.equal(JSON.parse(run('report', updated)).missing, 1);
+    const revisedSessions = join(dir, 'revised-sessions.json');
+    await writeFile(revisedSessions, '["1"]');
+    const blocked = spawnSync(process.execPath, [cli, 'set-sessions', updated, revisedSessions], { encoding: 'utf8' });
+    assert.equal(blocked.status, 1);
+    assert.match(blocked.stderr, /drop-records/);
+    assert.equal(JSON.parse(run('set-sessions', updated, revisedSessions, '--drop-records')).records.length, 2);
+    assert.equal(JSON.parse(run('compare', initial, updated)).attendance.added.length, 1);
+    assert.match(run('export-csv', updated), /"A","2","present"/);
+    const emptyBundle = join(dir, 'empty-bundle.json');
+    const classBundle = join(dir, 'class-bundle.json');
+    await writeFile(emptyBundle, run('bundle-new'));
+    await writeFile(classBundle, run('bundle-put', emptyBundle, 'course', 'Course', updated));
+    assert.equal(JSON.parse(run('bundle-report', classBundle))[0].missing, 1);
+    assert.equal(JSON.parse(run('bundle-remove', classBundle, 'course')).classes.length, 0);
+    const failed = spawnSync(process.execPath, [cli, 'apply', updated, changes], { encoding: 'utf8' });
+    assert.equal(failed.status, 1);
+    assert.match(failed.stderr, /conflicting changes/);
+    assert.equal(JSON.parse(await readFile(updated, 'utf8')).records.length, 3);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('returns errors without emitting a partial snapshot', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'attendance-workbench-'));
+  try {
+    const roster = join(dir, 'roster.csv');
+    const sessions = join(dir, 'sessions.json');
+    const attendance = join(dir, 'attendance.csv');
+    await writeFile(roster, 'id,name,email\nA,An,invalid\n');
+    await writeFile(sessions, '[]');
+    await writeFile(attendance, 'studentId,sessionId,status\n');
+    const result = spawnSync(process.execPath, [cli, 'init', roster, sessions, attendance], { encoding: 'utf8' });
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, '');
+    assert.match(result.stderr, /invalid_email/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
