@@ -2,9 +2,11 @@
 
 ## Phạm vi đã chốt
 
-Android và Windows dành cho giảng viên. Sinh viên dùng web check-in. Web quản lý giảng viên được hoãn theo xác nhận của người dùng. Repo Flutter tiếp tục build tại thư mục gốc, `packages/core/` chứa model và nghiệp vụ dùng chung.
+Android, Windows và web quản lý dành cho giảng viên. Sinh viên dùng web check-in, hộp thư và yêu cầu sửa kết quả. Người dùng đã yêu cầu triển khai tiếp web quản lý. Repo Flutter tiếp tục build tại thư mục gốc, `packages/core/` chứa model và nghiệp vụ dùng chung.
 
 Project là `fap-attendance-71655`. Web được phục vụ tại [FAP Attendance](https://fap-attendance-71655.web.app). Trang gốc hướng dẫn mở QR, link điểm danh cụ thể nằm ở `/join/{sessionId}`.
+
+Giảng viên mở [/admin](https://fap-attendance-71655.web.app/admin). Sinh viên mở [/student](https://fap-attendance-71655.web.app/student) để xem hộp thư và yêu cầu. Chi tiết chức năng và luồng duyệt nằm trong [hướng dẫn web quản lý](admin-web.md).
 
 ## Chuẩn bị máy phát triển
 
@@ -57,6 +59,7 @@ APK nằm tại `build/app/outputs/flutter-apk/app-debug.apk`. Windows demo nằ
 npm run dev --prefix web
 npm test --prefix web
 npm run build --prefix web
+node firebase/configure-web.mjs
 node firebase/node_modules/firebase-tools/lib/bin/firebase.js deploy --project fap-attendance-71655 --only firestore,hosting --non-interactive
 ```
 
