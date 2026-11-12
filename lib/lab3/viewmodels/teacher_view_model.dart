@@ -606,44 +606,46 @@ class TeacherViewModel extends ChangeNotifier {
     return result;
   }
 
-  Future<bool> close(String classId, String meetingId) =>
-      _run('close_attendance', () async {
-        if (meeting(classId, meetingId).state != MeetingState.active) {
-          throw const AppProblem('Buổi học chưa mở hoặc đã chốt.');
-        }
-        if (links is LiveAttendanceLinks) {
-          link = await (links as LiveAttendanceLinks).forMeeting(
-            course(classId),
-            meeting(classId, meetingId),
+  Future<bool> close(String classId, String meetingId) => _run(
+    'close_attendance',
+    () async {
+      if (meeting(classId, meetingId).state != MeetingState.active) {
+        throw const AppProblem('Buổi học chưa mở hoặc đã chốt.');
+      }
+      if (links is LiveAttendanceLinks) {
+        link = await (links as LiveAttendanceLinks).forMeeting(
+          course(classId),
+          meeting(classId, meetingId),
+        );
+        await repository.saveLink(uid, link);
+      }
+      if (link != null) {
+        // Freeze the server, then retrieve all accepted submissions before finalizing.
+        await links.stop(link!);
+        await _refreshLink();
+        if (linkError != null) {
+          throw const AppProblem(
+            'Chưa lấy đủ kết quả từ link. Hãy thử lại trước khi chốt.',
           );
-          await repository.saveLink(uid, link);
         }
-        if (link != null) {
-          // Freeze the server, then retrieve all accepted submissions before finalizing.
-          await links.stop(link!);
-          await _refreshLink();
-          if (linkError != null) {
-            throw const AppProblem(
-              'Chưa lấy đủ kết quả từ link. Hãy thử lại trước khi chốt.',
-            );
-          }
-          await repository.saveLink(uid, null);
-          link = null;
-        }
-        await _replace(
-          attendance.closeMeeting(course(classId), meetingId, now: now()),
-        );
-        final totals = counts(classId, meetingId);
-        await _safe(
-          () => telemetry.event('attendance_closed', {
-            'present_count': totals[AttendanceStatus.present]!,
-            'absent_count': totals[AttendanceStatus.absent]!,
-          }),
-        );
-        message = sync != null && sync!.status != 'Đã đồng bộ'
-            ? 'Đã chốt trên máy; chưa xác nhận đồng bộ Firebase. ${sync!.status}'
-            : 'Đã chốt. Các ô chưa ghi đã chuyển thành Absent.';
-      });
+        await repository.saveLink(uid, null);
+        link = null;
+      }
+      await _replace(
+        attendance.closeMeeting(course(classId), meetingId, now: now()),
+      );
+      final totals = counts(classId, meetingId);
+      await _safe(
+        () => telemetry.event('attendance_closed', {
+          'present_count': totals[AttendanceStatus.present]!,
+          'absent_count': totals[AttendanceStatus.absent]!,
+        }),
+      );
+      message = sync != null && sync!.status != 'Đã đồng bộ'
+          ? 'Đã chốt trên máy; chưa xác nhận đồng bộ Firebase. ${sync!.status}'
+          : 'Đã chốt. Các ô chưa ghi đã chuyển thành Absent.';
+    },
+  );
 
   Future<bool> requestAiReview(String classId, String meetingId) => _run(
     'ai_review',

@@ -59,7 +59,8 @@ class _AttendancePageState extends State<AttendancePage> {
       ],
       child: ContentList(
         children: [
-          if (vm.draftCount > 0) const AttendanceDraftNotice(),
+          if (m.state == MeetingState.active || vm.draftCount > 0)
+            const AttendanceDraftNotice(),
           SectionCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -320,7 +321,6 @@ class AttendanceDraftNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<TeacherViewModel>();
-    if (vm.draftCount == 0) return const SizedBox.shrink();
     return SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
