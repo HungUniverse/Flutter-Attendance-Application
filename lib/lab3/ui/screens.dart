@@ -388,6 +388,7 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
+  bool _showWeek = false;
   int _tab = 0;
   @override
   Widget build(BuildContext context) {
@@ -498,6 +499,15 @@ class _DashboardPageState extends State<DashboardPage> {
                 ],
               ),
             ),
+            SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(value: false, label: Text('Danh sách lớp')),
+                ButtonSegment(value: true, label: Text('Lịch tuần')),
+              ],
+              selected: {_showWeek},
+              onSelectionChanged: (v) => setState(() => _showWeek = v.first),
+            ),
+            if (_showWeek) const _WeeklySchedule(),
             FilledButton.icon(
               onPressed: vm.busy
                   ? null
@@ -602,6 +612,255 @@ class _ClassCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _WeeklySchedule extends StatefulWidget {
+  const _WeeklySchedule();
+
+  @override
+  State<_WeeklySchedule> createState() => _WeeklyScheduleState();
+}
+
+class _WeeklyScheduleState extends State<_WeeklySchedule> {
+  late DateTime _monday;
+
+  static DateTime _startOfWeek(DateTime date) =>
+      DateUtils.addDaysToDate(date, DateTime.monday - date.weekday);
+
+  @override
+  void initState() {
+    super.initState();
+    _monday = _startOfWeek(context.read<TeacherViewModel>().now().toLocal());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final vm = context.watch<TeacherViewModel>();
+    final today = vm.now().toLocal();
+    final days = List.generate(7, (i) => DateUtils.addDaysToDate(_monday, i));
+    final meetingsByDay = {
+      for (final day in days) day: <(CourseClass, Meeting)>[],
+    };
+    for (final course in vm.workspace!.classes) {
+      for (final meeting in course.meetings) {
+        final day = DateUtils.dateOnly(meeting.startAt.toLocal());
+        meetingsByDay[day]?.add((course, meeting));
+      }
+    }
+    for (final meetings in meetingsByDay.values) {
+      meetings.sort((a, b) => a.$2.startAt.compareTo(b.$2.startAt));
+    }
+    final hasMeetings = meetingsByDay.values.any((items) => items.isNotEmpty);
+
+    return SectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              IconButton(
+                tooltip: 'Tuần trước',
+                onPressed: () => setState(
+                  () => _monday = DateUtils.addDaysToDate(_monday, -7),
+                ),
+                icon: const Icon(Icons.chevron_left),
+              ),
+              TextButton(
+                onPressed: () =>
+                    setState(() => _monday = _startOfWeek(vm.now().toLocal())),
+                child: const Text('Tuần này'),
+              ),
+              IconButton(
+                tooltip: 'Tuần sau',
+                onPressed: () => setState(
+                  () => _monday = DateUtils.addDaysToDate(_monday, 7),
+                ),
+                icon: const Icon(Icons.chevron_right),
+              ),
+            ],
+          ),
+          OutlinedButton(
+            onPressed: () async {
+              final date = await showDatePicker(
+                context: context,
+                initialDate: _monday,
+                firstDate: DateTime(2020),
+                lastDate: DateTime(2100),
+              );
+              if (date != null && mounted) {
+                setState(() => _monday = _startOfWeek(date));
+              }
+            },
+            child: Text(
+              '${DateFormat('dd/MM').format(days.first)} – ${DateFormat('dd/MM/yyyy').format(days.last)}',
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (!hasMeetings)
+            const Text('Chưa có lịch dạy trong tuần này. Chọn tuần khác.')
+          else
+            for (final day in days)
+              _ScheduleDay(
+                day: day,
+                isToday: DateUtils.isSameDay(day, today),
+                meetings: meetingsByDay[day]!,
+              ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScheduleDay extends StatelessWidget {
+  const _ScheduleDay({
+    required this.day,
+    required this.isToday,
+    required this.meetings,
+  });
+
+  final DateTime day;
+  final bool isToday;
+  final List<(CourseClass, Meeting)> meetings;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context).textTheme;
+    final weekday = day.weekday == DateTime.sunday
+        ? 'CN'
+        : 'T${day.weekday + 1}';
+    return Column(
+      children: [
+        const Divider(height: 1, color: AppColors.border),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 54,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: isToday ? AppColors.orangeSoft : null,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      DateFormat('dd/MM').format(day),
+                      textAlign: TextAlign.center,
+                      style: theme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: isToday ? AppColors.orangeDark : AppColors.ink,
+                      ),
+                    ),
+                    Text(weekday, style: theme.bodySmall),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: meetings.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text(
+                          'Không có lịch dạy',
+                          style: theme.bodySmall,
+                        ),
+                      )
+                    : Column(
+                        spacing: 8,
+                        children: [
+                          for (final (course, meeting) in meetings)
+                            _ScheduleMeeting(course: course, meeting: meeting),
+                        ],
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ScheduleMeeting extends StatelessWidget {
+  const _ScheduleMeeting({required this.course, required this.meeting});
+
+  final CourseClass course;
+  final Meeting meeting;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context).textTheme;
+    final start = meeting.startAt.toLocal();
+    final end = meeting.endAt.toLocal();
+    final timeFormat = DateFormat('HH:mm');
+    final slot = ScheduleService.slotTimes.entries
+        .where((entry) => entry.value.startHour == start.hour)
+        .firstOrNull;
+    const shape = RoundedRectangleBorder(
+      side: BorderSide(color: AppColors.border),
+      borderRadius: BorderRadius.all(Radius.circular(12)),
+    );
+    return Material(
+      color: AppColors.creamLight,
+      shape: shape,
+      child: InkWell(
+        customBorder: shape,
+        onTap: () => openPage(
+          context,
+          AttendancePage(classId: course.id, meetingId: meeting.id),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (slot != null)
+                    Text(
+                      'Ca ${slot.key}',
+                      style: theme.labelLarge?.copyWith(
+                        color: AppColors.orangeDark,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  Text(timeFormat.format(start), style: theme.bodySmall),
+                  Text(timeFormat.format(end), style: theme.bodySmall),
+                ],
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      course.courseCode,
+                      style: theme.titleSmall?.copyWith(
+                        color: AppColors.orangeDark,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text('${course.classCode} · Slot ${meeting.number}'),
+                    const SizedBox(height: 4),
+                    StatusTag(
+                      stateLabel(meeting.state),
+                      color: AppColors.orangeDark,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

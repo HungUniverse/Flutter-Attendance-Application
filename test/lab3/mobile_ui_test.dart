@@ -174,6 +174,82 @@ void main() {
       });
       await tester.pumpWidget(const SizedBox());
     });
+    testWidgets(
+      'weekly schedule scrolls by date and opens the selected meeting at $width',
+      (tester) async {
+        final h = Harness(Directory('unused-ui-fixture'), inMemory: true);
+        await h.initialize();
+        final workspace = h.vm.workspace!;
+        final course = workspace.classes.single;
+        h.vm.workspace = workspace.copyWith(
+          classes: [
+            course.copyWith(
+              meetings: [
+                course.meetings.single,
+                Meeting(
+                  id: 'm2',
+                  number: 2,
+                  startAt: DateTime(2026, 11, 3, 7),
+                  endAt: DateTime(2026, 11, 3, 9, 15),
+                  state: MeetingState.upcoming,
+                ),
+              ],
+            ),
+          ],
+        );
+        await tester.binding.setSurfaceSize(Size(width, 800));
+        addTearDown(() async {
+          await tester.binding.setSurfaceSize(null);
+          await h.dispose();
+        });
+        await tester.pumpWidget(TeacherMobileApp(model: h.vm));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Lịch tuần'));
+        await tester.pumpAndSettle();
+        expect(find.text('02/11 – 08/11/2026'), findsOneWidget);
+        expect(find.text('03/11'), findsOneWidget);
+        expect(find.text('Ca 1'), findsOneWidget);
+        expect(find.text('07:00'), findsOneWidget);
+        expect(find.text('Ca 2'), findsOneWidget);
+        expect(find.text('09:30'), findsOneWidget);
+        final first = find.text('SE1901 · Slot 1');
+        final second = find.text('SE1901 · Slot 2');
+        expect(
+          tester.getTopLeft(second).dy,
+          lessThan(tester.getTopLeft(first).dy),
+        );
+        expect(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is Scrollable &&
+                (widget.axisDirection == AxisDirection.left ||
+                    widget.axisDirection == AxisDirection.right),
+          ),
+          findsNothing,
+        );
+        expect(tester.takeException(), isNull);
+        await tester.ensureVisible(first);
+        await tester.tap(first);
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<AttendancePage>(find.byType(AttendancePage)).meetingId,
+          'm1',
+        );
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+        final next = find.byTooltip('Tuần sau');
+        await tester.ensureVisible(next);
+        await tester.pumpAndSettle();
+        await tester.tap(next);
+        await tester.pumpAndSettle();
+        expect(find.text('09/11 – 15/11/2026'), findsOneWidget);
+        expect(
+          find.text('Chưa có lịch dạy trong tuần này. Chọn tuần khác.'),
+          findsOneWidget,
+        );
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
   }
   testWidgets('editing validates a new reason and cancellation keeps record', (
     tester,
