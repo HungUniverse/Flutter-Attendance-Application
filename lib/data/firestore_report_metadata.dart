@@ -28,6 +28,7 @@ class FirestoreReportMetadata {
       'meetingId': meeting.id, 'fileName': p.basename(file.path), 'format': format, 'bytes': await file.length(),
     };
     try {
+      await pending.parent.create(recursive: true);
       await writeReportAtomically(pending, Stream.value(utf8.encode(jsonEncode(payload))));
       await flush(uid);
     } on Object {

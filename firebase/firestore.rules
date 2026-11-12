@@ -152,7 +152,8 @@ service cloud.firestore {
       allow update, delete: if false;
     }
     match /reportMetadata/{id} {
-      allow read: if teacher() && resource.data.ownerUid == request.auth.uid;
+      allow get: if teacher() && (!exists(/databases/$(database)/documents/reportMetadata/$(id)) || resource.data.ownerUid == request.auth.uid);
+      allow list: if teacher() && resource.data.ownerUid == request.auth.uid;
       allow create: if teacher()
         && request.resource.data.keys().hasOnly(['ownerUid', 'classId', 'meetingId', 'fileName', 'format', 'bytes', 'at'])
         && request.resource.data.ownerUid == request.auth.uid && ownsClass(request.resource.data.classId)
