@@ -26,7 +26,12 @@ test('runs the full offline import, reporting, update and export workflow', asyn
     assert.equal(report.missing, 2);
     assert.equal(report.coverage, 0.5);
     assert.match(run('report-html', initial, 'Class report'), /<title>Class report<\/title>/);
+    assert.equal(JSON.parse(run('rolling', initial, '1'))[0].windows.length, 2);
+    assert.equal(JSON.parse(run('absence-runs', initial, '1'))[0].student.id, 'B');
     assert.equal(JSON.parse(run('forecast', initial, '2', '0.75'))[0].forecast, null);
+    const policy = join(dir, 'policy.json');
+    await writeFile(policy, '{"minimumRate":0.75,"maximumAbsences":1}');
+    assert.equal(JSON.parse(run('policy', initial, policy))[0].status, 'undetermined');
     await writeFile(changes, JSON.stringify([
       { studentId: 'A', sessionId: '2', expected: null, status: 'present' },
     ]));
@@ -45,11 +50,21 @@ test('runs the full offline import, reporting, update and export workflow', asyn
     await writeFile(emptyBundle, run('bundle-new'));
     await writeFile(classBundle, run('bundle-put', emptyBundle, 'course', 'Course', updated));
     assert.equal(JSON.parse(run('bundle-report', classBundle))[0].missing, 1);
+    assert.equal(JSON.parse(run('bundle-students', classBundle)).length, 2);
+    assert.equal(JSON.parse(run('bundle-extract', classBundle, 'course')).records.length, 3);
     assert.equal(JSON.parse(run('bundle-remove', classBundle, 'course')).classes.length, 0);
     const failed = spawnSync(process.execPath, [cli, 'apply', updated, changes], { encoding: 'utf8' });
     assert.equal(failed.status, 1);
     assert.match(failed.stderr, /conflicting changes/);
     assert.equal(JSON.parse(await readFile(updated, 'utf8')).records.length, 3);
+    const scheduleOptions = join(dir, 'schedule-options.json');
+    const schedule = join(dir, 'schedule.json');
+    await writeFile(scheduleOptions, JSON.stringify({ startDate: '2026-01-01', endDate: '2026-01-15',
+      startTime: '09:00', durationMinutes: 60, weekdays: [4], resources: ['room'], idPrefix: 'class' }));
+    await writeFile(schedule, run('schedule-generate', scheduleOptions));
+    assert.equal(JSON.parse(await readFile(schedule, 'utf8')).length, 3);
+    assert.deepEqual(JSON.parse(run('schedule-conflicts', schedule)), []);
+    assert.match(run('schedule-calendar', schedule, 'example.com', '2026-01-01T00:00:00Z'), /BEGIN:VEVENT/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

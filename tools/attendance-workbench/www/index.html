@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Attendance Workbench</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#home" aria-label="Attendance Workbench, trang chủ">
+      <span class="brand-mark" aria-hidden="true">A</span>
+      <span><strong>Attendance</strong><small>Workbench</small></span>
+    </a>
+    <div class="top-actions">
+      <span class="local-badge"><i></i> Chạy cục bộ</span>
+      <span class="dirty-indicator" id="dirty-indicator" hidden><i></i> Chưa tải xuống</span>
+      <button class="button button-quiet history-button" id="undo-action" title="Hoàn tác (Ctrl+Z)" disabled>↶ Hoàn tác</button>
+      <button class="button button-quiet history-button" id="redo-action" title="Làm lại (Ctrl+Shift+Z)" disabled>↷</button>
+      <button class="button button-quiet" id="compare-snapshot">So sánh</button>
+      <button class="button button-quiet" id="manage-bundle">Kho lớp</button>
+      <button class="button button-quiet" id="open-snapshot">Mở dữ liệu</button>
+      <button class="button button-primary" id="download-snapshot" disabled>Tải bản sao</button>
+    </div>
+  </header>
+
+  <main class="app-shell">
+    <aside class="sidebar" aria-label="Điều hướng chính">
+      <div class="sidebar-label">LÀM VIỆC</div>
+      <nav class="main-nav">
+        <button class="nav-item is-active" data-view="overview"><span class="nav-icon">◫</span>Tổng quan</button>
+        <button class="nav-item" data-view="attendance"><span class="nav-icon">▦</span>Điểm danh</button>
+        <button class="nav-item" data-view="students"><span class="nav-icon">♧</span>Sinh viên</button>
+        <button class="nav-item" data-view="sessions"><span class="nav-icon">▣</span>Buổi học</button>
+        <button class="nav-item" data-view="analysis"><span class="nav-icon">⌁</span>Phân tích</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="data-card">
+          <span class="data-icon">▤</span>
+          <strong>Dữ liệu của bạn</strong>
+          <p>Tệp chỉ được đọc hoặc tải xuống khi bạn yêu cầu.</p>
+          <button class="text-button" id="sidebar-open">Chọn tệp JSON <span>↗</span></button>
+        </div>
+        <div class="sidebar-foot">Attendance Workbench <span>v1</span></div>
+      </div>
+    </aside>
+
+    <section class="workspace" id="workspace" aria-live="polite">
+      <section class="empty-state" id="empty-state">
+        <div class="empty-illustration" aria-hidden="true">
+          <div class="paper-back"></div><div class="paper-front"><span></span><span></span><span></span><b>✓</b></div>
+        </div>
+        <p class="eyebrow">KHÔNG GIAN LÀM VIỆC CỤC BỘ</p>
+        <h1>Bắt đầu với dữ liệu điểm danh</h1>
+        <p class="empty-copy">Mở bản sao JSON đã xuất từ công cụ. Bạn có thể xem, sửa, phân tích và tải xuống bản cập nhật.</p>
+        <div class="empty-actions">
+          <button class="button button-primary button-large" id="empty-open">Chọn tệp JSON</button>
+          <button class="button button-secondary button-large" id="create-demo">Xem dữ liệu mẫu</button>
+        </div>
+        <div class="privacy-note"><span>◇</span> Không kết nối máy chủ. Dữ liệu vẫn trên thiết bị này.</div>
+      </section>
+
+      <div id="loaded-workspace" hidden>
+        <div class="page-heading">
+          <div><p class="eyebrow" id="page-eyebrow">LỚP HỌC</p><h1 id="page-title">Tổng quan</h1><p class="page-subtitle" id="page-subtitle"></p></div>
+          <div class="heading-actions"><button class="button button-secondary" id="add-session">＋ Buổi học</button><button class="button button-primary" id="quick-add-student">＋ Sinh viên</button></div>
+        </div>
+        <div class="view-content" id="view-content"></div>
+      </div>
+    </section>
+  </main>
+
+  <input id="snapshot-file" type="file" accept="application/json,.json" hidden>
+  <input id="roster-file" type="file" accept="text/csv,.csv" hidden>
+
+  <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
+  <dialog class="modal" id="modal"><form method="dialog" id="modal-form"><div class="modal-content" id="modal-content"></div></form></dialog>
+</body>
+</html>

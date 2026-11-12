@@ -12,16 +12,26 @@ import { forecastRoster } from '../../backend/attendance-forecast.mjs';
 import { applyAttendanceBatch } from '../../backend/attendance-batch.mjs';
 import { compareAttendanceSnapshots } from '../../backend/attendance-snapshot-diff.mjs';
 import { attendanceToCsv } from '../../backend/attendance-analytics.mjs';
-import { createBundle, parseBundle, serializeBundle, putClass, removeClass, summarizeBundle } from './bundle.mjs';
+import { createBundle, parseBundle, serializeBundle, putClass, removeClass, summarizeBundle,
+  getClassSnapshot, summarizeStudentsAcrossClasses } from './bundle.mjs';
 import { reviseSnapshot } from './revise.mjs';
 import { renderHtmlReport } from './html-report.mjs';
+import { generateRecurringSessions } from '../../backend/session-recurrence.mjs';
+import { findScheduleConflicts } from '../../backend/session-schedule.mjs';
+import { sessionsToICalendar } from '../../backend/session-icalendar.mjs';
+import { rollingAttendance } from '../../backend/attendance-trends.mjs';
+import { findConsecutiveAbsences } from '../../backend/attendance-streaks.mjs';
+import { evaluatePolicy } from './policy.mjs';
 
 const usage = `Attendance workbench (Node.js 22+)
 
   node cli.mjs init ROSTER.csv SESSIONS.json ATTENDANCE.csv
   node cli.mjs report SNAPSHOT.json
   node cli.mjs report-html SNAPSHOT.json [TITLE]
+  node cli.mjs rolling SNAPSHOT.json WINDOW_SIZE
+  node cli.mjs absence-runs SNAPSHOT.json MINIMUM
   node cli.mjs forecast SNAPSHOT.json REMAINING TARGET
+  node cli.mjs policy SNAPSHOT.json POLICY.json
   node cli.mjs apply SNAPSHOT.json CHANGES.json
   node cli.mjs compare BEFORE.json AFTER.json
   node cli.mjs export-csv SNAPSHOT.json
@@ -31,6 +41,11 @@ const usage = `Attendance workbench (Node.js 22+)
   node cli.mjs bundle-put BUNDLE.json CLASS_ID CLASS_NAME SNAPSHOT.json
   node cli.mjs bundle-remove BUNDLE.json CLASS_ID
   node cli.mjs bundle-report BUNDLE.json
+  node cli.mjs bundle-students BUNDLE.json
+  node cli.mjs bundle-extract BUNDLE.json CLASS_ID
+  node cli.mjs schedule-generate OPTIONS.json
+  node cli.mjs schedule-conflicts SCHEDULE.json
+  node cli.mjs schedule-calendar SCHEDULE.json DOMAIN GENERATED_AT [TITLE]
 
 Commands print results to stdout. Redirect stdout to a new file to save it.
 Sessions is a JSON array of session IDs in chronological order. Changes is a
@@ -82,6 +97,14 @@ export async function runCommand(args) {
       if (values.length < 1 || values.length > 2) throw new TypeError('expected snapshot and optional title');
       return renderHtmlReport(await snapshot(values[0]), values[1]);
     }
+    case 'rolling':
+    case 'absence-runs': {
+      requireArgs(values, 2);
+      if (!/^[1-9]\d*$/.test(values[1])) throw new TypeError('count must be a positive integer');
+      const data = await snapshot(values[0]);
+      const analyze = command === 'rolling' ? rollingAttendance : findConsecutiveAbsences;
+      return json(analyze(data.roster, data.sessionIds, data.records, Number(values[1])));
+    }
     case 'forecast': {
       requireArgs(values, 3);
       const data = await snapshot(values[0]);
@@ -89,6 +112,11 @@ export async function runCommand(args) {
         throw new TypeError('remaining must be a non-negative integer and target a fraction from 0 to 1');
       }
       return json(forecastRoster(data.roster, data.sessionIds, data.records, Number(values[1]), Number(values[2])));
+    }
+    case 'policy': {
+      requireArgs(values, 2);
+      const [data, policy] = await Promise.all([snapshot(values[0]), readText(values[1])]);
+      return json(evaluatePolicy(data, JSON.parse(policy)));
     }
     case 'apply': {
       requireArgs(values, 2);
@@ -139,6 +167,27 @@ export async function runCommand(args) {
     case 'bundle-report': {
       requireArgs(values, 1);
       return json(summarizeBundle(parseBundle(await readText(values[0]))));
+    }
+    case 'bundle-students': {
+      requireArgs(values, 1);
+      return json(summarizeStudentsAcrossClasses(parseBundle(await readText(values[0]))));
+    }
+    case 'bundle-extract': {
+      requireArgs(values, 2);
+      return `${serializeAttendanceSnapshot(getClassSnapshot(parseBundle(await readText(values[0])), values[1]))}\n`;
+    }
+    case 'schedule-generate': {
+      requireArgs(values, 1);
+      return json(generateRecurringSessions(JSON.parse(await readText(values[0]))));
+    }
+    case 'schedule-conflicts': {
+      requireArgs(values, 1);
+      return json(findScheduleConflicts(JSON.parse(await readText(values[0]))));
+    }
+    case 'schedule-calendar': {
+      if (values.length < 3 || values.length > 4) throw new TypeError('expected schedule, domain, timestamp and optional title');
+      return sessionsToICalendar(JSON.parse(await readText(values[0])),
+        { uidDomain: values[1], generatedAt: values[2], title: values[3] });
     }
     default:
       throw new TypeError(`unknown command: ${command}; use --help`);

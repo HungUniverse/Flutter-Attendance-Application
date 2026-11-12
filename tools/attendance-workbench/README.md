@@ -36,8 +36,48 @@ across classes, and `bundle-remove` to remove an entry. These commands also
 write their result to stdout, so save each revision to a separate file before
 replacing an earlier version. A bundle contains the complete student and
 attendance data and should be stored accordingly.
+`bundle-extract` retrieves one class snapshot for use with the other commands.
+`bundle-students` aggregates recorded attendance by student ID across classes
+and reports differing names or emails as identity conflicts. Confirm that shared
+IDs refer to the same person before using these totals.
 
 Use `set-roster` with a roster CSV or `set-sessions` with a JSON array to make
 an updated snapshot. If an existing attendance record refers to a removed
 student or session, the command reports an error. Add `--drop-records` to
 explicitly discard those records. Save the output separately from the input.
+
+`rolling` summarizes attendance over full consecutive windows, while
+`absence-runs` lists consecutive absence sequences meeting a minimum length.
+Missing results break a sequence and remain separate from absences.
+
+`policy` evaluates a JSON object containing `minimumRate` (0–1) and
+`maximumAbsences` (a non-negative integer). Missing results produce an
+undetermined outcome when they could change the decision. The report uses only
+the supplied data and rules, so it does not represent an institution's policy
+unless those rules were entered by the caller.
+
+`schedule-generate` accepts a JSON object with `startDate`, `endDate`,
+`startTime`, `durationMinutes`, `weekdays`, `resources`, `idPrefix`, and an
+optional `exceptions` array. Dates and times use UTC, weekdays use Sunday=0
+through Saturday=6, and exceptions are `YYYY-MM-DD` strings. The output is a
+JSON schedule. `schedule-conflicts` checks that schedule for shared-resource
+overlaps. `schedule-calendar` exports it as iCalendar using the supplied UID
+domain and UTC generation timestamp, for example `2026-01-01T00:00:00Z`.
+
+## Giao diện cục bộ
+
+Chạy `node tools/attendance-workbench/serve.mjs` từ thư mục gốc dự án và mở
+địa chỉ mà lệnh in ra. Máy chủ chỉ lắng nghe trên `127.0.0.1`, không ghi tệp
+và không kết nối mạng. Nó phục vụ giao diện trong `www` và các module `.mjs`
+cần thiết trong `backend`. Dừng máy chủ bằng Ctrl+C.
+
+Giao diện hỗ trợ mở bản sao JSON, bảng tổng quan, bảng điểm danh có thể sửa,
+lọc và sắp xếp sinh viên, thêm và xóa buổi học, nhập CSV lớp, tạo lịch lặp,
+xem xu hướng, áp dụng điều kiện điểm danh và so sánh hai bản sao. Có thể quản
+lý nhiều lớp trong kho JSON ở bộ nhớ, tạo báo cáo HTML hoặc tải bản sao và CSV.
+Hoàn tác và làm lại hỗ trợ tối đa 100 thay đổi. Dữ liệu chỉ được tải xuống khi
+người dùng chọn nút tải xuống hoặc phím tắt Ctrl+S. Khi có thay đổi chưa tải,
+trang cảnh báo trước khi đóng.
+
+Không có thay đổi nào tự động lưu vào Firebase hoặc ứng dụng chính. Kho lớp
+trong giao diện chỉ tồn tại trong bộ nhớ cho đến khi người dùng tải tệp JSON.

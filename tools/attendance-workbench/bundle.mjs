@@ -67,3 +67,45 @@ export function summarizeBundle(bundle) {
       expected: report.expected, recorded: report.recorded, missing: report.missing, coverage: report.coverage };
   });
 }
+
+/** Return a validated copy of one class snapshot. */
+export function getClassSnapshot(bundle, id) {
+  const classId = text(id, 'class ID');
+  const result = parseBundle(serializeBundle(bundle));
+  const entry = result.classes.find((item) => item.id === classId);
+  if (!entry) throw new TypeError(`unknown class ID: ${classId}`);
+  return entry.snapshot;
+}
+
+/**
+ * Aggregate attendance by student ID across classes. Every class remains
+ * visible in the result, and differing names or emails are reported as
+ * identity variants so callers can investigate rather than silently merging.
+ */
+export function summarizeStudentsAcrossClasses(bundle) {
+  const result = parseBundle(serializeBundle(bundle));
+  const students = new Map();
+  for (const entry of result.classes) {
+    const report = attendanceQualityReport(entry.snapshot.roster, entry.snapshot.sessionIds, entry.snapshot.records);
+    for (const item of report.students) {
+      let total = students.get(item.student.id);
+      if (!total) {
+        total = { studentId: item.student.id, identities: [], classes: [], present: 0, absent: 0, missing: 0 };
+        students.set(item.student.id, total);
+      }
+      if (!total.identities.some((identity) => identity.name === item.student.name && identity.email === item.student.email)) {
+        total.identities.push({ name: item.student.name, email: item.student.email });
+      }
+      const missing = item.missingSessionIds.length;
+      total.classes.push({ classId: entry.id, className: entry.name, present: item.present, absent: item.absent, missing });
+      total.present += item.present;
+      total.absent += item.absent;
+      total.missing += missing;
+    }
+  }
+  return [...students.values()].map((student) => ({
+    ...student,
+    identityConflict: student.identities.length > 1,
+    attendanceRate: student.present + student.absent ? student.present / (student.present + student.absent) : null,
+  }));
+}
