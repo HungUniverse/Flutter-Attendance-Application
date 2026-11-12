@@ -25,7 +25,9 @@ class FirestoreWorkspaceRemote implements WorkspaceRemote {
       auth.current?.uid ?? (throw const AppProblem('Vui lòng đăng nhập.'));
 
   Future<void> requireTeacher() async {
-    final profile = await db.doc('users/$owner').get(const GetOptions(source: Source.server));
+    final profile = await db
+        .doc('users/$owner')
+        .get(const GetOptions(source: Source.server));
     if (profile.data()?['role'] != 'teacher') {
       throw const WorkspaceAccessDenied();
     }
@@ -37,9 +39,11 @@ class FirestoreWorkspaceRemote implements WorkspaceRemote {
     final uid = owner;
     DocumentReference<Map<String, dynamic>> ref;
     if (semester == null) {
-      final rows = await db.collection('workspaces')
+      final rows = await db
+          .collection('workspaces')
           .where('ownerUid', isEqualTo: uid)
-          .orderBy('updatedAt', descending: true).limit(1)
+          .orderBy('updatedAt', descending: true)
+          .limit(1)
           .get(const GetOptions(source: Source.server));
       if (rows.docs.isEmpty) return {'data': null};
       ref = rows.docs.single.reference;
@@ -58,8 +62,13 @@ class FirestoreWorkspaceRemote implements WorkspaceRemote {
         final attendance = <String, dynamic>{};
         final audits = <dynamic>[];
         for (final id in (entry.value as List).cast<String>()) {
-          final meeting = (await tx.get(db.doc('classes/${entry.key}/meetings/$id'))).data()!;
-          meetings.add({for (final key in ['id', 'number', 'startAt', 'endAt', 'state']) key: meeting[key]});
+          final meeting = (await tx.get(
+            db.doc('classes/${entry.key}/meetings/$id'),
+          )).data()!;
+          meetings.add({
+            for (final key in ['id', 'number', 'startAt', 'endAt', 'state'])
+              key: meeting[key],
+          });
           attendance[id] = meeting['records'];
           audits.addAll(meeting['auditEvents'] as List);
         }
@@ -71,17 +80,27 @@ class FirestoreWorkspaceRemote implements WorkspaceRemote {
         });
       }
       if (uid != owner) throw const AppProblem('Tài khoản đã thay đổi.');
-      return {'data': {'revision': manifest['revision'], 'workspace': {
-        ...Map<String, dynamic>.from(manifest['data'] as Map), 'classes': classes,
-      }}};
+      return {
+        'data': {
+          'revision': manifest['revision'],
+          'workspace': {
+            ...Map<String, dynamic>.from(manifest['data'] as Map),
+            'classes': classes,
+          },
+        },
+      };
     });
   }
 
   @override
-  Future<Map<String, dynamic>> writeWorkspace(Map<String, dynamic> pending) async {
+  Future<Map<String, dynamic>> writeWorkspace(
+    Map<String, dynamic> pending,
+  ) async {
     await requireTeacher();
     final uid = owner;
-    final workspace = TeacherWorkspace.fromJson(Map<String, Object?>.from(pending['workspace'] as Map));
+    final workspace = TeacherWorkspace.fromJson(
+      Map<String, Object?>.from(pending['workspace'] as Map),
+    );
     final workspaceId = firestoreWorkspaceId(uid, workspace.semester);
     final ref = db.doc('workspaces/$workspaceId');
     final documents = <String, Map<String, dynamic>>{};
@@ -89,57 +108,100 @@ class FirestoreWorkspaceRemote implements WorkspaceRemote {
     for (final course in workspace.classes) {
       final classId = firestoreClassId(uid, workspace.semester, course.id);
       layout[classId] = course.meetings.map((m) => m.id).toList();
-      final data = course.toJson()..remove('meetings')..remove('attendance')..remove('auditEvents');
+      final data = course.toJson()
+        ..remove('meetings')
+        ..remove('attendance')
+        ..remove('auditEvents');
       final roster = <String, String>{};
       for (final student in course.students) {
         if (student.normalizedEmail.isEmpty) continue;
         if (roster.containsKey(student.normalizedEmail)) {
-          throw const AppProblem('Roster có email trùng. Hãy sửa tệp trước khi đồng bộ.');
+          throw const AppProblem(
+            'Roster có email trùng. Hãy sửa tệp trước khi đồng bộ.',
+          );
         }
         roster[student.normalizedEmail] = student.rollNumber;
       }
       documents['classes/$classId'] = {
-        'ownerUid': uid, 'workspaceId': workspaceId, 'archived': false,
-        'data': data, 'roster': roster,
+        'ownerUid': uid,
+        'workspaceId': workspaceId,
+        'archived': false,
+        'data': data,
+        'roster': roster,
       };
       for (final meeting in course.meetings) {
         final start = meeting.startAt.toLocal();
         documents['classes/$classId/meetings/${meeting.id}'] = {
           ...meeting.toJson(),
-          'dayStart': Timestamp.fromDate(DateTime(start.year, start.month, start.day)),
-          'dayEnd': Timestamp.fromDate(DateTime(start.year, start.month, start.day + 1)),
-          'records': course.attendance[meeting.id]?.map((roll, mark) => MapEntry(roll, mark.toJson())) ?? {},
-          'auditEvents': course.auditEvents.where((a) => a.meetingId == meeting.id).map((a) => a.toJson()).toList(),
+          'dayStart': Timestamp.fromDate(
+            DateTime(start.year, start.month, start.day),
+          ),
+          'dayEnd': Timestamp.fromDate(
+            DateTime(start.year, start.month, start.day + 1),
+          ),
+          'records':
+              course.attendance[meeting.id]?.map(
+                (roll, mark) => MapEntry(roll, mark.toJson()),
+              ) ??
+              {},
+          'auditEvents': course.auditEvents
+              .where((a) => a.meetingId == meeting.id)
+              .map((a) => a.toJson())
+              .toList(),
         };
       }
     }
     return db.runTransaction((tx) async {
       final previous = (await tx.get(ref)).data();
       if (previous?['mutationId'] == pending['mutationId']) {
-        return {'data': {'revision': previous!['revision'], 'workspace': workspace.toJson()}};
+        return {
+          'data': {
+            'revision': previous!['revision'],
+            'workspace': workspace.toJson(),
+          },
+        };
       }
-      if ((previous?['revision'] ?? 0) != pending['revision']) throw const SyncConflict();
-      final oldLayout = Map<String, dynamic>.from(previous?['layout'] as Map? ?? {});
+      if ((previous?['revision'] ?? 0) != pending['revision']) {
+        throw const SyncConflict();
+      }
+      final oldLayout = Map<String, dynamic>.from(
+        previous?['layout'] as Map? ?? {},
+      );
       final paths = {...documents.keys};
-      for (final classId in oldLayout.keys) { paths.add('classes/$classId'); }
+      for (final classId in oldLayout.keys) {
+        paths.add('classes/$classId');
+      }
       final existing = <String, Map<String, dynamic>?>{};
-      for (final path in paths) { existing[path] = (await tx.get(db.doc(path))).data(); }
+      for (final path in paths) {
+        existing[path] = (await tx.get(db.doc(path))).data();
+      }
       if (uid != owner) throw const AppProblem('Tài khoản đã thay đổi.');
       for (final entry in documents.entries) {
-        if (!const DeepCollectionEquality().equals(entry.value, existing[entry.key])) {
+        if (!const DeepCollectionEquality().equals(
+          entry.value,
+          existing[entry.key],
+        )) {
           tx.set(db.doc(entry.key), entry.value);
         }
       }
-      for (final classId in oldLayout.keys.where((id) => !layout.containsKey(id))) {
+      for (final classId in oldLayout.keys.where(
+        (id) => !layout.containsKey(id),
+      )) {
         tx.update(db.doc('classes/$classId'), {'archived': true});
       }
       final revision = (previous?['revision'] as int? ?? 0) + 1;
       final data = workspace.toJson()..remove('classes');
       tx.set(ref, {
-        'ownerUid': uid, 'revision': revision, 'mutationId': pending['mutationId'],
-        'data': data, 'layout': layout, 'updatedAt': FieldValue.serverTimestamp(),
+        'ownerUid': uid,
+        'revision': revision,
+        'mutationId': pending['mutationId'],
+        'data': data,
+        'layout': layout,
+        'updatedAt': FieldValue.serverTimestamp(),
       });
-      return {'data': {'revision': revision, 'workspace': workspace.toJson()}};
+      return {
+        'data': {'revision': revision, 'workspace': workspace.toJson()},
+      };
     });
   }
 }
