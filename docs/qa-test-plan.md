@@ -37,6 +37,10 @@ Trong quá trình kiểm thử hộp trắng (White-box QA) và kiểm thử bi�
 | **BUG-04** | `lib/domain/attendance_reconciliation_service.dart` & `workspace_integrity_validator.dart` | Khi gộp hoặc sửa dữ liệu điểm danh có khóa MSSV khác hoa/thường (`se194673` vs `SE194673`) hoặc buổi học mới từ bản ghi đồng bộ, bản ghi cũ bị trùng khóa hoặc tạo bản ghi mồ côi (`ORPHANED_MEETING_ATTENDANCE`). | Hợp nhất danh sách `meetings` theo tiến trình trạng thái, chuẩn hóa khóa MSSV không phân biệt hoa/thường về mã chuẩn của sinh viên, tự động hạ cấp các buổi active dư thừa và điền lý do mặc định cho bản ghi audit trống. |
 | **BUG-05** | `lib/domain/session_recovery_planner.dart` & `attendance_analytics_service.dart` | `scheduleMakeupMeeting` chấp nhận `customMeetingId` rỗng hoặc trùng với mã buổi học đã có; `AttendanceAnalyticsService` tra cứu MSSV phân biệt hoa/thường và chưa bọc giá trị chứa `\r` khi xuất CSV. | Kiểm tra `customMeetingId` không rỗng và không trùng lặp; bổ sung tra cứu MSSV không phân biệt hoa/thường và thoát chuỗi CSV an toàn với `\r`, `\t` và công thức có khoảng trắng đầu dòng. |
 | **BUG-06** | `test/qa_*.dart` & `integration_test/qa_app_e2e_test.dart` | Khi chạy kiểm thử giao diện headless, font mặc định Ahem có độ rộng ký tự lớn gây sai lệch bố cục ở kích thước màn hình hẹp (412px). | Nạp font tỷ lệ thực `assets/fonts/Roboto.ttf` (kèm fallback hệ thống) trong `setUpAll` cho toàn bộ bộ test UI/E2E. |
+| **BUG-07** | `extension/src/csv.ts`, `attendance_json.ts`, `fap_adapter.ts` | Extension chưa loại bỏ tiền tố CSV Formula Injection (`'`), chưa kiểm tra ngày lịch tràn (ví dụ `2026-02-30`) và `endAt <= startAt`, regex mã lớp `/\b[A-Z]{2,5}\d{4}/g` bắt nhầm tiền tố của MSSV 6 chữ số (`SE000001`), và nối chuỗi `<option>` thiếu khoảng trắng khiến nhãn tiếng Việt (`CÓ MẶT`/`VẮNG`) không khớp. | Bổ sung `stripFormulaPrefix`, `isValidIsoDateTime`, hậu tố `\b` cho regex mã lớp, chuẩn hóa `roll_number`/`member_code` không phân biệt hoa/thường và hỗ trợ đầy đủ `<select>` tiếng Việt. |
+| **BUG-08** | `web/src/admin/markbook.js` & `model.js` | `DOMParser` trong môi trường trình duyệt/happy-dom báo lỗi `<parsererror>` khi gặp khai báo XML nháy đơn (`<?xml version='1.0'?>` trong `FA26_Markbook.ods`); dòng sinh viên thiếu trường lẻ làm hủy toàn bộ bảng; `model.js` phân biệt hoa/thường khi đối chiếu `rollNumber`. | Cắt bỏ khai báo `<?xml ...?>` đầu file, hỗ trợ bỏ qua dòng thiếu dữ liệu kèm cảnh báo (`warnings`), điền đầy mảng cột thưa của XLSX và chuẩn hóa `rollNumber` viết hoa trong `parseRoster`, `protectHistory`, `correction`. |
+| **BUG-09** | `backend/relay.mjs`, `attendance-merge.mjs`, `workspaces.mjs` | `relay.mjs` gặp lỗi `TypeError` (HTTP 500) khi mảng `students` chứa phần tử `null` và chưa chuẩn hóa chữ thường cho email; `resolveAttendanceConflicts` chưa `.trim()` khóa `studentId`/`sessionId`; `validateWorkspace` chấp nhận `c.id` chỉ chứa khoảng trắng. | Kiểm tra phần tử object hợp lệ, chuẩn hóa `.trim().toLowerCase()` cho email sinh viên, cắt khoảng trắng khóa xung đột và từ chối `c.id` rỗng. |
+| **BUG-10** | `demo-fap/app.js` & `tools/attendance-workbench/isolation.test.mjs` | `demo-fap/app.js` lỗi `JSON.parse` khi nạp file JSON có BOM UTF-8 (`\uFEFF`) và chưa chuẩn hóa hoa/thường khi khôi phục trạng thái chốt; `isolation.test.mjs` quét đệ quy cả thư mục `web/node_modules`. | Loại bỏ `\uFEFF` trước khi `JSON.parse`, chuẩn hóa `rollNumber`/`status` viết hoa và bỏ qua `node_modules`/`dist` trong `isolation.test.mjs`. |
 
 ---
 
@@ -90,3 +94,17 @@ Trong quá trình kiểm thử hộp trắng (White-box QA) và kiểm thử bi�
 
 - Kiểm thử luồng nghiệp vụ khép kín từ đầu đến cuối:
   `Đăng nhập Google` $\rightarrow$ `Xem lịch & lớp trên Dashboard` $\rightarrow$ `Kiểm tra tab Thông báo` $\rightarrow$ `Mở buổi học đang diễn ra` $\rightarrow$ `Chuyển sang chế độ Thủ công & điểm danh Có mặt (P)` $\rightarrow$ `Chốt danh sách (tự động đánh Vắng cho sinh viên chưa điểm danh)` $\rightarrow$ `Mở chi tiết sinh viên & sửa kết quả P/A kèm lý do kiểm toán (Audit Trail)` $\rightarrow$ `Đăng xuất an toàn`.
+
+### 3.6. Full-Stack Subprojects QA Suite (`extension/`, `web/`, `backend/`, `demo-fap/`, `tools/attendance-workbench/`, `packages/core/`)
+
+- **Chrome Extension (`extension/test/qa_extension_suite.test.ts` & `demo_page.test.ts` — 22/22 PASS)**:
+  - Kiểm thử парsing CSV/JSON với UTF-8 BOM, loại bỏ tiền tố CSV Formula Injection, từ chối ngày không tồn tại (`2026-02-30`) và `endAt <= startAt`.
+  - Kiểm thử `FapPageAdapter` với checkbox, radio, `<select>` tiếng Việt (`Có mặt`/`Vắng`), đối chiếu theo `member_code` và ngăn chặn nhận nhầm MSSV 6 chữ số làm mã lớp.
+- **Web Admin & Student App (`web/test/markbook.test.mjs`, `web/test/analytics.test.mjs`, `web/test-dom/*.test.mjs` — 25/25 PASS)**:
+  - Kiểm thử đọc trực tiếp tệp thực tế `test/fixtures/FA26_Markbook.ods`, xử lý bảng XLSX có ô thưa, suy luận học kỳ từ đường dẫn đầy đủ, và mô-đun thống kê `web/src/admin/analytics.js`.
+- **Node.js Backend Services (`backend/test/*.test.mjs` — 82/82 PASS)**:
+  - Kiểm thử `attendance-fpt-policy.mjs` (đánh giá điều kiện dự thi FPT 15%/20% và số buổi tối đa còn được phép vắng), bảo vệ `relay.mjs` trước phần tử `null` và chuẩn hóa khóa trong `attendance-merge.mjs` & `workspaces.mjs`.
+- **Attendance Workbench CLI (`tools/attendance-workbench/*.test.mjs` — 137/137 PASS)**:
+  - Kiểm thử `anomaly-detector.mjs` (`anomaly-scan`, `anomaly-scan-csv`) phát hiện buổi vắng 100%, sụt giảm chuyên cần đột ngột, suy giảm nửa cuối kỳ và chuỗi trạng thái đan xen `P/A`.
+- **Shared Core Package (`test/qa_core_package_test.dart`)**:
+  - Kiểm thử `CourseClass.recordFor`, `markManual`, `overrideStatus` và `closeMeeting` không phân biệt hoa/thường cho `rollNumber`.
