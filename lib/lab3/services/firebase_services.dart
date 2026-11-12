@@ -40,13 +40,17 @@ Future<void> initializeMobileFirebase() async {
     const debugToken = String.fromEnvironment('FIREBASE_APPCHECK_DEBUG_TOKEN');
     await FirebaseAppCheck.instance.activate(
       providerAndroid: kDebugMode
-          ? AndroidDebugProvider(debugToken: debugToken.isEmpty ? null : debugToken)
+          ? AndroidDebugProvider(
+              debugToken: debugToken.isEmpty ? null : debugToken,
+            )
           : const AndroidPlayIntegrityProvider(),
     );
   } else if (Platform.isWindows) {
     const debugToken = String.fromEnvironment('FIREBASE_APPCHECK_DEBUG_TOKEN');
     await FirebaseAppCheck.instance.activate(
-      providerWindows: WindowsDebugProvider(debugToken: debugToken.isEmpty ? null : debugToken),
+      providerWindows: WindowsDebugProvider(
+        debugToken: debugToken.isEmpty ? null : debugToken,
+      ),
     );
   }
 }
@@ -143,6 +147,10 @@ class FirebaseTelemetry implements TelemetryService {
   @override
   Future<void> error(Object error, StackTrace stack, String operation) async {
     await crashlytics.setCustomKey('operation', operation);
+    if (error is FirebaseException) {
+      await crashlytics.setCustomKey('firebase_error_code', error.code);
+      await crashlytics.setCustomKey('firebase_plugin', error.plugin);
+    }
     // Free-text errors may contain imported student data, paths or tokens.
     await crashlytics.recordError(
       Exception('$operation: ${error.runtimeType}'),
