@@ -30,10 +30,18 @@ test("storage.rules restricts report paths, extensions, size limits, and ownerUi
   );
   assert.match(storage, /request\.resource\.size < 20 \* 1024 \* 1024/);
   assert.match(storage, /request\.resource\.metadata\.ownerUid == uid/);
-  assert.match(
-    storage,
-    /request\.resource\.contentType\.matches\('\(application\/json\|text\/csv\)'\)/,
-  );
+  assert.match(storage, /filename\.matches\('[^']+\(json\|csv\|pdf\)'\)/);
+  for (const [extension, contentType] of [
+    ["json", "application/json"],
+    ["csv", "text/csv"],
+    ["pdf", "application/pdf"],
+  ]) {
+    assert.ok(
+      storage.includes(
+        `filename.matches('.*[.]${extension}') && request.resource.contentType == '${contentType}'`,
+      ),
+    );
+  }
 });
 
 test("firestore.indexes.json defines composite indexes for teacher-owned collections", async () => {
