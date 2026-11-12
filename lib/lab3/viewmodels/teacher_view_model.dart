@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 import '../../data/roster_importer.dart';
 import '../../data/shared_workspace_sync.dart';
 import '../services/attendance_link_service.dart';
+import '../services/firestore_attendance_links.dart';
 import '../../domain/attendance_service.dart';
 import '../../domain/models.dart';
 import '../../domain/roster_merge_service.dart';
@@ -64,6 +65,9 @@ class TeacherViewModel extends ChangeNotifier {
   StreamSubscription<TeacherIdentity?>? _authSub;
   StreamSubscription<AppNotice>? _noticeSub;
   Timer? _timer;
+  Timer? _liveTimer;
+  StreamSubscription<void>? _linkSub;
+  String? _watchingLinkId;
   int _generation = 0;
 
   String get uid =>
@@ -94,6 +98,7 @@ class TeacherViewModel extends ChangeNotifier {
     user = identity;
     workspace = null;
     link = null;
+    _watchLink();
     linkError = null;
     cloudUrl = null;
     exportedFile = null;
@@ -114,6 +119,7 @@ class TeacherViewModel extends ChangeNotifier {
       if (generation != _generation || disposed) return;
       workspace = loaded;
       link = savedLink;
+      _watchLink();
       await _clearClosedLink(identity.uid, savedLink);
       if (generation != _generation || disposed) return;
       if (workspace != null) await _reconcile();
@@ -187,8 +193,35 @@ class TeacherViewModel extends ChangeNotifier {
       return false;
     } finally {
       busy = false;
+      _watchLink();
       _notify();
     }
+  }
+
+  void _watchLink() {
+    if (links is! LiveAttendanceLinks || _watchingLinkId == link?.id) return;
+    unawaited(_linkSub?.cancel());
+    _liveTimer?.cancel();
+    _watchingLinkId = link?.id;
+    _linkSub = link == null ? null : (links as LiveAttendanceLinks).changes(link!).listen(
+      (_) => _scheduleLiveRefresh(),
+      onError: (Object error) {
+        linkError = _friendly(error);
+        _notify();
+      },
+    );
+  }
+
+  void _scheduleLiveRefresh() {
+    _liveTimer?.cancel();
+    _liveTimer = Timer(const Duration(milliseconds: 250), () {
+      if (disposed || link == null) return;
+      if (busy || loadingWorkspace) {
+        _scheduleLiveRefresh();
+      } else {
+        unawaited(_run('live_check_in', _refreshLink, quiet: true));
+      }
+    });
   }
 
   Future<bool> signIn() => _run('google_sign_in', () async {
@@ -575,8 +608,10 @@ class TeacherViewModel extends ChangeNotifier {
       workspace = loaded;
       await _clearClosedLink(owner, link);
       if (generation != _generation || disposed) return;
-      if (workspace != null && links is HttpAttendanceLinkService) {
-        final recovered = await (links as HttpAttendanceLinkService).current();
+      if (workspace != null && (links is HttpAttendanceLinkService || links is LiveAttendanceLinks)) {
+        final recovered = links is LiveAttendanceLinks
+            ? await (links as LiveAttendanceLinks).current()
+            : await (links as HttpAttendanceLinkService).current();
         if (generation != _generation || disposed) return;
         if (recovered != null) {
           final meeting = _meetingForLink(recovered);
@@ -747,6 +782,8 @@ class TeacherViewModel extends ChangeNotifier {
     sync?.dispose();
     _generation++;
     _timer?.cancel();
+    _liveTimer?.cancel();
+    unawaited(_linkSub?.cancel());
     unawaited(_authSub?.cancel());
     unawaited(_noticeSub?.cancel());
     super.dispose();
