@@ -147,10 +147,14 @@ class FirebaseTelemetry implements TelemetryService {
   @override
   Future<void> error(Object error, StackTrace stack, String operation) async {
     await crashlytics.setCustomKey('operation', operation);
-    if (error is FirebaseException) {
-      await crashlytics.setCustomKey('firebase_error_code', error.code);
-      await crashlytics.setCustomKey('firebase_plugin', error.plugin);
-    }
+    await crashlytics.setCustomKey(
+      'firebase_error_code',
+      error is FirebaseException ? error.code : '',
+    );
+    await crashlytics.setCustomKey(
+      'firebase_plugin',
+      error is FirebaseException ? error.plugin : '',
+    );
     // Free-text errors may contain imported student data, paths or tokens.
     await crashlytics.recordError(
       Exception('$operation: ${error.runtimeType}'),
