@@ -437,6 +437,7 @@ class _DashboardPageState extends State<DashboardPage> {
         },
         child: ContentList(
           children: [
+            if (vm.draftCount > 0) const AttendanceDraftNotice(),
             if (vm.sync != null)
               SectionCard(
                 child: Column(
