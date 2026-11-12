@@ -27,7 +27,7 @@ class FirestoreWorkspaceRemote implements WorkspaceRemote {
   Future<void> requireTeacher() async {
     final profile = await db.doc('users/$owner').get(const GetOptions(source: Source.server));
     if (profile.data()?['role'] != 'teacher') {
-      throw const AppProblem('Tài khoản chưa được cấp quyền giảng viên trong Firebase.');
+      throw const WorkspaceAccessDenied();
     }
   }
 

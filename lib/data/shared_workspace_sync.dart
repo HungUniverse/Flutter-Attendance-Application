@@ -21,6 +21,7 @@ class SharedApi implements WorkspaceRemote {
   SharedApi(this.auth, {String? baseUrl, http.Client? client})
     : base = baseUrl ?? const String.fromEnvironment('ATTENDANCE_API_URL'),
       client = client ?? http.Client();
+  @override
   final AuthService auth;
   final String base;
   final http.Client client;
@@ -85,6 +86,10 @@ class SyncConflict extends AppProblem {
     : super(
         'Có thay đổi trên thiết bị khác. Bản trên máy được giữ; cần đối chiếu trước khi tiếp tục.',
       );
+}
+
+class WorkspaceAccessDenied extends AppProblem {
+  const WorkspaceAccessDenied() : super('Tài khoản chưa được cấp quyền giảng viên trong Firebase.');
 }
 
 /// Durable local outbox + optimistic server revision; never silently overwrites
@@ -295,6 +300,8 @@ class SharedWorkspaceSync extends ChangeNotifier {
         final confirmed = await _push(uid, file, state);
         _status('Đã đồng bộ');
         return confirmed ?? workspace;
+      } on WorkspaceAccessDenied {
+        rethrow;
       } on SyncConflict {
         _status(const SyncConflict().message, isConflict: true);
       } on Object {
@@ -343,6 +350,8 @@ class SharedWorkspaceSync extends ChangeNotifier {
           try {
             final confirmed = await _push(uid, file, state);
             if (confirmed == null) await disk.saveWorkspace(pending);
+          } on WorkspaceAccessDenied {
+            rethrow;
           } on SyncConflict {
             _status(const SyncConflict().message, isConflict: true);
             return pending;
@@ -376,6 +385,8 @@ class SharedWorkspaceSync extends ChangeNotifier {
         });
         _status('Đã đồng bộ');
         return workspace;
+      } on WorkspaceAccessDenied {
+        rethrow;
       } on Object {
         _status('Đang dùng bản trên máy · Chưa kết nối');
         return cached;
