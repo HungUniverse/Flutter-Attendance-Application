@@ -98,11 +98,14 @@ class _AttendancePageState extends State<AttendancePage> {
             ),
           ],
           if (editable) ...[
-            if (vm.ai != null) OutlinedButton.icon(
-              onPressed: vm.busy ? null : () => reviewWithAi(context, c.id, m.id),
-              icon: const Icon(Icons.auto_awesome_outlined),
-              label: const Text('AI · Gợi ý kiểm tra trước khi chốt'),
-            ),
+            if (vm.ai != null)
+              OutlinedButton.icon(
+                onPressed: vm.busy
+                    ? null
+                    : () => reviewWithAi(context, c.id, m.id),
+                icon: const Icon(Icons.auto_awesome_outlined),
+                label: const Text('AI · Gợi ý kiểm tra trước khi chốt'),
+              ),
             SegmentedButton<AttendanceMode>(
               segments: const [
                 ButtonSegment(
@@ -341,31 +344,84 @@ Future<void> closeAttendance(
   if (context.mounted) showResult(context, ok);
 }
 
-Future<void> reviewWithAi(BuildContext context, String classId, String meetingId) async {
+Future<void> reviewWithAi(
+  BuildContext context,
+  String classId,
+  String meetingId,
+) async {
   final vm = context.read<TeacherViewModel>();
   final ok = await vm.requestAiReview(classId, meetingId);
   if (!context.mounted) return;
-  if (!ok || vm.aiReview == null) { showResult(context, false); return; }
-  final editor = TextEditingController(text: vm.aiReview!.text);
-  final edited = await showDialog<String>(context: context, builder: (context) => AlertDialog(
-    title: const Text('Gợi ý do AI tạo'),
-    content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-      const Text('Kiểm tra, chỉnh sửa và xác nhận nội dung trước khi tiếp tục chốt.'),
-      const SizedBox(height: 16),
-      TextField(controller: editor, minLines: 5, maxLines: 12, decoration: const InputDecoration(labelText: 'Nội dung kiểm tra')),
-    ])),
-    actions: [
-      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Đóng')),
-      FilledButton(onPressed: () { if (editor.text.trim().isNotEmpty) Navigator.pop(context, editor.text.trim()); }, child: const Text('Xác nhận gợi ý')),
-    ],
-  ));
-  // The route may still be animating out while its TextField is mounted.
-  await Future<void>.delayed(const Duration(milliseconds: 300));
-  editor.dispose();
+  if (!ok || vm.aiReview == null) {
+    showResult(context, false);
+    return;
+  }
+  final edited = await showDialog<String>(
+    context: context,
+    builder: (_) => _AiReviewDialog(vm.aiReview!.text),
+  );
   if (edited != null && context.mounted) {
     final accepted = await vm.acceptAiReview(edited);
     if (context.mounted) showResult(context, accepted);
   }
+}
+
+class _AiReviewDialog extends StatefulWidget {
+  const _AiReviewDialog(this.text);
+  final String text;
+  @override
+  State<_AiReviewDialog> createState() => _AiReviewDialogState();
+}
+
+class _AiReviewDialogState extends State<_AiReviewDialog> {
+  late final TextEditingController editor;
+  @override
+  void initState() {
+    super.initState();
+    editor = TextEditingController(text: widget.text);
+  }
+
+  @override
+  void dispose() {
+    editor.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Gợi ý do AI tạo'),
+    content: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Kiểm tra, chỉnh sửa và xác nhận nội dung trước khi tiếp tục chốt.',
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: editor,
+            minLines: 5,
+            maxLines: 12,
+            decoration: const InputDecoration(labelText: 'Nội dung kiểm tra'),
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Đóng'),
+      ),
+      FilledButton(
+        onPressed: () {
+          if (editor.text.trim().isNotEmpty) {
+            Navigator.pop(context, editor.text.trim());
+          }
+        },
+        child: const Text('Xác nhận gợi ý'),
+      ),
+    ],
+  );
 }
 
 class LinkPage extends StatelessWidget {
@@ -939,13 +995,12 @@ class _ExportPageState extends State<ExportPage> {
                       : (v) => setState(() => _format = v.first),
                 ),
                 const SizedBox(height: 12),
-                Text(
-                  switch (_format) {
-                    'pdf' => 'Báo cáo PDF có thể mở, lưu và chia sẻ trên thiết bị.',
-                    'json' => 'Dùng cho Chrome Extension trên máy tính.',
-                    _ => 'Dùng trao đổi và đối chiếu dữ liệu bảng tính.',
-                  },
-                ),
+                Text(switch (_format) {
+                  'pdf' =>
+                    'Báo cáo PDF có thể mở, lưu và chia sẻ trên thiết bị.',
+                  'json' => 'Dùng cho Chrome Extension trên máy tính.',
+                  _ => 'Dùng trao đổi và đối chiếu dữ liệu bảng tính.',
+                }),
                 Text(vm.settings.exportHelp),
               ],
             ),
@@ -965,17 +1020,18 @@ class _ExportPageState extends State<ExportPage> {
                   title: Text('Lưu trên thiết bị'),
                   subtitle: Text('Mặc định · luôn giữ bản local'),
                 ),
-                if (vm.uploads != null) CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: _backup,
-                  onChanged: vm.busy
-                      ? null
-                      : (v) => setState(() => _backup = v!),
-                  title: const Text('Sao lưu Firebase Storage'),
-                  subtitle: const Text(
-                    'Cần mạng · Xếp theo học kỳ / môn / lớp / buổi học',
+                if (vm.uploads != null)
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: _backup,
+                    onChanged: vm.busy
+                        ? null
+                        : (v) => setState(() => _backup = v!),
+                    title: const Text('Sao lưu Firebase Storage'),
+                    subtitle: const Text(
+                      'Cần mạng · Xếp theo học kỳ / môn / lớp / buổi học',
+                    ),
                   ),
-                ),
               ],
             ),
           ),
@@ -1033,8 +1089,10 @@ class _ExportPageState extends State<ExportPage> {
                     ),
                   ],
                   const SizedBox(height: 8),
-                  if (vm.uploads != null) LinearProgressIndicator(value: vm.uploadProgress),
-                  if (vm.uploads != null) Text('Tải lên: ${(vm.uploadProgress * 100).round()}%'),
+                  if (vm.uploads != null)
+                    LinearProgressIndicator(value: vm.uploadProgress),
+                  if (vm.uploads != null)
+                    Text('Tải lên: ${(vm.uploadProgress * 100).round()}%'),
                   if (vm.cloudUrl != null) ...[
                     const Text(
                       'Đã sao lưu Firebase Storage',
