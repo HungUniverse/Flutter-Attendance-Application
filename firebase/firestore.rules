@@ -145,14 +145,68 @@ service cloud.firestore {
         allow update, delete: if false;
       }
     }
+    match /attendanceRequests/{id} {
+      function validRequest(d) {
+        let session = get(/databases/$(database)/documents/attendanceSessions/$(d.sessionId)).data;
+        let course = get(/databases/$(database)/documents/classes/$(d.classId)).data;
+        let meeting = get(/databases/$(database)/documents/classes/$(d.classId)/meetings/$(d.meetingId)).data;
+        return d.keys().hasOnly(['uid', 'email', 'ownerUid', 'classId', 'meetingId', 'sessionId', 'requestedStatus', 'reason', 'state', 'createdAt'])
+          && d.uid == request.auth.uid && d.email == request.auth.token.email.lower()
+          && d.sessionId is string && id == d.sessionId + '_' + request.auth.uid
+          && d.classId == session.classId && d.meetingId == session.meetingId
+          && d.ownerUid == session.ownerUid && d.ownerUid == course.ownerUid
+          && rosterMember(d.classId) && meeting.state == 'closed'
+          && d.requestedStatus in ['P', 'A']
+          && d.requestedStatus != meeting.records[course.roster[d.email]].status
+          && d.reason is string && d.reason.size() <= 1000 && d.reason.matches('.*\\S.*')
+          && d.state == 'pending' && d.createdAt == request.time;
+      }
+      function approved(d) {
+        let course = get(/databases/$(database)/documents/classes/$(d.classId)).data;
+        let meeting = getAfter(/databases/$(database)/documents/classes/$(d.classId)/meetings/$(d.meetingId)).data;
+        let before = get(/databases/$(database)/documents/classes/$(d.classId)/meetings/$(d.meetingId)).data;
+        let audit = meeting.auditEvents[meeting.auditEvents.size() - 1];
+        return course.archived == false && d.email in course.roster
+          && meeting.state == 'closed'
+          && workspaceAdvanced(course.workspaceId)
+          && meeting.auditEvents.size() == before.auditEvents.size() + 1
+          && audit.id == id && audit.reason == d.decisionReason
+          && audit.rollNumber == course.roster[d.email]
+          && audit.newValue == d.requestedStatus
+          && meeting.records[course.roster[d.email]].status == d.requestedStatus;
+      }
+      allow get: if googleUser() && (!exists(/databases/$(database)/documents/attendanceRequests/$(id))
+        || resource.data.uid == request.auth.uid || (teacher() && resource.data.ownerUid == request.auth.uid));
+      allow list: if googleUser() && (resource.data.uid == request.auth.uid || (teacher() && resource.data.ownerUid == request.auth.uid));
+      allow create: if googleUser() && validRequest(request.resource.data);
+      allow update: if ownsClass(resource.data.classId) && resource.data.state == 'pending'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state', 'decisionReason', 'reviewerUid', 'decidedAt'])
+        && request.resource.data.state in ['approved', 'rejected']
+        && request.resource.data.reviewerUid == request.auth.uid
+        && request.resource.data.decidedAt == request.time
+        && request.resource.data.decisionReason is string
+        && request.resource.data.decisionReason.size() <= 1000
+        && request.resource.data.decisionReason.matches('.*\\S.*')
+        && (request.resource.data.state == 'rejected' || approved(request.resource.data));
+      allow delete: if false;
+    }
     match /announcements/{id} {
-      allow read: if googleUser() && (resource.data.recipientUid == request.auth.uid || resource.data.ownerUid == request.auth.uid);
+      allow read: if googleUser() && (resource.data.recipientUid == request.auth.uid
+        || resource.data.ownerUid == request.auth.uid
+        || ('recipientEmail' in resource.data && resource.data.recipientEmail == request.auth.token.email.lower()));
       allow create: if teacher()
-        && request.resource.data.keys().hasOnly(['ownerUid', 'recipientUid', 'title', 'body', 'at', 'classId', 'meetingId'])
+        && request.resource.data.keys().hasOnly(['ownerUid', 'recipientUid', 'recipientEmail', 'title', 'body', 'at', 'classId', 'meetingId'])
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.recipientUid is string
-        && request.resource.data.title is string && request.resource.data.title.size() > 0
-        && request.resource.data.body is string && request.resource.data.at == request.time
+        && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 160
+        && request.resource.data.body is string && request.resource.data.body.size() > 0 && request.resource.data.body.size() <= 3000
+        && request.resource.data.meetingId is string
+        && (request.resource.data.meetingId == '' || exists(/databases/$(database)/documents/classes/$(request.resource.data.classId)/meetings/$(request.resource.data.meetingId)))
+        && (!('recipientEmail' in request.resource.data)
+          || (request.resource.data.recipientEmail is string
+            && (request.resource.data.recipientEmail == ''
+              || request.resource.data.recipientEmail in get(/databases/$(database)/documents/classes/$(request.resource.data.classId)).data.roster)))
+        && request.resource.data.at == request.time
         && ownsClass(request.resource.data.classId);
       allow update, delete: if false;
     }
