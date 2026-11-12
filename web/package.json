@@ -11,6 +11,7 @@
     "test:ui": "node --experimental-test-module-mocks --test test-dom/*.test.mjs"
   },
   "dependencies": {
+    "fflate": "^0.8.3",
     "firebase": "^13.3.0"
   },
   "overrides": {
