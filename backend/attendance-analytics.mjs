@@ -37,32 +37,41 @@ export function normalizeRecords(records) {
 /** Summarize counts and rate; a dataset with no records has a null rate. */
 export function summarizeAttendance(records) {
   const normalized = normalizeRecords(records);
-  const present = normalized.filter((record) => record.status === 'present').length;
-  return { total: normalized.length, present, absent: normalized.length - present,
-    attendanceRate: normalized.length ? present / normalized.length : null };
+  let present = 0;
+  for (const record of normalized) {
+    if (record.status === 'present') present++;
+  }
+  return summarizeCounts(normalized.length, present);
 }
 
-function group(records, key) {
+function summarizeCounts(total, present) {
+  return { total, present, absent: total - present, attendanceRate: total ? present / total : null };
+}
+
+function summarizeGroups(records, key) {
   const groups = new Map();
   for (const record of normalizeRecords(records)) {
-    if (!groups.has(record[key])) groups.set(record[key], []);
-    groups.get(record[key]).push(record);
+    const id = record[key];
+    let counts = groups.get(id);
+    if (!counts) {
+      counts = { total: 0, present: 0 };
+      groups.set(id, counts);
+    }
+    counts.total++;
+    if (record.status === 'present') counts.present++;
   }
-  return groups;
+  return Array.from(groups, ([id, { total, present }]) => ({ [key]: id, ...summarizeCounts(total, present) }))
+    .sort((a, b) => a[key].localeCompare(b[key]));
 }
 
 /** Produce one summary per student, sorted by student ID. */
 export function summarizeStudents(records) {
-  return [...group(records, 'studentId')].map(([studentId, items]) =>
-    ({ studentId, ...summarizeAttendance(items) }))
-    .sort((a, b) => a.studentId.localeCompare(b.studentId));
+  return summarizeGroups(records, 'studentId');
 }
 
 /** Produce one summary per session, sorted by session ID. */
 export function summarizeSessions(records) {
-  return [...group(records, 'sessionId')].map(([sessionId, items]) =>
-    ({ sessionId, ...summarizeAttendance(items) }))
-    .sort((a, b) => a.sessionId.localeCompare(b.sessionId));
+  return summarizeGroups(records, 'sessionId');
 }
 
 /** Find students whose recorded attendance rate is strictly below a threshold. */

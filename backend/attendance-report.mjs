@@ -10,21 +10,24 @@ export function buildAttendanceReport(roster, sessionIds, records) {
     return id.trim();
   });
   if (new Set(sessions).size !== sessions.length) throw new TypeError('duplicate session ID');
-  const studentIds = new Set(students.map((student) => student.id));
   const sessionSet = new Set(sessions);
   const byStudent = new Map(students.map((student) => [student.id, new Map()]));
   for (const record of normalizeRecords(records)) {
-    if (!studentIds.has(record.studentId)) throw new TypeError(`unknown student: ${record.studentId}`);
+    const statuses = byStudent.get(record.studentId);
+    if (!statuses) throw new TypeError(`unknown student: ${record.studentId}`);
     if (!sessionSet.has(record.sessionId)) throw new TypeError(`unknown session: ${record.sessionId}`);
-    byStudent.get(record.studentId).set(record.sessionId, record.status);
+    statuses.set(record.sessionId, record.status);
   }
   return students.map((student) => {
-    const statuses = sessions.map((sessionId) => ({
-      sessionId,
-      status: byStudent.get(student.id).get(sessionId) ?? 'missing',
-    }));
-    const present = statuses.filter((entry) => entry.status === 'present').length;
-    const absent = statuses.filter((entry) => entry.status === 'absent').length;
+    const recorded = byStudent.get(student.id);
+    let present = 0;
+    let absent = 0;
+    const statuses = sessions.map((sessionId) => {
+      const status = recorded.get(sessionId) ?? 'missing';
+      if (status === 'present') present++;
+      if (status === 'absent') absent++;
+      return { sessionId, status };
+    });
     return {
       student,
       present,
