@@ -59,8 +59,11 @@ export function generateMeetings(localId, scheduleCode, start, weeks, perWeek) {
   }
   return meetings;
 }
-export function protectHistory(students, meetings) {
+export function protectHistory(students, meetings, previousStudents = []) {
   const rolls = new Set(students.map(s => s.rollNumber));
+  const previous = new Set(previousStudents.map(s=>s.rollNumber));
+  if (meetings.some(m=>m.state === "closed") && students.some(s=>!previous.has(s.rollNumber)))
+    throw new AdminError("Lớp đã có buổi chốt: chỉ sửa thông tin sinh viên hiện có. Thêm sinh viên vào lớp mới để không tạo kết quả trống trong lịch sử.");
   for (const m of meetings) for (const roll of Object.keys(m.records || {})) {
     if (!rolls.has(roll)) throw new AdminError(`Không thể bỏ ${roll}: sinh viên đã có kết quả điểm danh. Giữ MSSV để bảo toàn lịch sử.`);
   }

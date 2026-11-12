@@ -10,12 +10,13 @@ export function parseSessionId(value) {
 export async function createRequest(db,user,input) {
   const sessionId=parseSessionId(input.session),reason=required(input.reason,"Lý do đề nghị",1000);
   if(!["P","A"].includes(input.status))throw new AdminError("Chọn Có mặt hoặc Vắng.");
-  const ref=doc(db,"attendanceRequests",`${sessionId}_${user.uid}`);
   return runTransaction(db,async tx=>{
-    const [session,own]=await Promise.all([tx.get(doc(db,"attendanceSessions",sessionId)),tx.get(ref)]);
-    if(own.exists())throw new AdminError("Bạn đã gửi yêu cầu cho buổi này. Theo dõi kết quả trong danh sách yêu cầu.");
+    const session=await tx.get(doc(db,"attendanceSessions",sessionId));
     if(!session.exists())throw new AdminError("Không tìm thấy phiên. Kiểm tra lại link với giảng viên.");
     const s=session.data();
+    const ref=doc(db,"attendanceRequests",`${s.classId}_${s.meetingId}_${user.uid}`);
+    const own=await tx.get(ref);
+    if(own.exists())throw new AdminError("Bạn đã gửi yêu cầu cho buổi này. Theo dõi kết quả trong danh sách yêu cầu.");
     tx.set(ref,{
       uid:user.uid,email:user.email.toLowerCase(),ownerUid:s.ownerUid,classId:s.classId,meetingId:s.meetingId,sessionId,
       requestedStatus:input.status,reason,state:"pending",createdAt:serverTimestamp(),

@@ -90,7 +90,7 @@ export class AdminRepository {
       if (!current.exists() || current.data().archived) throw new AdminError("Lớp đã được lưu trữ.");
       const meetings = [];
       for (const id of w.layout[course.id] || []) meetings.push((await tx.get(this.ref(`classes/${course.id}/meetings/${id}`))).data());
-      protectHistory(students, meetings);
+      protectHistory(students, meetings, current.data().data.students);
       this.advance(tx,w);
       tx.update(current.ref, { data: { ...current.data().data, courseCode, classCode, students }, roster: rosterMap(students) });
     });

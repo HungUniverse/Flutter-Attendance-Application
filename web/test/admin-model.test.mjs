@@ -23,6 +23,8 @@ test("web schedule mirrors native group and slot conventions across a month boun
 test("history protection and corrections retain unrelated results and audits",()=>{
   const old={state:"closed",id:"m1",records:{S1:{status:"A"},S2:{status:"P"}},auditEvents:[{id:"old"}]};
   assert.throws(()=>protectHistory([{rollNumber:"S1"}],[old]),AdminError);
+  assert.throws(()=>protectHistory([{rollNumber:"S1"},{rollNumber:"S2"},{rollNumber:"S3"}],[old],[{rollNumber:"S1"},{rollNumber:"S2"}]),AdminError);
+  assert.doesNotThrow(()=>protectHistory([{rollNumber:"S1"},{rollNumber:"S2"}],[old],[{rollNumber:"S1"},{rollNumber:"S2"}]));
   const edited=correction(old,"S1","P","Đối chiếu minh chứng","request1",new Date("2026-11-12T00:00:00Z"));
   assert.deepEqual(edited.records.S2,old.records.S2);
   assert.deepEqual(edited.auditEvents[0],old.auditEvents[0]);

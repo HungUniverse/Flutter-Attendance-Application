@@ -38,7 +38,7 @@ export async function exerciseAdminFlow(seedClosedMeeting) {
     await assert.rejects(createRequest(studentDb,user,{session:sessionId,status:"P",reason:"Gửi trùng"}));
     await assert.rejects(createRequest(outsiderDb,{uid:"outsider",email:"outsider@example.com"},{session:sessionId,status:"P",reason:"Không thuộc lớp"}));
     const before=await repo.counts();assert.equal(before.pending,1);
-    const id=`${sessionId}_student`;
+    const id=`${course.id}_${meeting.id}_student`;
     await repo.decide(id,"approved","Đã xác minh có mặt");
     const result=await getDocFromServer(doc(studentDb,"attendanceRequests",id));
     assert.equal(result.data().state,"approved");

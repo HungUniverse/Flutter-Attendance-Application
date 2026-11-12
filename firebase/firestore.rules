@@ -152,7 +152,7 @@ service cloud.firestore {
         let meeting = get(/databases/$(database)/documents/classes/$(d.classId)/meetings/$(d.meetingId)).data;
         return d.keys().hasOnly(['uid', 'email', 'ownerUid', 'classId', 'meetingId', 'sessionId', 'requestedStatus', 'reason', 'state', 'createdAt'])
           && d.uid == request.auth.uid && d.email == request.auth.token.email.lower()
-          && d.sessionId is string && id == d.sessionId + '_' + request.auth.uid
+          && d.sessionId is string && id == d.classId + '_' + d.meetingId + '_' + request.auth.uid
           && d.classId == session.classId && d.meetingId == session.meetingId
           && d.ownerUid == session.ownerUid && d.ownerUid == course.ownerUid
           && rosterMember(d.classId) && meeting.state == 'closed'
