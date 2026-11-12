@@ -30,10 +30,12 @@ async function api(suffix, body) {
     headers,
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
-  if (!response.ok)
+  if (!response.ok) {
+    const failure = await response.json().catch(() => ({}));
     throw new Error(
-      `Firestore reset HTTP ${response.status} at ${suffix.split("?")[0]}`,
+      `Firestore reset HTTP ${response.status} at ${suffix.split("?")[0]}: ${failure.error?.message || "No error detail"}`,
     );
+  }
   return response.json();
 }
 async function list(collection) {
@@ -87,9 +89,14 @@ const nested = [
     )
   ).flat(),
 ];
-const deleted = [...nested, ...Object.values(groups).flat()].filter(
-  (d) => d.fields,
-);
+// Remove session parents first so no further student check-in can be accepted.
+const deleted = [
+  ...groups.attendanceSessions,
+  ...nested,
+  ...Object.entries(groups)
+    .filter(([name]) => name !== "attendanceSessions")
+    .flatMap(([, docs]) => docs),
+].filter((d) => d.fields);
 const summary = {
   projectId,
   deleteCounts: Object.fromEntries(
@@ -150,15 +157,36 @@ const barrier = [
 ];
 for (let i = 0; i < barrier.length; i += 400)
   await api(":commit", { writes: barrier.slice(i, i + 400) });
-for (let i = 0; i < deleted.length; i += 400)
+const deleteBatchSize = 50;
+for (let i = 0; i < deleted.length; i += deleteBatchSize)
   await api(":commit", {
-    writes: deleted
-      .slice(i, i + 400)
-      .map((d) => ({
-        delete: d.name,
-        currentDocument: { updateTime: d.updateTime },
-      })),
+    writes: deleted.slice(i, i + deleteBatchSize).map((d) => ({
+      delete: d.name,
+      currentDocument: { updateTime: d.updateTime },
+    })),
   });
+// A check-in arriving between inventory and session deletion must not survive as
+// an orphan subcollection. Re-scan the original parent paths after closing access.
+const residual = (
+  await Promise.all([
+    ...groups.classes.map((d) =>
+      list(`${d.name.split("/documents/")[1]}/meetings`),
+    ),
+    ...groups.attendanceSessions.map((d) =>
+      list(`${d.name.split("/documents/")[1]}/checkIns`),
+    ),
+  ])
+)
+  .flat()
+  .filter((d) => d.fields);
+for (let i = 0; i < residual.length; i += deleteBatchSize) {
+  await api(":commit", {
+    writes: residual.slice(i, i + deleteBatchSize).map((d) => ({
+      delete: d.name,
+      currentDocument: { updateTime: d.updateTime },
+    })),
+  });
+}
 const remaining = Object.fromEntries(
   await Promise.all(
     collections.map(async (name) => [
@@ -180,7 +208,7 @@ if (
 console.log(
   JSON.stringify({
     resetComplete: true,
-    deletedDocuments: deleted.length,
+    deletedDocuments: deleted.length + residual.length,
     remaining,
     emptyWorkspaces: workspaces.length,
     preservedUserProfiles: (await list("users")).filter((d) => d.fields).length,
