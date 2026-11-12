@@ -70,12 +70,15 @@ class ScheduleRule {
   final List<DateTime> excludedDates;
   final List<DateTime> additionalStarts;
 
-  int get dayGroup => scheduleCode.isEmpty
-      ? 0
-      : (int.tryParse(scheduleCode.substring(0, 1)) ?? 0);
-  int get dailySlot => scheduleCode.length < 2
-      ? 0
-      : (int.tryParse(scheduleCode.substring(1, 2)) ?? 0);
+  int get dayGroup {
+    final code = scheduleCode.trim();
+    return code.isEmpty ? 0 : (int.tryParse(code.substring(0, 1)) ?? 0);
+  }
+
+  int get dailySlot {
+    final code = scheduleCode.trim();
+    return code.length < 2 ? 0 : (int.tryParse(code.substring(1, 2)) ?? 0);
+  }
 
   Map<String, Object?> toJson() => {
     'scheduleCode': scheduleCode,

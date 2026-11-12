@@ -56,8 +56,14 @@ class AttendanceService {
       return courseClass;
     }
     final attendance = _deepCopy(courseClass.attendance);
-    attendance.putIfAbsent(meetingId, () => {});
-    attendance[meetingId]![student.rollNumber] = AttendanceRecord(
+    final records = attendance.putIfAbsent(meetingId, () => {});
+    final canonicalRoll = student.rollNumber;
+    final normalizedRoll = canonicalRoll.trim().toUpperCase();
+    records.removeWhere(
+      (key, _) =>
+          key != canonicalRoll && key.trim().toUpperCase() == normalizedRoll,
+    );
+    records[canonicalRoll] = AttendanceRecord(
       status: AttendanceStatus.present,
       source: source,
       recordedAt: recordedAt,
@@ -75,9 +81,16 @@ class AttendanceService {
     final records = attendance.putIfAbsent(meetingId, () => {});
     final recordedAt = now ?? DateTime.now();
     for (final student in courseClass.students) {
-      final existing = courseClass.recordFor(meetingId, student.rollNumber);
+      final canonicalRoll = student.rollNumber;
+      final normalizedRoll = canonicalRoll.trim().toUpperCase();
+      final existing = courseClass.recordFor(meetingId, canonicalRoll);
       if (existing == null || existing.status == AttendanceStatus.unmarked) {
-        records[student.rollNumber] = AttendanceRecord(
+        records.removeWhere(
+          (key, _) =>
+              key != canonicalRoll &&
+              key.trim().toUpperCase() == normalizedRoll,
+        );
+        records[canonicalRoll] = AttendanceRecord(
           status: AttendanceStatus.absent,
           source: AttendanceSource.finalize,
           recordedAt: recordedAt,
@@ -120,12 +133,16 @@ class AttendanceService {
       throw StateError('Kết quả đã ghi. Hãy sửa với lý do.');
     }
     final attendance = _deepCopy(courseClass.attendance);
-    attendance.putIfAbsent(meetingId, () => {})[canonicalRoll] =
-        AttendanceRecord(
-          status: status,
-          source: AttendanceSource.manual,
-          recordedAt: at,
-        );
+    final records = attendance.putIfAbsent(meetingId, () => {});
+    records.removeWhere(
+      (key, _) =>
+          key != canonicalRoll && key.trim().toUpperCase() == normalizedRoll,
+    );
+    records[canonicalRoll] = AttendanceRecord(
+      status: status,
+      source: AttendanceSource.manual,
+      recordedAt: at,
+    );
     return courseClass.copyWith(attendance: attendance);
   }
 

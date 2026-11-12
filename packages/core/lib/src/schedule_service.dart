@@ -29,7 +29,7 @@ class ScheduleService {
   };
 
   List<Meeting> generate(ScheduleRule rule, String classId) {
-    if (!RegExp(r'^[1-3][1-4]$').hasMatch(rule.scheduleCode)) {
+    if (!RegExp(r'^[1-3][1-4]$').hasMatch(rule.scheduleCode.trim())) {
       throw const FormatException('Mã lịch phải nằm trong khoảng 11–34.');
     }
     if (rule.weeks < 1 ||
