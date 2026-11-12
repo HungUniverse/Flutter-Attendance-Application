@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -6,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -21,9 +21,12 @@ import 'package:fap_attendance/lab3/services/firestore_attendance_links.dart';
 import 'package:fap_attendance/lab3/services/synced_workspace_repository.dart';
 import 'package:fap_attendance/lab3/services/ai_attendance_review.dart';
 import 'package:fap_attendance/lab3/services/contracts.dart';
+import 'package:fap_attendance/lab3/services/firestore_notifications.dart';
 import 'package:fap_attendance/lab3/viewmodels/teacher_view_model.dart';
 
 import '../test/lab3/fakes.dart';
+
+class _Messaging extends Fake implements FirebaseMessaging {}
 
 String fakeGoogleToken(String email) {
   String encode(Object value) =>
@@ -223,6 +226,22 @@ void main() {
               reason: model.error,
             );
             expect(reports.warning, isNull);
+            await db.collection('announcements').add({
+              'ownerUid': uid,
+              'recipientUid': uid,
+              'title': 'Buổi học',
+              'body': 'Kiểm tra kết quả',
+              'classId': firestoreClassId(uid, 'DEMO$round', 'c1'),
+              'meetingId': 'm1',
+              'at': FieldValue.serverTimestamp(),
+            });
+            final inbox = FirestoreNotifications(
+              _Messaging(),
+              db,
+              localClassId: (id) =>
+                  id == firestoreClassId(uid, 'DEMO$round', 'c1') ? 'c1' : null,
+            );
+            expect((await inbox.history(uid)).first.classId, 'c1');
             final restored = await repository.load(uid, semester: 'DEMO$round');
             expect(
               restored!.classes.single.recordFor('m1', 'S1')!.status,

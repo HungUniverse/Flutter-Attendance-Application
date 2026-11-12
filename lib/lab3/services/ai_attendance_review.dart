@@ -125,6 +125,7 @@ class FirebaseAttendanceReview implements AttendanceReviewService {
         'model': settings.aiModel,
         'status': 'error',
         'failureType': error.runtimeType.toString(),
+        if (error is FirebaseAIException) 'failureMessage': error.message,
         if (error is QuotaExceeded) 'failureCode': 'quota_exceeded',
       });
       throw AppProblem(
