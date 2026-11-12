@@ -149,3 +149,40 @@ test('generates repeatable synthetic snapshots, profile docs and compact manifes
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('anonymizes snapshots, class bundles and revision archives from explicit local options', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'attendance-workbench-privacy-'));
+  try {
+    const run = (...args) => execFileSync(process.execPath, [cli, ...args], { encoding: 'utf8' });
+    const source = join(dir, 'source.json');
+    const options = join(dir, 'privacy-options.json');
+    const anonymized = join(dir, 'anonymized.json');
+    await writeFile(source, run('demo-generate',));
+    await writeFile(options, JSON.stringify({ secret: 'temporary-local-test-secret-key' }));
+    await writeFile(anonymized, run('anonymize-snapshot', source, options));
+    const sourceJson = JSON.parse(await readFile(source, 'utf8'));
+    const outputJson = JSON.parse(await readFile(anonymized, 'utf8'));
+    assert.equal(outputJson.roster.length, sourceJson.roster.length);
+    assert.equal(outputJson.records.length, sourceJson.records.length);
+    assert.equal(JSON.parse(run('anonymize-report', source, options)).valid, true);
+    assert.doesNotMatch(JSON.stringify(outputJson), /DEMO-|student-1@example\.invalid/);
+
+    const empty = join(dir, 'empty-bundle.json');
+    const bundle = join(dir, 'private-bundle.json');
+    const anonymizedBundle = join(dir, 'anonymized-bundle.json');
+    await writeFile(empty, run('bundle-new'));
+    await writeFile(bundle, run('bundle-put', empty, 'private-course', 'Internal Class Name', source));
+    await writeFile(anonymizedBundle, run('anonymize-bundle', bundle, options));
+    assert.doesNotMatch(await readFile(anonymizedBundle, 'utf8'), /private-course|Internal Class Name|DEMO-/);
+
+    const archive = join(dir, 'private-archive.json');
+    const anonymizedArchive = join(dir, 'anonymized-archive.json');
+    await writeFile(archive, run('archive-new', source, 'Internal attendance record'));
+    await writeFile(anonymizedArchive, run('anonymize-archive', archive, options));
+    const scrubbedArchive = JSON.parse(await readFile(anonymizedArchive, 'utf8'));
+    assert.equal(scrubbedArchive.revisions[0].message, 'Revision 1');
+    assert.doesNotMatch(await readFile(anonymizedArchive, 'utf8'), /Internal attendance record|DEMO-/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

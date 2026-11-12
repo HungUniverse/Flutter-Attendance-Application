@@ -98,6 +98,20 @@ data to a service or writes files on its own. The browser workbench has a
 separate generator form for the same synthetic data; its output is an in-memory
 copy until explicitly downloaded.
 
+`anonymize-snapshot`, `anonymize-bundle`, and `anonymize-archive` create new
+documents with HMAC-SHA-256 pseudonyms. Student names and emails are replaced;
+session labels, class names, archive notes, authors, custom revision IDs and
+real timestamps are also removed by default. Attendance states and references
+remain consistent. Supply a private options JSON file such as
+`{"secret":"use-a-private-random-secret-of-at-least-16-bytes"}`. The secret
+is not copied to output. Reusing the same secret intentionally makes a person
+match across separately anonymized files; use different secrets when that link
+is not wanted. `keepSessionIds: true` retains the original session labels.
+`anonymize-report` checks that snapshot dimensions and attendance were
+preserved and reports whether identity fields remain. The output still contains
+attendance patterns, so use synthetic data when sharing a reproducible example
+and review any output before sending it elsewhere.
+
 `schedule-generate` accepts a JSON object with `startDate`, `endDate`,
 `startTime`, `durationMinutes`, `weekdays`, `resources`, `idPrefix`, and an
 optional `exceptions` array. Dates and times use UTC, weekdays use Sunday=0

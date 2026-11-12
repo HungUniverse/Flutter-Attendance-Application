@@ -30,6 +30,7 @@ import { planSchedule } from './schedule-planner.mjs';
 import { appendArchiveRevision, archiveToCsv, compareArchiveRevisions, createArchive, listArchiveRevisions,
   parseArchive, restoreArchiveRevision, serializeArchive } from './archive.mjs';
 import { generateSyntheticDataset, listSyntheticProfiles, summarizeDatasetSnapshot } from './dataset-lab.mjs';
+import { anonymizeArchive, anonymizeBundle, anonymizeSnapshot, anonymizationReport } from './privacy.mjs';
 
 const usage = `Attendance workbench (Node.js 22+)
 
@@ -59,6 +60,10 @@ const usage = `Attendance workbench (Node.js 22+)
   node cli.mjs demo-manifest [OPTIONS.json]
   node cli.mjs demo-profiles
   node cli.mjs demo-summary SNAPSHOT.json
+  node cli.mjs anonymize-snapshot SNAPSHOT.json OPTIONS.json
+  node cli.mjs anonymize-bundle BUNDLE.json OPTIONS.json
+  node cli.mjs anonymize-archive ARCHIVE.json OPTIONS.json
+  node cli.mjs anonymize-report SNAPSHOT.json OPTIONS.json
   node cli.mjs apply SNAPSHOT.json CHANGES.json
   node cli.mjs compare BEFORE.json AFTER.json
   node cli.mjs export-csv SNAPSHOT.json
@@ -301,6 +306,26 @@ export async function runCommand(args) {
     case 'demo-summary': {
       requireArgs(values, 1);
       return json(summarizeDatasetSnapshot(await snapshot(values[0])));
+    }
+    case 'anonymize-snapshot':
+    case 'anonymize-report': {
+      requireArgs(values, 2);
+      const [data, optionsText] = await Promise.all([snapshot(values[0]), readText(values[1])]);
+      const options = JSON.parse(optionsText);
+      const anonymized = anonymizeSnapshot(data, options);
+      return command === 'anonymize-report' ? json(anonymizationReport(data, anonymized))
+        : `${serializeAttendanceSnapshot(anonymized)}\n`;
+    }
+    case 'anonymize-bundle': {
+      requireArgs(values, 2);
+      const [bundle, optionsText] = await Promise.all([readText(values[0]), readText(values[1])]);
+      const anonymized = anonymizeBundle(bundle, JSON.parse(optionsText));
+      return `${JSON.stringify(anonymized, null, 2)}\n`;
+    }
+    case 'anonymize-archive': {
+      requireArgs(values, 2);
+      const [archive, optionsText] = await Promise.all([readText(values[0]), readText(values[1])]);
+      return `${JSON.stringify(anonymizeArchive(archive, JSON.parse(optionsText)), null, 2)}\n`;
     }
     default:
       throw new TypeError(`unknown command: ${command}; use --help`);
