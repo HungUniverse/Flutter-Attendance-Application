@@ -67,6 +67,7 @@ class QrPayload {
       final fingerprint = json['certificateFingerprint'] as String?;
       final modeName = json['mode'] as String?;
       if (version == null ||
+          version < 1 ||
           endpoint == null ||
           endpoint.trim().isEmpty ||
           classId == null ||
@@ -78,6 +79,7 @@ class QrPayload {
           issuedAt == null ||
           expiresAt == null ||
           fingerprint == null ||
+          fingerprint.trim().isEmpty ||
           modeName == null) {
         throw const FormatException('QR payload thiếu trường bắt buộc.');
       }

@@ -180,6 +180,25 @@ void main() {
         () => QrPayload.decode(incompleteJsonPayload),
         throwsA(isA<FormatException>()),
       );
+      final blankFingerprintPayload = base64Url.encode(
+        utf8.encode(
+          jsonEncode({
+            'v': 1,
+            'endpoint': 'https://example.com',
+            'classId': 'c1',
+            'meetingId': 'm1',
+            'token': 'tok',
+            'issuedAt': '2026-11-13T08:00:00Z',
+            'expiresAt': '2026-11-13T08:01:00Z',
+            'certificateFingerprint': '   ',
+            'mode': 'normal',
+          }),
+        ),
+      );
+      expect(
+        () => QrPayload.decode(blankFingerprintPayload),
+        throwsA(isA<FormatException>()),
+      );
     });
 
     test('should throw RosterImportException when importing dotless filename or corrupted archive bytes', () {
@@ -198,8 +217,26 @@ void main() {
       );
       expect(
         () => importer.importBytes(
+          Uint8List.fromList([1, 2, 3]),
+          fileName: r'C:\dir\.ods', // Hidden dotfile without basename
+          semester: 'FA26',
+          semesterStart: DateTime(2026, 11, 2),
+        ),
+        throwsA(isA<RosterImportException>()),
+      );
+      expect(
+        () => importer.importBytes(
           Uint8List.fromList([0, 1, 2, 3, 4]),
           fileName: 'corrupted.ods',
+          semester: 'FA26',
+          semesterStart: DateTime(2026, 11, 2),
+        ),
+        throwsA(isA<RosterImportException>()),
+      );
+      expect(
+        () => importer.importBytes(
+          Uint8List.fromList([0, 1, 2, 3, 4]),
+          fileName: 'corrupted.xlsx',
           semester: 'FA26',
           semesterStart: DateTime(2026, 11, 2),
         ),

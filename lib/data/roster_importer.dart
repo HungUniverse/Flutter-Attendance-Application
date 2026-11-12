@@ -41,10 +41,11 @@ class RosterImporter {
     int meetingsPerWeek = 2,
   }) {
     final normalizedName = fileName.trim().toLowerCase();
-    final dotIndex = normalizedName.lastIndexOf('.');
-    final extension = dotIndex <= 0
+    final baseName = normalizedName.split(RegExp(r'[\\/]')).last;
+    final dotIndex = baseName.lastIndexOf('.');
+    final extension = dotIndex <= 0 || dotIndex == baseName.length - 1
         ? ''
-        : normalizedName.substring(dotIndex + 1);
+        : baseName.substring(dotIndex + 1);
     final sheets = switch (extension) {
       'ods' => _readOds(bytes),
       'xlsx' => _readXlsx(bytes),
@@ -216,11 +217,16 @@ class RosterImporter {
   }
 
   Map<String, List<List<String>>> _readXlsx(Uint8List bytes) {
-    if (bytes.isEmpty) {
+    if (bytes.length < 4 || bytes[0] != 0x50 || bytes[1] != 0x4B) {
       throw const RosterImportException('File XLSX rỗng hoặc bị hỏng.');
     }
     try {
       final workbook = Excel.decodeBytes(bytes);
+      if (workbook.tables.isEmpty) {
+        throw const RosterImportException(
+          'File XLSX bị hỏng hoặc không đọc được.',
+        );
+      }
       return workbook.tables.map((name, sheet) {
         final rows = sheet.rows
             .map(
