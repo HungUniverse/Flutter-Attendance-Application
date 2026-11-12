@@ -6,9 +6,18 @@ import 'package:csv/csv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fap_attendance/domain/models.dart';
 import 'package:fap_attendance/lab3/services/contracts.dart';
+import 'package:fap_attendance/lab3/services/firestore_attendance_links.dart';
 import 'package:fap_attendance/lab3/viewmodels/teacher_view_model.dart';
 
 import 'fakes.dart';
+
+class _ServerTimedFakeLinks extends FakeLinks
+    implements ServerTimedAttendanceLinks {
+  _ServerTimedFakeLinks(this.serverNow);
+
+  @override
+  DateTime serverNow;
+}
 
 void main() {
   late Harness h;
@@ -410,6 +419,30 @@ void main() {
       );
       expect(h.telemetry.errors, contains('markbook_import'));
       expect(h.vm.course('c1').students.length, 3);
+    },
+  );
+
+  test(
+    'shareLink honors ServerTimedAttendanceLinks server clock when local clock is ahead',
+    () async {
+      final timedLinks = _ServerTimedFakeLinks(fixtureNow);
+      final timedHarness = Harness(
+        await Directory.systemTemp.createTemp('fap-lab3-timed-'),
+        linkService: timedLinks,
+      );
+      try {
+        await timedHarness.initialize();
+        expect(await timedHarness.vm.createLink('c1', 'm1'), isTrue);
+        // Simulate local device clock skewed 13 hours ahead of server time.
+        timedHarness.clock = fixtureNow.add(const Duration(hours: 13));
+        expect(await timedHarness.vm.shareLink(copy: true), isTrue);
+        expect(
+          timedHarness.device.copied,
+          equals('https://attendance.example/join/test'),
+        );
+      } finally {
+        await timedHarness.dispose();
+      }
     },
   );
 }

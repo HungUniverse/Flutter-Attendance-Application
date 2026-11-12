@@ -651,10 +651,14 @@ class TeacherViewModel extends ChangeNotifier {
           'Chỉ chọn bản nháp cho buổi đang mở hôm nay. Buổi đã chốt cần sửa có lý do.',
         );
       }
-      if (status == AttendanceStatus.unmarked ||
-          !c.students.any((s) => s.rollNumber == roll)) {
+      final normalizedRoll = roll.trim().toUpperCase();
+      final student = c.students.firstWhereOrNull(
+        (s) => s.rollNumber.trim().toUpperCase() == normalizedRoll,
+      );
+      if (status == AttendanceStatus.unmarked || student == null) {
         throw const AppProblem('Sinh viên hoặc kết quả không hợp lệ.');
       }
+      final canonicalRoll = student.rollNumber;
       final key =
           '${workspace!.semester}/$classId/$meetingId/${m.startAt.toIso8601String()}';
       final previous = _manualDrafts[key];
@@ -665,7 +669,7 @@ class TeacherViewModel extends ChangeNotifier {
         startAt: m.startAt,
         records: {
           ...?previous?.records,
-          roll: AttendanceRecord(
+          canonicalRoll: AttendanceRecord(
             status: status,
             source: AttendanceSource.manual,
             recordedAt: now(),
@@ -704,11 +708,19 @@ class TeacherViewModel extends ChangeNotifier {
       return mark(classId, meetingId, roll, status, reason: reason);
     }
     return _run('attendance_edit', () async {
+      final normalizedRoll = roll.trim().toUpperCase();
+      final canonicalRoll =
+          course(classId).students
+              .firstWhereOrNull(
+                (s) => s.rollNumber.trim().toUpperCase() == normalizedRoll,
+              )
+              ?.rollNumber ??
+          roll;
       await _replace(
         attendance.overrideStatus(
           course(classId),
           meetingId: meetingId,
-          rollNumber: roll,
+          rollNumber: canonicalRoll,
           status: status,
           reason: reason,
           auditId: const Uuid().v4(),
@@ -717,8 +729,8 @@ class TeacherViewModel extends ChangeNotifier {
       );
       final draft =
           _manualDrafts['${workspace!.semester}/$classId/$meetingId/${meeting(classId, meetingId).startAt.toIso8601String()}'];
-      if (draft?.records[roll]?.status == status) {
-        draft!.records.remove(roll);
+      if (draft?.records[canonicalRoll]?.status == status) {
+        draft!.records.remove(canonicalRoll);
         if (draft.records.isEmpty) _manualDrafts.remove(draft.key);
         await _saveDrafts();
       }
@@ -990,7 +1002,7 @@ class TeacherViewModel extends ChangeNotifier {
       // Keep the saved handle when the relay is unavailable so cleanup can retry.
       if (storedMeeting != null &&
           session.receiving &&
-          session.expiresAt.isAfter(now())) {
+          session.expiresAt.isAfter(linkNow)) {
         await links.stop(session);
       }
       if (generation != _generation || disposed || link != null) return;
@@ -1195,7 +1207,7 @@ class TeacherViewModel extends ChangeNotifier {
     if (link == null ||
         linkError != null ||
         !link!.receiving ||
-        !link!.expiresAt.isAfter(now())) {
+        !link!.expiresAt.isAfter(linkNow)) {
       throw const AppProblem('Link không ở trạng thái nhận điểm danh.');
     }
     if (copy) {
