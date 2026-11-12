@@ -241,13 +241,18 @@ class FirebaseReportUpload implements UploadService {
         customMetadata: destination.metadata,
       ),
     );
-    final subscription = task.snapshotEvents.listen((snapshot) {
-      progress(
-        snapshot.totalBytes == 0
-            ? 0
-            : snapshot.bytesTransferred / snapshot.totalBytes,
-      );
-    });
+    final subscription = task.snapshotEvents.listen(
+      (snapshot) {
+        progress(
+          snapshot.totalBytes == 0
+              ? 0
+              : snapshot.bytesTransferred / snapshot.totalBytes,
+        );
+      },
+      onError: (Object _) {
+        // The awaited upload task reports the same error below.
+      },
+    );
     try {
       await task;
       return await ref.getDownloadURL();
