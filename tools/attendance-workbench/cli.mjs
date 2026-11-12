@@ -2,7 +2,7 @@
 // A local, opt-in command-line interface. Commands read named inputs and write
 // results to stdout; they never start the application's server or contact it.
 import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { importRosterCsv } from '../../backend/roster-csv-import.mjs';
 import { importAttendanceCsv } from '../../backend/attendance-csv-import.mjs';
@@ -39,6 +39,31 @@ import { buildReportStudio, renderReportStudioHtml, reportStudioToCsv } from './
 import { buildCloseoutPackage, closeoutComparisonToCsv, closeoutInspectionToCsv, compareCloseoutPackages,
   inspectCloseoutPackage, readCloseoutFile, serializeCloseoutPackage } from './closeout-pack.mjs';
 import { buildPolicyLab, createPolicyGrid, policyLabToCsv } from './policy-lab.mjs';
+import { buildCohortExplorer, cohortExplorerToCsv } from './cohort-explorer.mjs';
+import { analyzeScheduleInsights, scheduleInsightsToCsv } from './schedule-insights.mjs';
+import { reconcileAttendanceSources, reconciliationToCsv, summarizeReconciliation } from './source-reconciliation.mjs';
+import { attendanceQueryDiffToCsv, attendanceQueryToCsv, compareAttendanceQueryResults, queryAttendanceSnapshot } from './snapshot-query.mjs';
+import { applyApprovedCorrections, auditCorrectionReview, correctionAuditToCsv, correctionReviewToCsv,
+  createCorrectionReview, parseCorrectionReview, serializeCorrectionReview, summarizeCorrectionReview, updateCorrectionCase } from './correction-review.mjs';
+import { buildRetentionPlan, retentionPlanToCsv } from './retention-planner.mjs';
+import { approveGovernedExport, governedExportToCsv, planGovernedExport } from './export-gate.mjs';
+import { createExemptionLedger, evaluateExemptionLedger, exemptionToCsv, parseExemptionLedger,
+  serializeExemptionLedger, summarizeExemptionLedger, updateExemption } from './exemption-ledger.mjs';
+import { analyzeAttendancePatterns, attendancePatternsToCsv } from './attendance-patterns.mjs';
+import { evaluateAttendanceForecasts, forecastEvaluationToCsv } from './forecast-evaluation.mjs';
+import { planSnapshotMigration, snapshotMigrationToCsv } from './snapshot-migration.mjs';
+import { parseSnapshotContract, snapshotContractToCsv, validateSnapshotContract } from './snapshot-contract.mjs';
+import { allocateReviewCasesConstrained, reviewAllocationToCsv } from './review-allocator.mjs';
+import { casebookSlaToCsv, reportCasebookSla } from './casebook-sla.mjs';
+import { planAttendanceRecovery, recoveryPlanToCsv } from './recovery-planner.mjs';
+import { casebookWorkloadToCsv, reportCasebookWorkload } from './casebook-workload.mjs';
+import { applyCasebookBatch } from './casebook-batch.mjs';
+import { casebookActivityToCsv, reportCasebookActivity } from './casebook-activity.mjs';
+import { attendanceImpactDiffToCsv, compareAttendanceImpact } from './attendance-impact-diff.mjs';
+import { casebookServiceLevelsToCsv, evaluateCasebookServiceLevels } from './casebook-service-level.mjs';
+import { decideSnapshotRelease, planSnapshotRelease, snapshotReleaseToCsv,
+  verifySnapshotReleaseReceipt, compareSnapshotReleaseReceipts, snapshotReleaseDiffToCsv } from './snapshot-release-gate.mjs';
+import { planReviewBoard, reviewBoardToCsv } from './review-board.mjs';
 
 const usage = `Attendance workbench (Node.js 22+)
 
@@ -52,6 +77,52 @@ const usage = `Attendance workbench (Node.js 22+)
   node cli.mjs policy-grid GRID.json
   node cli.mjs policy-lab SNAPSHOT.json OPTIONS.json
   node cli.mjs policy-lab-csv SNAPSHOT.json OPTIONS.json summary|cohorts|students|comparisons
+  node cli.mjs snapshot-query SNAPSHOT.json QUERY.json
+  node cli.mjs snapshot-query-csv SNAPSHOT.json QUERY.json rows|groups
+  node cli.mjs snapshot-query-diff BEFORE.json AFTER.json [QUERY.json]
+  node cli.mjs snapshot-query-diff-csv BEFORE.json AFTER.json SECTION [QUERY.json]
+  node cli.mjs attendance-impact-diff BEFORE.json AFTER.json [OPTIONS.json]
+  node cli.mjs attendance-impact-diff-csv BEFORE.json AFTER.json SECTION [OPTIONS.json]
+  node cli.mjs cohort-explore SNAPSHOT.json OPTIONS.json
+  node cli.mjs cohort-explore-csv SNAPSHOT.json OPTIONS.json SECTION
+  node cli.mjs schedule-insights SCHEDULE.json [OPTIONS.json]
+  node cli.mjs schedule-insights-csv SCHEDULE.json SECTION [OPTIONS.json]
+  node cli.mjs source-reconcile SOURCES.json [OPTIONS.json]
+  node cli.mjs source-reconcile-csv SOURCES.json SECTION [OPTIONS.json]
+  node cli.mjs correction-new SNAPSHOT.json PROPOSALS.json [OPTIONS.json]
+  node cli.mjs correction-update REVIEW.json CASE_ID UPDATE.json
+  node cli.mjs correction-apply REVIEW.json CURRENT_SNAPSHOT.json [REVIEW_REVISION]
+  node cli.mjs correction-audit REVIEW.json CURRENT_SNAPSHOT.json
+  node cli.mjs correction-audit-csv REVIEW.json CURRENT_SNAPSHOT.json
+  node cli.mjs correction-summary REVIEW.json
+  node cli.mjs correction-csv REVIEW.json [--include-notes]
+  node cli.mjs retention-plan INVENTORY.json POLICIES.json [OPTIONS.json]
+  node cli.mjs retention-plan-csv INVENTORY.json POLICIES.json SECTION [OPTIONS.json]
+  node cli.mjs export-plan SNAPSHOT.json POLICY.json REQUEST.json [OPTIONS.json]
+  node cli.mjs export-approve SNAPSHOT.json POLICY.json REQUEST.json APPROVAL.json [OPTIONS.json]
+  node cli.mjs governed-export-csv APPROVED_PLAN.json
+  node cli.mjs exemption-new SNAPSHOT.json PROPOSALS.json [OPTIONS.json]
+  node cli.mjs exemption-update LEDGER.json EXEMPTION_ID UPDATE.json
+  node cli.mjs exemption-report LEDGER.json CURRENT_SNAPSHOT.json
+  node cli.mjs exemption-report-csv LEDGER.json CURRENT_SNAPSHOT.json class|students|sessions
+  node cli.mjs exemption-summary LEDGER.json
+  node cli.mjs exemption-csv LEDGER.json
+  node cli.mjs patterns SNAPSHOT.json OPTIONS.json
+  node cli.mjs patterns-csv SNAPSHOT.json OPTIONS.json windows|cohorts|sessions|students
+  node cli.mjs forecast-evaluate SNAPSHOT.json OPTIONS.json
+  node cli.mjs forecast-evaluate-csv SNAPSHOT.json OPTIONS.json metrics|cohorts|calibration|comparisons|students
+  node cli.mjs recovery-plan SNAPSHOT.json POLICY.json OPTIONS.json
+  node cli.mjs recovery-plan-csv SNAPSHOT.json POLICY.json OPTIONS.json summary|cohorts|students
+  node cli.mjs migration-plan SNAPSHOT.json OPTIONS.json
+  node cli.mjs migration-plan-csv SNAPSHOT.json OPTIONS.json issues|conflicts|records
+  node cli.mjs contract-check SNAPSHOT.json CONTRACT.json
+  node cli.mjs contract-check-csv SNAPSHOT.json CONTRACT.json checks|summary
+  node cli.mjs release-plan SNAPSHOT.json CONTRACT.json [OPTIONS.json]
+  node cli.mjs release-decide PLAN.json APPROVAL.json
+  node cli.mjs release-verify RECEIPT.json SNAPSHOT.json CONTRACT.json
+  node cli.mjs release-csv RECEIPT.json
+  node cli.mjs release-compare BEFORE_RECEIPT.json AFTER_RECEIPT.json
+  node cli.mjs release-compare-csv BEFORE_RECEIPT.json AFTER_RECEIPT.json
   node cli.mjs scenario-new SNAPSHOT.json TITLE [POLICY.json]
   node cli.mjs scenario-set SCENARIO.json STUDENT_ID SESSION_ID present|absent|missing
   node cli.mjs scenario-remove SCENARIO.json STUDENT_ID SESSION_ID
@@ -81,10 +152,23 @@ const usage = `Attendance workbench (Node.js 22+)
   node cli.mjs review-plan SNAPSHOT.json [OPTIONS.json]
   node cli.mjs review-plan-csv SNAPSHOT.json [OPTIONS.json]
   node cli.mjs review-allocate PLAN.json REVIEWERS.json
+  node cli.mjs review-allocate-constrained PLAN.json REVIEWERS.json [OPTIONS.json]
+  node cli.mjs review-allocate-csv ALLOCATION.json assignments|reviewers|unassigned
+  node cli.mjs review-board CASEBOOK.json PLAN.json REVIEWERS.json [OPTIONS.json]
+  node cli.mjs review-board-csv CASEBOOK.json PLAN.json REVIEWERS.json SECTION [OPTIONS.json]
   node cli.mjs casebook-new PLAN.json [OPTIONS.json]
+  node cli.mjs casebook-batch CASEBOOK.json BATCH.json
   node cli.mjs casebook-update CASEBOOK.json CASE_ID UPDATE.json
   node cli.mjs casebook-reconcile CASEBOOK.json PLAN.json [OPTIONS.json]
   node cli.mjs casebook-summary CASEBOOK.json
+  node cli.mjs casebook-sla CASEBOOK.json [OPTIONS.json]
+  node cli.mjs casebook-sla-csv CASEBOOK.json cases|priority|assignee|summary [OPTIONS.json]
+  node cli.mjs casebook-workload CASEBOOK.json REVIEWERS.json [OPTIONS.json]
+  node cli.mjs casebook-workload-csv CASEBOOK.json REVIEWERS.json SECTION [OPTIONS.json]
+  node cli.mjs casebook-activity CASEBOOK.json [OPTIONS.json]
+  node cli.mjs casebook-activity-csv CASEBOOK.json SECTION [OPTIONS.json]
+  node cli.mjs casebook-service-level CASEBOOK.json [OPTIONS.json]
+  node cli.mjs casebook-service-level-csv CASEBOOK.json summary|priority|cases [OPTIONS.json]
   node cli.mjs casebook-csv CASEBOOK.json [--include-notes]
   node cli.mjs casebook-events CASEBOOK.json [OPTIONS.json]
   node cli.mjs casebook-events-csv CASEBOOK.json [OPTIONS.json]
@@ -392,10 +476,43 @@ export async function runCommand(args) {
       const [planText, reviewersText] = await Promise.all(values.map(readText));
       return json(allocateReviewCases(JSON.parse(planText), JSON.parse(reviewersText)));
     }
+    case 'review-allocate-constrained': {
+      if (values.length < 2 || values.length > 3) throw new TypeError('expected plan, reviewers and optional allocation options JSON');
+      const [planText, reviewersText, optionsText] = await Promise.all([
+        readText(values[0]), readText(values[1]), values[2] ? readText(values[2]) : Promise.resolve('{}'),
+      ]);
+      return json(allocateReviewCasesConstrained(JSON.parse(planText), JSON.parse(reviewersText), JSON.parse(optionsText)));
+    }
+    case 'review-allocate-csv': {
+      requireArgs(values, 2);
+      const allocationText = await readText(values[0]);
+      return reviewAllocationToCsv(JSON.parse(allocationText), values[1]);
+    }
+    case 'review-board':
+    case 'review-board-csv': {
+      const csvMode = command === 'review-board-csv';
+      if (values.length < (csvMode ? 4 : 3) || values.length > (csvMode ? 5 : 4)) {
+        throw new TypeError(csvMode
+          ? 'expected casebook, review plan, reviewers, section and optional options JSON'
+          : 'expected casebook, review plan, reviewers and optional options JSON');
+      }
+      const optionsPath = values[csvMode ? 4 : 3];
+      const [bookText, planText, reviewersText, optionsText] = await Promise.all([
+        readText(values[0]), readText(values[1]), readText(values[2]),
+        optionsPath === undefined ? Promise.resolve('{}') : readText(optionsPath),
+      ]);
+      const report = planReviewBoard(JSON.parse(bookText), JSON.parse(planText), JSON.parse(reviewersText), JSON.parse(optionsText));
+      return csvMode ? reviewBoardToCsv(report, values[3]) : json(report);
+    }
     case 'casebook-new': {
       if (values.length < 1 || values.length > 2) throw new TypeError('expected review plan and optional casebook options JSON');
       const [planText, optionsText] = await Promise.all([readText(values[0]), values[1] ? readText(values[1]) : Promise.resolve('{}')]);
       return serializeCasebook(createCasebook(JSON.parse(planText), JSON.parse(optionsText)));
+    }
+    case 'casebook-batch': {
+      requireArgs(values, 2);
+      const [bookText, batchText] = await Promise.all(values.map(readText));
+      return serializeCasebook(applyCasebookBatch(parseCasebook(bookText), JSON.parse(batchText)));
     }
     case 'casebook-update': {
       requireArgs(values, 3);
@@ -414,6 +531,66 @@ export async function runCommand(args) {
     case 'casebook-summary': {
       requireArgs(values, 1);
       return json(summarizeCasebook(parseCasebook(await readText(values[0]))));
+    }
+    case 'casebook-sla':
+    case 'casebook-sla-csv': {
+      if (command === 'casebook-sla' && (values.length < 1 || values.length > 2)) {
+        throw new TypeError('expected casebook and optional SLA options JSON');
+      }
+      if (command === 'casebook-sla-csv' && (values.length < 2 || values.length > 3)) {
+        throw new TypeError('expected casebook, CSV section and optional SLA options JSON');
+      }
+      const optionsPath = values[command === 'casebook-sla' ? 1 : 2];
+      const [bookText, optionsText] = await Promise.all([
+        readText(values[0]), optionsPath === undefined ? Promise.resolve('{}') : readText(optionsPath),
+      ]);
+      const report = reportCasebookSla(JSON.parse(bookText), JSON.parse(optionsText));
+      return command === 'casebook-sla-csv' ? casebookSlaToCsv(report, values[1]) : json(report);
+    }
+    case 'casebook-workload':
+    case 'casebook-workload-csv': {
+      const csvMode = command === 'casebook-workload-csv';
+      if (values.length < (csvMode ? 3 : 2) || values.length > (csvMode ? 4 : 3)) {
+        throw new TypeError(csvMode
+          ? 'expected casebook, reviewers, CSV section and optional options JSON'
+          : 'expected casebook, reviewers and optional options JSON');
+      }
+      const optionsPath = values[csvMode ? 3 : 2];
+      const [bookText, reviewerText, optionsText] = await Promise.all([
+        readText(values[0]), readText(values[1]), optionsPath === undefined ? Promise.resolve('{}') : readText(optionsPath),
+      ]);
+      const report = reportCasebookWorkload(JSON.parse(bookText), JSON.parse(reviewerText), JSON.parse(optionsText));
+      return csvMode ? casebookWorkloadToCsv(report, values[2]) : json(report);
+    }
+    case 'casebook-activity':
+    case 'casebook-activity-csv': {
+      const csvMode = command === 'casebook-activity-csv';
+      if (values.length < (csvMode ? 2 : 1) || values.length > (csvMode ? 3 : 2)) {
+        throw new TypeError(csvMode
+          ? 'expected casebook, CSV section and optional activity options JSON'
+          : 'expected casebook and optional activity options JSON');
+      }
+      const optionsPath = values[csvMode ? 2 : 1];
+      const [bookText, optionsText] = await Promise.all([
+        readText(values[0]), optionsPath === undefined ? Promise.resolve('{}') : readText(optionsPath),
+      ]);
+      const report = reportCasebookActivity(JSON.parse(bookText), JSON.parse(optionsText));
+      return csvMode ? casebookActivityToCsv(report, values[1]) : json(report);
+    }
+    case 'casebook-service-level':
+    case 'casebook-service-level-csv': {
+      const csvMode = command === 'casebook-service-level-csv';
+      if (values.length < (csvMode ? 2 : 1) || values.length > (csvMode ? 3 : 2)) {
+        throw new TypeError(csvMode
+          ? 'expected casebook, CSV section and optional service-level options JSON'
+          : 'expected casebook and optional service-level options JSON');
+      }
+      const optionsPath = values[csvMode ? 2 : 1];
+      const [bookText, optionsText] = await Promise.all([
+        readText(values[0]), optionsPath === undefined ? Promise.resolve('{}') : readText(optionsPath),
+      ]);
+      const report = evaluateCasebookServiceLevels(JSON.parse(bookText), JSON.parse(optionsText));
+      return csvMode ? casebookServiceLevelsToCsv(report, values[1]) : json(report);
     }
     case 'casebook-csv': {
       if (values.length < 1 || values.length > 2 || (values.length === 2 && values[1] !== '--include-notes')) {
@@ -481,6 +658,263 @@ export async function runCommand(args) {
       const [data, optionsText] = await Promise.all([snapshot(values[0]), readText(values[1])]);
       const lab = buildPolicyLab(data, JSON.parse(optionsText));
       return command === 'policy-lab' ? json(lab) : policyLabToCsv(lab, values[2]);
+    }
+    case 'snapshot-query':
+    case 'snapshot-query-csv': {
+      if (values.length !== (command === 'snapshot-query' ? 2 : 3)) {
+        throw new TypeError(command === 'snapshot-query' ? 'expected snapshot and query JSON' : 'expected snapshot, query JSON and rows or groups section');
+      }
+      const [data, queryText] = await Promise.all([snapshot(values[0]), readText(values[1])]);
+      const result = queryAttendanceSnapshot(data, JSON.parse(queryText));
+      return command === 'snapshot-query' ? json(result) : attendanceQueryToCsv(result, values[2]);
+    }
+    case 'snapshot-query-diff':
+    case 'snapshot-query-diff-csv': {
+      const csvMode = command === 'snapshot-query-diff-csv';
+      if (values.length < (csvMode ? 3 : 2) || values.length > (csvMode ? 4 : 3)) {
+        throw new TypeError(csvMode ? 'expected before, after, section and optional query JSON' : 'expected before, after and optional query JSON');
+      }
+      const [before, after, queryText] = await Promise.all([snapshot(values[0]), snapshot(values[1]),
+        values[csvMode ? 3 : 2] ? readText(values[csvMode ? 3 : 2]) : Promise.resolve('{}')]);
+      const diff = compareAttendanceQueryResults(before, after, JSON.parse(queryText));
+      return csvMode ? attendanceQueryDiffToCsv(diff, values[2]) : json(diff);
+    }
+    case 'attendance-impact-diff':
+    case 'attendance-impact-diff-csv': {
+      const csvMode = command === 'attendance-impact-diff-csv';
+      if (values.length < (csvMode ? 3 : 2) || values.length > (csvMode ? 4 : 3)) {
+        throw new TypeError(csvMode
+          ? 'expected before, after, section and optional impact options JSON'
+          : 'expected before, after and optional impact options JSON');
+      }
+      const optionsPath = values[csvMode ? 3 : 2];
+      const [before, after, optionsText] = await Promise.all([
+        snapshot(values[0]), snapshot(values[1]), optionsPath === undefined ? Promise.resolve('{}') : readText(optionsPath),
+      ]);
+      const report = compareAttendanceImpact(before, after, JSON.parse(optionsText));
+      return csvMode ? attendanceImpactDiffToCsv(report, values[2]) : json(report);
+    }
+    case 'cohort-explore':
+    case 'cohort-explore-csv': {
+      const csvMode = command === 'cohort-explore-csv';
+      if (values.length !== (csvMode ? 3 : 2)) throw new TypeError(csvMode
+        ? 'expected snapshot, options JSON and cohorts, sessions, comparisons or students section'
+        : 'expected snapshot and cohort options JSON');
+      const [data, optionsText] = await Promise.all([snapshot(values[0]), readText(values[1])]);
+      const report = buildCohortExplorer(data, JSON.parse(optionsText));
+      return csvMode ? cohortExplorerToCsv(report, values[2]) : json(report);
+    }
+    case 'schedule-insights':
+    case 'schedule-insights-csv': {
+      const csvMode = command === 'schedule-insights-csv';
+      if (values.length < (csvMode ? 2 : 1) || values.length > (csvMode ? 3 : 2)) throw new TypeError(csvMode
+        ? 'expected schedule, section and optional options JSON' : 'expected schedule and optional options JSON');
+      const [scheduleText, optionsText] = await Promise.all([readText(values[0]), values[csvMode ? 2 : 1]
+        ? readText(values[csvMode ? 2 : 1]) : Promise.resolve('{}')]);
+      const report = analyzeScheduleInsights(JSON.parse(scheduleText), JSON.parse(optionsText));
+      return csvMode ? scheduleInsightsToCsv(report, values[1]) : json(report);
+    }
+    case 'source-reconcile':
+    case 'source-reconcile-csv': {
+      const csvMode = command === 'source-reconcile-csv';
+      if (values.length < (csvMode ? 2 : 1) || values.length > (csvMode ? 3 : 2)) throw new TypeError(csvMode
+        ? 'expected source list, section and optional options JSON' : 'expected source list and optional options JSON');
+      const configPath = resolve(values[0]);
+      const [sourceText, optionsText] = await Promise.all([readText(configPath), values[csvMode ? 2 : 1]
+        ? readText(values[csvMode ? 2 : 1]) : Promise.resolve('{}')]);
+      const definitions = JSON.parse(sourceText);
+      if (!Array.isArray(definitions)) throw new TypeError('source list must be a JSON array');
+      const sources = await Promise.all(definitions.map(async (definition) => {
+        if (definition.snapshotFile === undefined) return definition;
+        const snapshotFile = resolve(dirname(configPath), definition.snapshotFile);
+        const { snapshotFile: ignored, ...source } = definition;
+        return { ...source, snapshot: await snapshot(snapshotFile) };
+      }));
+      const plan = reconcileAttendanceSources(sources, JSON.parse(optionsText));
+      return csvMode ? reconciliationToCsv(plan, values[1]) : json(plan);
+    }
+    case 'correction-new': {
+      if (values.length < 2 || values.length > 3) throw new TypeError('expected snapshot, proposals JSON and optional review options JSON');
+      const [data, proposalsText, optionsText] = await Promise.all([snapshot(values[0]), readText(values[1]),
+        values[2] ? readText(values[2]) : Promise.resolve('{}')]);
+      return serializeCorrectionReview(createCorrectionReview(data, JSON.parse(proposalsText), JSON.parse(optionsText)));
+    }
+    case 'correction-update': {
+      requireArgs(values, 3);
+      const [reviewText, updateText] = await Promise.all([readText(values[0]), readText(values[2])]);
+      const update = JSON.parse(updateText);
+      if (!update || typeof update !== 'object' || Array.isArray(update)) throw new TypeError('correction update must be an object');
+      const { action, ...options } = update;
+      return serializeCorrectionReview(updateCorrectionCase(parseCorrectionReview(reviewText), values[1], action, options));
+    }
+    case 'correction-apply': {
+      if (values.length < 2 || values.length > 3) throw new TypeError('expected review, current snapshot and optional review revision');
+      const [reviewText, data] = await Promise.all([readText(values[0]), snapshot(values[1])]);
+      const options = values[2] === undefined ? {} : { expectedReviewRevision: Number(values[2]) };
+      return json(applyApprovedCorrections(parseCorrectionReview(reviewText), data, options));
+    }
+    case 'correction-audit':
+    case 'correction-audit-csv': {
+      requireArgs(values, 2);
+      const [reviewText, data] = await Promise.all([readText(values[0]), snapshot(values[1])]);
+      const audit = auditCorrectionReview(parseCorrectionReview(reviewText), data);
+      return command === 'correction-audit-csv' ? correctionAuditToCsv(audit) : json(audit);
+    }
+    case 'correction-summary': {
+      requireArgs(values, 1);
+      return json(summarizeCorrectionReview(parseCorrectionReview(await readText(values[0]))));
+    }
+    case 'correction-csv': {
+      if (values.length < 1 || values.length > 2 || (values.length === 2 && values[1] !== '--include-notes')) {
+        throw new TypeError('expected review and optional --include-notes');
+      }
+      return correctionReviewToCsv(parseCorrectionReview(await readText(values[0])), { includeNotes: values.length === 2 });
+    }
+    case 'retention-plan':
+    case 'retention-plan-csv': {
+      const csvMode = command === 'retention-plan-csv';
+      if (values.length < (csvMode ? 3 : 2) || values.length > (csvMode ? 4 : 3)) throw new TypeError(csvMode
+        ? 'expected inventory, policies, section and optional options JSON' : 'expected inventory, policies and optional options JSON');
+      const [inventoryText, policiesText, optionsText] = await Promise.all([readText(values[0]), readText(values[1]),
+        values[csvMode ? 3 : 2] ? readText(values[csvMode ? 3 : 2]) : Promise.resolve('{}')]);
+      const plan = buildRetentionPlan(JSON.parse(inventoryText), JSON.parse(policiesText), JSON.parse(optionsText));
+      return csvMode ? retentionPlanToCsv(plan, values[2]) : json(plan);
+    }
+    case 'export-plan':
+    case 'export-approve': {
+      const approve = command === 'export-approve';
+      const minimum = approve ? 4 : 3;
+      if (values.length < minimum || values.length > minimum + 1) throw new TypeError(approve
+        ? 'expected snapshot, policy, request, approval and optional options JSON'
+        : 'expected snapshot, policy, request and optional options JSON');
+      const [data, policyText, requestText, approvalText, optionsText] = await Promise.all([
+        snapshot(values[0]), readText(values[1]), readText(values[2]),
+        approve ? readText(values[3]) : Promise.resolve(null),
+        values[approve ? 4 : 3] ? readText(values[approve ? 4 : 3]) : Promise.resolve('{}'),
+      ]);
+      const policy = JSON.parse(policyText);
+      const request = JSON.parse(requestText);
+      const options = JSON.parse(optionsText);
+      const result = approve
+        ? approveGovernedExport(data, policy, request, JSON.parse(approvalText), options)
+        : planGovernedExport(data, policy, request, options);
+      return json(result);
+    }
+    case 'governed-export-csv': {
+      requireArgs(values, 1);
+      return governedExportToCsv(JSON.parse(await readText(values[0])));
+    }
+    case 'exemption-new': {
+      if (values.length < 2 || values.length > 3) throw new TypeError('expected snapshot, proposals JSON and optional ledger options JSON');
+      const [data, proposalText, optionsText] = await Promise.all([snapshot(values[0]), readText(values[1]),
+        values[2] ? readText(values[2]) : Promise.resolve('{}')]);
+      return serializeExemptionLedger(createExemptionLedger(data, JSON.parse(proposalText), JSON.parse(optionsText)));
+    }
+    case 'exemption-update': {
+      requireArgs(values, 3);
+      const [ledgerText, updateText] = await Promise.all([readText(values[0]), readText(values[2])]);
+      const update = JSON.parse(updateText);
+      if (!update || typeof update !== 'object' || Array.isArray(update)) throw new TypeError('exemption update must be an object');
+      const { action, ...options } = update;
+      return serializeExemptionLedger(updateExemption(parseExemptionLedger(ledgerText), values[1], action, options));
+    }
+    case 'exemption-report':
+    case 'exemption-report-csv': {
+      const csvMode = command === 'exemption-report-csv';
+      if (values.length !== (csvMode ? 3 : 2)) throw new TypeError(csvMode
+        ? 'expected ledger, snapshot and class, students or sessions section' : 'expected ledger and current snapshot');
+      const [ledgerText, data] = await Promise.all([readText(values[0]), snapshot(values[1])]);
+      const report = evaluateExemptionLedger(parseExemptionLedger(ledgerText), data);
+      return csvMode ? exemptionToCsv(report, values[2]) : json(report);
+    }
+    case 'exemption-summary': {
+      requireArgs(values, 1);
+      return json(summarizeExemptionLedger(parseExemptionLedger(await readText(values[0]))));
+    }
+    case 'exemption-csv': {
+      requireArgs(values, 1);
+      return exemptionToCsv(parseExemptionLedger(await readText(values[0])));
+    }
+    case 'patterns':
+    case 'patterns-csv': {
+      const csvMode = command === 'patterns-csv';
+      if (values.length !== (csvMode ? 3 : 2)) throw new TypeError(csvMode
+        ? 'expected snapshot, options JSON and windows, cohorts, sessions or students section'
+        : 'expected snapshot and pattern options JSON');
+      const [data, optionsText] = await Promise.all([snapshot(values[0]), readText(values[1])]);
+      const report = analyzeAttendancePatterns(data, JSON.parse(optionsText));
+      return csvMode ? attendancePatternsToCsv(report, values[2]) : json(report);
+    }
+    case 'forecast-evaluate':
+    case 'forecast-evaluate-csv': {
+      const csvMode = command === 'forecast-evaluate-csv';
+      if (values.length !== (csvMode ? 3 : 2)) throw new TypeError(csvMode
+        ? 'expected snapshot, options JSON and metrics, cohorts, calibration, comparisons or students section'
+        : 'expected snapshot and forecast evaluation options JSON');
+      const [data, optionsText] = await Promise.all([snapshot(values[0]), readText(values[1])]);
+      const report = evaluateAttendanceForecasts(data, JSON.parse(optionsText));
+      return csvMode ? forecastEvaluationToCsv(report, values[2]) : json(report);
+    }
+    case 'recovery-plan':
+    case 'recovery-plan-csv': {
+      const csvMode = command === 'recovery-plan-csv';
+      if (values.length !== (csvMode ? 4 : 3)) throw new TypeError(csvMode
+        ? 'expected snapshot, policy, options JSON and summary, cohorts or students section'
+        : 'expected snapshot, policy and recovery options JSON');
+      const [data, policyText, optionsText] = await Promise.all([
+        snapshot(values[0]), readText(values[1]), readText(values[2]),
+      ]);
+      const report = planAttendanceRecovery(data, JSON.parse(policyText), JSON.parse(optionsText));
+      return csvMode ? recoveryPlanToCsv(report, values[3]) : json(report);
+    }
+    case 'migration-plan':
+    case 'migration-plan-csv': {
+      const csvMode = command === 'migration-plan-csv';
+      if (values.length !== (csvMode ? 3 : 2)) throw new TypeError(csvMode
+        ? 'expected snapshot, migration options JSON and issues, conflicts or records section'
+        : 'expected snapshot and migration options JSON');
+      const [data, optionsText] = await Promise.all([snapshot(values[0]), readText(values[1])]);
+      const plan = planSnapshotMigration(data, JSON.parse(optionsText));
+      return csvMode ? snapshotMigrationToCsv(plan, values[2]) : json(plan);
+    }
+    case 'contract-check':
+    case 'contract-check-csv': {
+      const csvMode = command === 'contract-check-csv';
+      if (values.length !== (csvMode ? 3 : 2)) throw new TypeError(csvMode
+        ? 'expected snapshot, contract and checks or summary section' : 'expected snapshot and contract JSON');
+      const [data, contractText] = await Promise.all([snapshot(values[0]), readText(values[1])]);
+      const report = validateSnapshotContract(data, parseSnapshotContract(contractText));
+      return csvMode ? snapshotContractToCsv(report, values[2]) : json(report);
+    }
+    case 'release-plan': {
+      if (values.length < 2 || values.length > 3) throw new TypeError('expected snapshot, contract and optional release options JSON');
+      const [data, contractText, optionsText] = await Promise.all([
+        snapshot(values[0]), readText(values[1]), values[2] ? readText(values[2]) : Promise.resolve('{}'),
+      ]);
+      return json(planSnapshotRelease(data, contractText, JSON.parse(optionsText)));
+    }
+    case 'release-decide': {
+      requireArgs(values, 2);
+      const [planText, approvalText] = await Promise.all(values.map(readText));
+      return json(decideSnapshotRelease(JSON.parse(planText), JSON.parse(approvalText)));
+    }
+    case 'release-verify': {
+      requireArgs(values, 3);
+      const [receiptText, data, contractText] = await Promise.all([
+        readText(values[0]), snapshot(values[1]), readText(values[2]),
+      ]);
+      return json(verifySnapshotReleaseReceipt(receiptText, data, contractText));
+    }
+    case 'release-csv': {
+      requireArgs(values, 1);
+      return snapshotReleaseToCsv(JSON.parse(await readText(values[0])));
+    }
+    case 'release-compare':
+    case 'release-compare-csv': {
+      requireArgs(values, 2);
+      const [beforeText, afterText] = await Promise.all(values.map(readText));
+      const diff = compareSnapshotReleaseReceipts(beforeText, afterText);
+      return command === 'release-compare-csv' ? snapshotReleaseDiffToCsv(diff) : json(diff);
     }
     default:
       throw new TypeError(`unknown command: ${command}; use --help`);

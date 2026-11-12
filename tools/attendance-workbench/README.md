@@ -117,6 +117,111 @@ institutional rules before making any decision. This optional CLI module is
 only loaded by `tools/attendance-workbench/cli.mjs` and is not imported by the
 Flutter/web application.
 
+## Additional offline analysis commands
+
+These commands are available only through the explicit workbench CLI. The
+query engine accepts a bounded JSON filter tree (`all`, `any`, `not`) instead
+of executable expressions, supports sorting and pagination, and keeps names and
+emails out of result rows unless they are listed in `columns`. Group summaries
+can suppress groups below a caller-selected minimum size. Use:
+
+```text
+node tools/attendance-workbench/cli.mjs snapshot-query snapshot.json query.json
+node tools/attendance-workbench/cli.mjs snapshot-query-csv snapshot.json query.json rows
+node tools/attendance-workbench/cli.mjs snapshot-query-diff before.json after.json [query.json]
+```
+
+`cohort-explore` builds weighted cohort and time-window summaries with
+coverage, rate distributions, paired-window comparisons and small-group
+suppression. `schedule-insights` reports resource overlaps, turnarounds,
+utilization, capacity warnings and daily workload from an explicitly supplied
+schedule JSON file. Both accept options JSON and have CSV variants.
+
+`source-reconcile` accepts a JSON array of source descriptions. Each entry
+contains `id`, optional `label` and `priority`, and either an embedded
+`snapshot` or a `snapshotFile` path relative to the source-list file. Optional
+mapping, target, conflict and provenance choices go in an options JSON file.
+The command produces a review plan; it never changes its source files.
+
+`correction-new`, `correction-update`, `correction-audit` and
+`correction-apply` manage an append-only correction review ledger. Applying
+approved corrections returns a separate snapshot in stdout only after the
+baseline and expected cell values match. It does not overwrite the supplied
+snapshot. Reviewer notes are excluded from CSV unless
+`correction-csv ... --include-notes` is explicitly requested.
+
+`retention-plan` evaluates a caller-supplied metadata inventory against explicit
+retention rules and a chosen `asOf` date. It accounts for legal holds, temporary
+approved overrides, conflicting rules, policy gaps and review windows. The
+`entries`, `kinds` and `summary` CSV sections contain inventory metadata only;
+this command never opens, deletes, redacts or rewrites the files described by
+the inventory.
+
+`export-plan` checks an explicitly scoped snapshot export against a supplied
+least-privilege policy. It blocks disallowed recipients, purposes, fields,
+validity periods and oversized results; aggregate requests suppress groups
+below the configured minimum size. External record-level exports and
+policy-required exports return no payload until `export-approve` records a
+named reviewer and reason. `governed-export-csv` exports only an approved plan.
+These commands prepare a local preview and never send or save data.
+
+`exemption-new` and `exemption-update` keep reviewed absence excuses, campus
+closures, make-up credits and duplicate corrections in a separate versioned
+ledger. `exemption-report` evaluates approved entries over the current snapshot
+as an analytics overlay; stale results or a closure that overlaps a student
+exception block the adjusted report. It leaves the original attendance values
+alone and reports the adjusted denominator, coverage and rate separately.
+
+`patterns` reviews absence and missing-result runs, overlapping or fixed-size
+session windows, coverage, rate distributions and simple up/down trend signals.
+Student-level rows are omitted unless `includeStudentRows` is enabled; small
+cohort summaries are suppressed by `minimumGroupSize`. These are descriptive
+signals from recorded results and do not infer causes.
+
+`forecast-evaluate` performs a chronological holdout backtest for mean,
+last-result, recency-weighted and linear-trend estimators. It compares errors,
+threshold confusion counts and calibration bins while preserving missing
+results. Detail predictions are opt-in and small calibration groups are
+suppressed. This is a model check on past data, not a live student prediction.
+
+`migration-plan` previews student/session ID changes, target dimensions,
+record collisions and explicit removals. Many-to-one student merges need an
+authoritative target roster when identity fields differ; conflicting attendance
+cells need a per-conflict choice or an explicit present/absent priority. The
+target snapshot is included only with `includeSnapshot: true`, and source data
+is never overwritten.
+
+`contract-check` validates a snapshot against a caller-authored versioned JSON
+contract. Checks cover dimensions, record counts, coverage, missing-result
+limits, required IDs, exact session order, selected cells, absence rates and
+placeholder identities. Error-level failures reject the snapshot; warning
+checks remain visible without failing acceptance.
+
+`release-plan` converts an accepted contract check into a local approval plan.
+`release-decide` records a named approval or rejection; failed warning checks
+must be acknowledged explicitly before approval. `release-verify` rechecks the
+receipt against the supplied snapshot and contract, and `release-csv` exports
+compact evidence. `release-compare` checks two receipts for snapshot, contract,
+warning-acknowledgement and approval changes. The receipt digest detects accidental edits but is not a
+digital signature; these commands do not publish or replace the snapshot.
+
+`recovery-plan` combines a target attendance rate and absence limit with an
+explicit number of future sessions. Choose how historical missing results are
+handled (`optimistic`, `pessimistic` or `exclude`) in the options JSON. The
+default output contains only totals and caller-defined cohort summaries, with
+small cohorts suppressed. Student rows require `includeStudentRows: true`.
+This is a hypothetical plan and does not fill or edit attendance records.
+
+`attendance-impact-diff` compares two snapshots by roster member and shared
+session, reports added or removed dimensions and changed cells, and can compare
+outcomes against a caller-provided attendance policy. Cohort totals are
+suppressed below the selected minimum size. Student rows and names are opt-in;
+both source snapshots remain unchanged.
+
+All of these commands read caller-named files and write results to stdout.
+Their modules are imported by `tools/attendance-workbench/cli.mjs`; the Flutter
+and web app entry points do not import or invoke the workbench.
+
 The `scenario-new` command creates a self-contained simulation from a snapshot.
 Use `scenario-set` to propose `present`, `absent`, or `missing` values and
 `scenario-remove` to clear a proposal. `scenario-evaluate` reports before and
@@ -192,6 +297,52 @@ status transitions and expected revisions explicit. `casebook-summary` and
 `casebook-csv` show the current state; notes stay out of the CSV unless
 `--include-notes` is supplied.
 
+`casebook-sla` reports time spent in each review status, with a paused clock
+while a case is waiting for data. Priority thresholds can be tuned in an
+options JSON file, and the report groups totals by priority and assignee.
+Student identifiers and names are omitted unless
+`includeStudentDetails: true` is selected. The report only reads the local
+casebook; it does not notify assignees or change case status.
+
+`casebook-workload` compares current open assignments with reviewer case and
+weighted-point capacities supplied in a separate JSON roster. It identifies
+unassigned, orphaned, inactive and over-capacity work, and reports load
+utilization by reviewer. Case rows and reviewer names are opt-in. The report
+does not change assignments or reviewer profiles.
+
+`casebook-batch` applies a list of independent case updates only when the
+casebook revision and every selected case revision still match. It validates
+the full batch before returning a new casebook, so stale or invalid operations
+produce no partial output. The batch is supplied as JSON with
+`expectedBookRevision`, `operations`, and optional `actor` and `at` fields.
+
+`casebook-activity` summarizes event counts, daily volume, status transitions,
+reopenings and resolution time over an explicit UTC time window. Event rows and
+actor breakdowns require separate opt-ins. Notes and student identities never
+appear in this report.
+
+`casebook-service-level` checks first-response and resolution targets by
+priority. Waiting-for-data intervals pause the clock by default. Set `from`,
+`to`, `asOf`, thresholds and paused statuses in the options JSON; detailed case
+rows are opt-in. It reports historical and still-open deadline results without
+notifying reviewers or changing the casebook.
+
+`review-allocate-constrained` adds optional skill, conflict, case-limit and
+weighted-capacity checks to local allocation planning. It sorts urgent and
+less-flexible cases first, spreads load by projected utilization, and reports
+why a case could not be assigned. Pass an options JSON file to tune priority
+weights, cohort and repeat-student balancing, and whether reviewer names may
+appear in the report. `review-allocate-csv` exports assignments, reviewer
+loads, or unassigned cases. These commands only produce a plan in stdout; they
+do not create work items or modify application data.
+
+`review-board` combines the open assignments in a casebook with a new review
+plan and reviewer capacity roster. It ignores cases already present in the
+casebook, reserves existing reviewer load, and proposes only the remaining
+assignments. It flags unknown assignees and reviewers already over capacity;
+student IDs and reviewer names remain opt-in. The board does not update the
+casebook.
+
 `casebook-events` filters the history by event types, actor, case ID or time
 range, with a bounded result count. Student identity and note text are omitted
 unless `includeStudentDetails: true` or `includeNotes: true` is set in its
@@ -257,6 +408,155 @@ trang cảnh báo trước khi đóng.
 
 Không có thay đổi nào tự động lưu vào Firebase hoặc ứng dụng chính. Kho lớp
 trong giao diện chỉ tồn tại trong bộ nhớ cho đến khi người dùng tải tệp JSON.
+
+## Ví dụ quy trình rà soát offline
+
+Các lệnh dưới đây chỉ chạy khi gọi trực tiếp `node tools/attendance-workbench/cli.mjs`.
+Hãy lưu mỗi kết quả vào một tệp mới để giữ lại bản đầu vào và lịch sử có thể
+đối chiếu. Các lệnh không tự ghi tệp; chuyển hướng stdout là thao tác lưu của
+người gọi.
+
+### Phân công hồ sơ và ghi nhận quyết định
+
+Tạo hàng đợi từ một snapshot đã nhập hoặc đã tạo bằng `demo-generate`:
+
+```powershell
+node tools/attendance-workbench/cli.mjs review-plan snapshot.json review-options.json > review-plan.json
+node tools/attendance-workbench/cli.mjs casebook-new review-plan.json > casebook-v1.json
+```
+
+Danh sách người rà soát là dữ liệu đầu vào riêng. Trọng số năng lực tính theo
+điểm; số hồ sơ tối đa được kiểm tra độc lập với tổng điểm:
+
+```json
+[
+  {
+    "id": "team-a",
+    "name": "Attendance Review Team A",
+    "active": true,
+    "skills": ["attendance", "language-vi"],
+    "capacityCases": 35,
+    "capacityPoints": 120,
+    "currentLoadPoints": 8,
+    "conflictStudentIds": [],
+    "blockedCaseIds": []
+  }
+]
+```
+
+Lưu danh sách trên thành `reviewers.json`, rồi lập đề xuất phân công tính cả
+tải hiện có trong sổ:
+
+```powershell
+node tools/attendance-workbench/cli.mjs review-board casebook-v1.json review-plan.json reviewers.json > review-board.json
+node tools/attendance-workbench/cli.mjs review-board-csv casebook-v1.json review-plan.json reviewers.json reviewers
+```
+
+Board bỏ qua hồ sơ đã có trong sổ, hiển thị hồ sơ không có người nhận hợp lệ
+và không áp dụng phân công. Nếu người rà soát chấp thuận một số thay đổi, tạo
+tệp `batch.json` từ các ID và revision hiện tại:
+
+```json
+{
+  "expectedBookRevision": 1,
+  "actor": "review-lead",
+  "at": "2026-11-13T09:00:00Z",
+  "operations": [
+    {
+      "caseId": "review-case-id",
+      "expectedRevision": 1,
+      "action": {
+        "status": "in_review",
+        "assigneeId": "team-a",
+        "note": "Check the source attendance register."
+      }
+    }
+  ]
+}
+```
+
+Chạy `casebook-batch` để kiểm tra tất cả revision và nhận một bản sổ mới:
+
+```powershell
+node tools/attendance-workbench/cli.mjs casebook-batch casebook-v1.json batch.json > casebook-v2.json
+node tools/attendance-workbench/cli.mjs casebook-sla casebook-v2.json sla-options.json
+node tools/attendance-workbench/cli.mjs casebook-activity casebook-v2.json activity-options.json
+node tools/attendance-workbench/cli.mjs casebook-service-level casebook-v2.json service-options.json
+```
+
+Nếu bất kỳ case revision, trạng thái hoặc action nào sai, lệnh batch dừng và
+không xuất một casebook một phần. `casebook-workload` nhận roster reviewer có
+capacity để đối chiếu các phân công đang mở. Tên và ID học sinh trong báo cáo
+chi tiết luôn cần được bật bằng tùy chọn riêng.
+
+### Kiểm tra và duyệt snapshot
+
+Hợp đồng là JSON khai báo; đặt check severity thành `warning` nếu muốn người
+duyệt có thể chấp nhận nhưng phải xác nhận cảnh báo:
+
+```json
+{
+  "format": "attendance-snapshot-contract",
+  "version": 1,
+  "id": "semester-intake",
+  "title": "Semester attendance import",
+  "revision": 1,
+  "checks": [
+    { "id": "minimum-roster", "type": "min_students", "value": 2 },
+    { "id": "coverage", "type": "minimum_coverage", "value": 0.9, "severity": "warning" },
+    { "id": "sessions", "type": "min_sessions", "value": 1 }
+  ]
+}
+```
+
+Lập plan, xem các check, rồi ghi quyết định rõ ràng. Khi có check cảnh báo
+không đạt, approval phải liệt kê tất cả ID đó trong `acknowledgedWarnings`:
+
+```powershell
+node tools/attendance-workbench/cli.mjs contract-check snapshot.json contract.json
+node tools/attendance-workbench/cli.mjs release-plan snapshot.json contract.json > release-plan.json
+node tools/attendance-workbench/cli.mjs release-decide release-plan.json approval.json > release-receipt.json
+node tools/attendance-workbench/cli.mjs release-verify release-receipt.json snapshot.json contract.json
+node tools/attendance-workbench/cli.mjs release-csv release-receipt.json
+```
+
+Receipt chỉ ghi fingerprint, kích thước snapshot, revision hợp đồng và thông
+tin duyệt; nó không chứa bảng điểm danh. Verification kiểm tra lại snapshot
+và contract được truyền vào. SHA-256 trong receipt giúp phát hiện chỉnh sửa
+vô ý, nhưng không thay thế chữ ký số hay quy trình lưu trữ được phê duyệt.
+
+### So sánh bản trước và sau
+
+Tạo snapshot sửa riêng bằng `apply`, `correction-apply` hoặc thao tác có kiểm
+tra revision. So sánh kết quả và tính kế hoạch phục hồi mà không thay đổi hai
+bản đầu vào:
+
+```json
+{
+  "policy": { "minimumRate": 0.75, "maximumAbsences": 2 },
+  "minimumCohortSize": 5,
+  "includeStudentRows": false,
+  "cohorts": [
+    { "id": "section-a", "label": "Section A", "studentIds": ["S001", "S002", "S003", "S004", "S005"] }
+  ]
+}
+```
+
+```powershell
+node tools/attendance-workbench/cli.mjs attendance-impact-diff before.json after.json impact-options.json
+node tools/attendance-workbench/cli.mjs attendance-impact-diff-csv before.json after.json summary impact-options.json
+node tools/attendance-workbench/cli.mjs recovery-plan after.json policy.json recovery-options.json
+node tools/attendance-workbench/cli.mjs release-compare old-receipt.json new-receipt.json
+```
+
+`attendance-impact-diff` phân loại thay đổi policy, coverage và ô điểm danh;
+`recovery-plan` yêu cầu số buổi tương lai và cách xử lý kết quả thiếu rõ ràng.
+Mặc định báo cáo chỉ có tổng hợp. Bật dòng chi tiết khi cần kiểm tra từng hồ sơ
+và giới hạn số dòng trước khi xuất CSV.
+
+Các ví dụ này dùng dữ liệu minh họa. Với dữ liệu thật, chọn thư mục lưu trữ
+phù hợp và xem lại các file đầu ra trước khi chia sẻ. `flutter run` không gọi
+những lệnh trong tài liệu này.
 
 ## Ranh giới với ứng dụng đang chạy
 
