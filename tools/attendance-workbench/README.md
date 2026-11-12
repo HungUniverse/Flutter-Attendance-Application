@@ -75,6 +75,48 @@ undetermined outcome when they could change the decision. The report uses only
 the supplied data and rules, so it does not represent an institution's policy
 unless those rules were entered by the caller.
 
+`policy-grid` expands explicit arrays of `minimumRates` and `maximumAbsences`
+into at most 40 named candidate rules. `policy-lab` applies those rules (or a
+caller-authored policy list) to a snapshot and compares four clearly labeled
+missing-data assumptions: keep unknown results bounded, assume they are
+present, assume they are absent, or exclude them from the rate. These are
+hypothetical calculations only; none fills or changes an attendance record.
+Each candidate has pass, fail and undetermined totals, optional cohort
+summaries, and outcome-change counts against a selected baseline rule. A cohort
+definition lists student IDs supplied in the options JSON. Cohorts smaller
+than `minimumCohortSize` (default 5) have their aggregate counts suppressed;
+use at least 2 as the threshold. Students not assigned to a cohort are grouped
+as `unassigned`.
+
+For example, save this as `policy-options.json` and run
+`node tools/attendance-workbench/cli.mjs policy-lab snapshot.json policy-options.json`:
+
+```json
+{
+  "policies": [
+    { "id": "baseline", "name": "Current proposal", "minimumRate": 0.75, "maximumAbsences": 2 },
+    { "id": "alternative", "name": "Alternative proposal", "minimumRate": 0.8, "maximumAbsences": 3 }
+  ],
+  "missingModes": ["bounded", "assume-present", "assume-absent", "exclude-missing"],
+  "baselinePolicyId": "baseline",
+  "minimumCohortSize": 5,
+  "cohorts": [
+    { "id": "section-a", "label": "Section A", "studentIds": ["S001", "S002"] }
+  ]
+}
+```
+
+The default JSON contains aggregate results only. Student rows require the
+explicit `includeStudentRows: true` option, are limited to 10,000, and can be
+exported using the `students` CSV section. `policy-lab-csv` also supports the
+`summary`, `cohorts`, and `comparisons` sections. The comparison section shows
+outcome changes per cohort and suppresses counts for cohorts below the same
+minimum size. CSV cells are escaped for spreadsheet use.
+The lab is an offline analysis aid; review the actual records and approved
+institutional rules before making any decision. This optional CLI module is
+only loaded by `tools/attendance-workbench/cli.mjs` and is not imported by the
+Flutter/web application.
+
 The `scenario-new` command creates a self-contained simulation from a snapshot.
 Use `scenario-set` to propose `present`, `absent`, or `missing` values and
 `scenario-remove` to clear a proposal. `scenario-evaluate` reports before and
@@ -141,6 +183,63 @@ reports the blockers. `maxSearchNodes` bounds the search; the result states
 whether that bound was reached. The browser can preview a plan and replace its
 temporary schedule only after the whole plan is feasible.
 
+`review-plan` builds an explainable queue from caller-configured attendance
+signals, and `review-allocate` can distribute that queue across reviewers with
+declared capacities. Both are suggestions for a human to inspect; neither
+updates a snapshot or contacts anyone. `casebook-new`, `casebook-update`, and
+`casebook-reconcile` maintain an append-only local review history while keeping
+status transitions and expected revisions explicit. `casebook-summary` and
+`casebook-csv` show the current state; notes stay out of the CSV unless
+`--include-notes` is supplied.
+
+`casebook-events` filters the history by event types, actor, case ID or time
+range, with a bounded result count. Student identity and note text are omitted
+unless `includeStudentDetails: true` or `includeNotes: true` is set in its
+options JSON. `casebook-events-csv` exports the same filtered rows with
+spreadsheet-safe cells. `casebook-history-audit` checks status and assignment
+event chains against each case's current state; it reports aggregate findings
+by default and includes case IDs only with `includeCaseIds: true`. Its `-csv`
+variant exports the bounded findings list.
+
+`report-studio` creates a filtered report object and `report-html-studio`
+renders a self-contained HTML copy. The `report-csv-studio` sections are
+`summary`, `students`, `sessions`, `matrix`, `audit`, and `policy`. Options can
+limit rows and matrix cells, redact student/session labels, or include a
+caller-supplied policy review. Reports may contain identifying attendance
+information unless those fields are explicitly hidden.
+
+`closeout-pack` builds a checksummed JSON package in memory. It includes
+reports and CSV summaries; a complete snapshot is excluded by default and only
+included with `includeSnapshot: true`. The manifest states whether the package
+contains student names, student IDs, session IDs, or the full snapshot.
+`closeout-inspect` verifies all checksums and shows privacy flags and file
+metadata without exposing file contents. `closeout-compare` verifies two
+packages and reports added, removed, changed, and unchanged files plus
+dimension and privacy changes. `closeout-extract PACKAGE.json FILE_NAME` writes
+one named package member to stdout after verifying the whole package. The
+`*-csv` variants export safe file inventories to stdout. All CLI commands
+require explicit input paths and write results only to stdout, so save outputs
+to new files of your choice.
+
+To create a report bundle without student or session identifiers, save these
+options to a JSON file:
+
+```json
+{
+  "includeSnapshot": false,
+  "reportOptions": {
+    "includeStudentNames": false,
+    "includeStudentIds": false,
+    "includeSessionIds": false
+  }
+}
+```
+
+Run `node tools/attendance-workbench/cli.mjs closeout-pack snapshot.json
+closeout-options.json` and redirect stdout to a new package file. Verify its
+manifest with `closeout-inspect`, or compare it to an earlier package with
+`closeout-compare`.
+
 ## Giao diện cục bộ
 
 Chạy `node tools/attendance-workbench/serve.mjs` từ thư mục gốc dự án và mở
@@ -158,3 +257,15 @@ trang cảnh báo trước khi đóng.
 
 Không có thay đổi nào tự động lưu vào Firebase hoặc ứng dụng chính. Kho lớp
 trong giao diện chỉ tồn tại trong bộ nhớ cho đến khi người dùng tải tệp JSON.
+
+## Ranh giới với ứng dụng đang chạy
+
+Mã workbench nằm dưới `tools/attendance-workbench`; ứng dụng Flutter/web không
+import các module ở đây. Chạy `flutter run` vẫn khởi động mã ứng dụng theo entry
+point hiện có và không khởi chạy CLI hay máy chủ workbench. Máy chủ cục bộ chỉ
+chạy khi người dùng gọi `serve.mjs`, chỉ bind `127.0.0.1` và chỉ phục vụ giao
+diện workbench cùng module đọc cần thiết. CLI đọc các đường dẫn mà người dùng
+truyền vào, xử lý dữ liệu trong tiến trình rồi ghi kết quả ra stdout; nó không
+tự lưu hoặc gửi dữ liệu. Các chức năng mới trong CLI như rà soát lịch sử, so
+sánh chính sách và kiểm tra gói kết sổ cũng chỉ được thực thi khi gọi đúng
+lệnh `node tools/attendance-workbench/cli.mjs ...`.

@@ -22,6 +22,7 @@
       <button class="button button-quiet" id="compare-snapshot">So sánh</button>
       <button class="button button-quiet" id="manage-bundle">Kho lớp</button>
       <button class="button button-quiet" id="manage-archive">Lịch sử</button>
+      <button class="button button-quiet" id="manage-casebook">Phiếu rà soát</button>
       <button class="button button-quiet" id="open-snapshot">Mở dữ liệu</button>
       <button class="button button-primary" id="download-snapshot" disabled>Tải bản sao</button>
     </div>
@@ -60,6 +61,7 @@
           <button class="button button-primary button-large" id="empty-open">Chọn tệp JSON</button>
           <button class="button button-secondary button-large" id="create-demo">Xem dữ liệu mẫu</button>
           <button class="button button-secondary button-large" id="create-synthetic">Tạo dữ liệu giả lập</button>
+          <button class="button button-secondary button-large" id="manage-casebook-empty">Mở phiếu rà soát</button>
           <button class="button button-secondary button-large" id="review-import">Kiểm tra 3 tệp CSV/JSON</button>
         </div>
         <div class="privacy-note"><span>◇</span> Không kết nối máy chủ. Dữ liệu vẫn trên thiết bị này.</div>
@@ -77,6 +79,7 @@
 
   <input id="snapshot-file" type="file" accept="application/json,.json" hidden>
   <input id="roster-file" type="file" accept="text/csv,.csv" hidden>
+  <input id="casebook-file" type="file" accept="application/json,.json" hidden>
 
   <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
   <dialog class="modal" id="modal"><form method="dialog" id="modal-form"><div class="modal-content" id="modal-content"></div></form></dialog>

@@ -32,6 +32,13 @@ import { appendArchiveRevision, archiveToCsv, compareArchiveRevisions, createArc
 import { generateSyntheticDataset, listSyntheticProfiles, summarizeDatasetSnapshot } from './dataset-lab.mjs';
 import { anonymizeArchive, anonymizeBundle, anonymizeSnapshot, anonymizationReport } from './privacy.mjs';
 import { mappedImportIssuesToCsv, parseDelimitedCsv, previewMappedImport, suggestHeaderMapping } from './import-studio.mjs';
+import { allocateReviewCases, buildReviewPlan, reviewPlanToCsv } from './review-plan.mjs';
+import { auditCasebookHistory, casebookEventsToCsv, casebookHistoryAuditToCsv, casebookToCsv, createCasebook,
+  listCasebookEvents, parseCasebook, reconcileCasebook, serializeCasebook, summarizeCasebook, updateCasebook } from './casebook.mjs';
+import { buildReportStudio, renderReportStudioHtml, reportStudioToCsv } from './report-studio.mjs';
+import { buildCloseoutPackage, closeoutComparisonToCsv, closeoutInspectionToCsv, compareCloseoutPackages,
+  inspectCloseoutPackage, readCloseoutFile, serializeCloseoutPackage } from './closeout-pack.mjs';
+import { buildPolicyLab, createPolicyGrid, policyLabToCsv } from './policy-lab.mjs';
 
 const usage = `Attendance workbench (Node.js 22+)
 
@@ -42,6 +49,9 @@ const usage = `Attendance workbench (Node.js 22+)
   node cli.mjs absence-runs SNAPSHOT.json MINIMUM
   node cli.mjs forecast SNAPSHOT.json REMAINING TARGET
   node cli.mjs policy SNAPSHOT.json POLICY.json
+  node cli.mjs policy-grid GRID.json
+  node cli.mjs policy-lab SNAPSHOT.json OPTIONS.json
+  node cli.mjs policy-lab-csv SNAPSHOT.json OPTIONS.json summary|cohorts|students|comparisons
   node cli.mjs scenario-new SNAPSHOT.json TITLE [POLICY.json]
   node cli.mjs scenario-set SCENARIO.json STUDENT_ID SESSION_ID present|absent|missing
   node cli.mjs scenario-remove SCENARIO.json STUDENT_ID SESSION_ID
@@ -68,6 +78,27 @@ const usage = `Attendance workbench (Node.js 22+)
   node cli.mjs map-suggest CSV.csv roster|attendance [DELIMITER]
   node cli.mjs map-preview ROSTER.csv ATTENDANCE.csv SESSIONS.json [OPTIONS.json]
   node cli.mjs map-issues-csv ROSTER.csv ATTENDANCE.csv SESSIONS.json [OPTIONS.json]
+  node cli.mjs review-plan SNAPSHOT.json [OPTIONS.json]
+  node cli.mjs review-plan-csv SNAPSHOT.json [OPTIONS.json]
+  node cli.mjs review-allocate PLAN.json REVIEWERS.json
+  node cli.mjs casebook-new PLAN.json [OPTIONS.json]
+  node cli.mjs casebook-update CASEBOOK.json CASE_ID UPDATE.json
+  node cli.mjs casebook-reconcile CASEBOOK.json PLAN.json [OPTIONS.json]
+  node cli.mjs casebook-summary CASEBOOK.json
+  node cli.mjs casebook-csv CASEBOOK.json [--include-notes]
+  node cli.mjs casebook-events CASEBOOK.json [OPTIONS.json]
+  node cli.mjs casebook-events-csv CASEBOOK.json [OPTIONS.json]
+  node cli.mjs casebook-history-audit CASEBOOK.json [OPTIONS.json]
+  node cli.mjs casebook-history-audit-csv CASEBOOK.json [OPTIONS.json]
+  node cli.mjs report-studio SNAPSHOT.json [OPTIONS.json]
+  node cli.mjs report-html-studio SNAPSHOT.json [OPTIONS.json]
+  node cli.mjs report-csv-studio SNAPSHOT.json SECTION [OPTIONS.json]
+  node cli.mjs closeout-pack SNAPSHOT.json [OPTIONS.json]
+  node cli.mjs closeout-inspect PACKAGE.json
+  node cli.mjs closeout-inspect-csv PACKAGE.json
+  node cli.mjs closeout-extract PACKAGE.json FILE_NAME
+  node cli.mjs closeout-compare BEFORE_PACKAGE.json AFTER_PACKAGE.json
+  node cli.mjs closeout-compare-csv BEFORE_PACKAGE.json AFTER_PACKAGE.json
   node cli.mjs apply SNAPSHOT.json CHANGES.json
   node cli.mjs compare BEFORE.json AFTER.json
   node cli.mjs export-csv SNAPSHOT.json
@@ -348,6 +379,108 @@ export async function runCommand(args) {
       const preview = previewMappedImport({ rosterCsv, attendanceCsv, sessions: sessionsText,
         rosterOptions: config.rosterOptions, attendanceOptions: config.attendanceOptions });
       return command === 'map-issues-csv' ? mappedImportIssuesToCsv(preview) : json(preview);
+    }
+    case 'review-plan':
+    case 'review-plan-csv': {
+      if (values.length < 1 || values.length > 2) throw new TypeError('expected snapshot and optional review options JSON');
+      const [data, optionsText] = await Promise.all([snapshot(values[0]), values[1] ? readText(values[1]) : Promise.resolve('{}')]);
+      const plan = buildReviewPlan(data, JSON.parse(optionsText));
+      return command === 'review-plan-csv' ? reviewPlanToCsv(plan) : json(plan);
+    }
+    case 'review-allocate': {
+      requireArgs(values, 2);
+      const [planText, reviewersText] = await Promise.all(values.map(readText));
+      return json(allocateReviewCases(JSON.parse(planText), JSON.parse(reviewersText)));
+    }
+    case 'casebook-new': {
+      if (values.length < 1 || values.length > 2) throw new TypeError('expected review plan and optional casebook options JSON');
+      const [planText, optionsText] = await Promise.all([readText(values[0]), values[1] ? readText(values[1]) : Promise.resolve('{}')]);
+      return serializeCasebook(createCasebook(JSON.parse(planText), JSON.parse(optionsText)));
+    }
+    case 'casebook-update': {
+      requireArgs(values, 3);
+      const [bookText, actionText] = await Promise.all([readText(values[0]), readText(values[2])]);
+      const update = JSON.parse(actionText);
+      if (!update || typeof update !== 'object' || Array.isArray(update)) throw new TypeError('casebook update must be an object');
+      const { action, ...options } = update;
+      return serializeCasebook(updateCasebook(parseCasebook(bookText), values[1], action, options));
+    }
+    case 'casebook-reconcile': {
+      if (values.length < 2 || values.length > 3) throw new TypeError('expected casebook, review plan and optional options JSON');
+      const [bookText, planText, optionsText] = await Promise.all([readText(values[0]), readText(values[1]),
+        values[2] ? readText(values[2]) : Promise.resolve('{}')]);
+      return serializeCasebook(reconcileCasebook(parseCasebook(bookText), JSON.parse(planText), JSON.parse(optionsText)));
+    }
+    case 'casebook-summary': {
+      requireArgs(values, 1);
+      return json(summarizeCasebook(parseCasebook(await readText(values[0]))));
+    }
+    case 'casebook-csv': {
+      if (values.length < 1 || values.length > 2 || (values.length === 2 && values[1] !== '--include-notes')) {
+        throw new TypeError('expected casebook and optional --include-notes');
+      }
+      return casebookToCsv(parseCasebook(await readText(values[0])), { includeNotes: values.length === 2 });
+    }
+    case 'casebook-events':
+    case 'casebook-events-csv': {
+      if (values.length < 1 || values.length > 2) throw new TypeError('expected casebook and optional event filter options JSON');
+      const [bookText, optionsText] = await Promise.all([readText(values[0]), values[1] ? readText(values[1]) : Promise.resolve('{}')]);
+      const events = listCasebookEvents(parseCasebook(bookText), JSON.parse(optionsText));
+      return command === 'casebook-events' ? json(events) : casebookEventsToCsv(events);
+    }
+    case 'casebook-history-audit':
+    case 'casebook-history-audit-csv': {
+      if (values.length < 1 || values.length > 2) throw new TypeError('expected casebook and optional audit options JSON');
+      const [bookText, optionsText] = await Promise.all([readText(values[0]), values[1] ? readText(values[1]) : Promise.resolve('{}')]);
+      const audit = auditCasebookHistory(parseCasebook(bookText), JSON.parse(optionsText));
+      return command === 'casebook-history-audit' ? json(audit) : casebookHistoryAuditToCsv(audit);
+    }
+    case 'report-studio':
+    case 'report-html-studio': {
+      if (values.length < 1 || values.length > 2) throw new TypeError('expected snapshot and optional report options JSON');
+      const [data, optionsText] = await Promise.all([snapshot(values[0]), values[1] ? readText(values[1]) : Promise.resolve('{}')]);
+      const report = buildReportStudio(data, JSON.parse(optionsText));
+      return command === 'report-html-studio' ? renderReportStudioHtml(report) : json(report);
+    }
+    case 'report-csv-studio': {
+      if (values.length < 2 || values.length > 3) throw new TypeError('expected snapshot, report section and optional options JSON');
+      const [data, optionsText] = await Promise.all([snapshot(values[0]), values[2] ? readText(values[2]) : Promise.resolve('{}')]);
+      return reportStudioToCsv(buildReportStudio(data, JSON.parse(optionsText)), values[1]);
+    }
+    case 'closeout-pack': {
+      if (values.length < 1 || values.length > 2) throw new TypeError('expected snapshot and optional closeout options JSON');
+      const [data, optionsText] = await Promise.all([snapshot(values[0]), values[1] ? readText(values[1]) : Promise.resolve('{}')]);
+      return serializeCloseoutPackage(buildCloseoutPackage(data, JSON.parse(optionsText)));
+    }
+    case 'closeout-inspect':
+    case 'closeout-inspect-csv': {
+      requireArgs(values, 1);
+      const inspection = inspectCloseoutPackage(await readText(values[0]));
+      return command === 'closeout-inspect' ? json(inspection) : closeoutInspectionToCsv(inspection);
+    }
+    case 'closeout-extract': {
+      requireArgs(values, 2);
+      return readCloseoutFile(await readText(values[0]), values[1]);
+    }
+    case 'closeout-compare':
+    case 'closeout-compare-csv': {
+      requireArgs(values, 2);
+      const [before, after] = await Promise.all(values.map(readText));
+      const comparison = compareCloseoutPackages(before, after);
+      return command === 'closeout-compare' ? json(comparison) : closeoutComparisonToCsv(comparison);
+    }
+    case 'policy-grid': {
+      requireArgs(values, 1);
+      return json(createPolicyGrid(JSON.parse(await readText(values[0]))));
+    }
+    case 'policy-lab':
+    case 'policy-lab-csv': {
+      if (values.length !== (command === 'policy-lab' ? 2 : 3)) {
+        throw new TypeError(command === 'policy-lab' ? 'expected snapshot and options JSON' : 'expected snapshot, options JSON and summary, cohorts, students or comparisons section');
+      }
+      const [data, optionsText] = await Promise.all([snapshot(values[0]), readText(values[1])]);
+      const lab = buildPolicyLab(data, JSON.parse(optionsText));
+      return command === 'policy-lab' ? json(lab) : policyLabToCsv(lab, values[2]);
     }
     default:
       throw new TypeError(`unknown command: ${command}; use --help`);

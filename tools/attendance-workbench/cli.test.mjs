@@ -217,3 +217,124 @@ test('maps localized CSV headers and previews explicit status and duplicate poli
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('builds review worklists, case histories, reports and checksummed closeout packages', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'attendance-workbench-closeout-'));
+  try {
+    const run = (...args) => execFileSync(process.execPath, [cli, ...args], { encoding: 'utf8' });
+    const source = join(dir, 'snapshot.json');
+    const reviewOptions = join(dir, 'review-options.json');
+    const plan = join(dir, 'review-plan.json');
+    const reviewers = join(dir, 'reviewers.json');
+    const casebook = join(dir, 'casebook.json');
+    const casebookOptions = join(dir, 'casebook-options.json');
+    const update = join(dir, 'update.json');
+    const reportOptions = join(dir, 'report-options.json');
+    const closeoutOptions = join(dir, 'closeout-options.json');
+    const historyOptions = join(dir, 'history-options.json');
+    const minimizedCloseoutOptions = join(dir, 'minimized-closeout-options.json');
+    await writeFile(source, run('demo-generate'));
+    await writeFile(reviewOptions, JSON.stringify({ targetRate: 0.8, futureSessions: 2, absenceStreak: 2 }));
+    await writeFile(plan, run('review-plan', source, reviewOptions));
+    const review = JSON.parse(await readFile(plan, 'utf8'));
+    assert.ok(review.summary.total > 0);
+    assert.match(run('review-plan-csv', source, reviewOptions), /"caseId","priority"/);
+    await writeFile(reviewers, JSON.stringify([{ id: 'team-a', name: 'Team A', capacity: 1 }]));
+    const allocation = JSON.parse(run('review-allocate', plan, reviewers));
+    assert.equal(allocation.summary.assigned, 1);
+    assert.ok(allocation.summary.unassigned >= 0);
+
+    await writeFile(casebookOptions, JSON.stringify({ createdAt: '2026-11-01T00:00:00Z', actor: 'Initial reviewer' }));
+    await writeFile(casebook, run('casebook-new', plan, casebookOptions));
+    const initial = JSON.parse(await readFile(casebook, 'utf8'));
+    const firstCase = initial.cases[0];
+    assert.equal(JSON.parse(run('casebook-summary', casebook)).summary.total, review.summary.total);
+    await writeFile(update, JSON.stringify({ expectedRevision: 1, actor: 'Reviewer', at: '2026-11-10T10:00:00Z',
+      action: { status: 'in_review', assigneeId: 'team-a', note: 'Verify source records.' } }));
+    const changed = JSON.parse(run('casebook-update', casebook, firstCase.caseId, update));
+    assert.equal(changed.cases[0].status, 'in_review');
+    assert.equal(changed.cases[0].assigneeId, 'team-a');
+    await writeFile(casebook, JSON.stringify(changed));
+    assert.equal(JSON.parse(run('casebook-reconcile', casebook, plan)).revision, 3);
+    assert.doesNotMatch(run('casebook-csv', casebook), /Verify source records/);
+    assert.match(run('casebook-csv', casebook, '--include-notes'), /Verify source records/);
+    const history = JSON.parse(run('casebook-events', casebook));
+    assert.ok(history.summary.totalMatches > 0);
+    assert.equal(history.summary.truncated, false);
+    await writeFile(historyOptions, JSON.stringify({ types: ['note'], includeNotes: true,
+      includeStudentDetails: true, limit: 1 }));
+    const privateHistory = JSON.parse(run('casebook-events', casebook, historyOptions));
+    assert.ok(privateHistory.summary.totalMatches > 0);
+    assert.ok(privateHistory.events[0].studentId);
+    assert.ok(privateHistory.events[0].note);
+    assert.match(run('casebook-events-csv', casebook), /"caseId","sequence","type"/);
+    const historyAudit = JSON.parse(run('casebook-history-audit', casebook));
+    assert.deepEqual(historyAudit.findings, []);
+    assert.match(run('casebook-history-audit-csv', casebook), /"eventSequence","code"/);
+
+    await writeFile(reportOptions, JSON.stringify({ title: 'Term report', generatedAt: '2026-11-10T10:00:00Z',
+      includeMatrix: true, includeAudit: true, policy: { minimumRate: 0.75, maximumAbsences: 2 }, maxStudentRows: 30 }));
+    const report = JSON.parse(run('report-studio', source, reportOptions));
+    assert.equal(report.title, 'Term report');
+    assert.ok(report.matrix);
+    assert.ok(report.audit);
+    assert.match(run('report-html-studio', source, reportOptions), /Term report/);
+    assert.match(run('report-csv-studio', source, 'students', reportOptions), /"studentId","studentName"/);
+
+    await writeFile(closeoutOptions, JSON.stringify({ includeSnapshot: true, reportOptions: JSON.parse(await readFile(reportOptions, 'utf8')) }));
+    const packageValue = JSON.parse(run('closeout-pack', source, closeoutOptions));
+    assert.equal(packageValue.format, 'attendance-closeout-package');
+    assert.equal(packageValue.manifest.containsFullSnapshot, true);
+    assert.ok(packageValue.files.some((file) => file.name === 'attendance-matrix.csv'));
+    assert.ok(packageValue.files.some((file) => file.name === 'manifest.json'));
+    const packFile = join(dir, 'closeout.json');
+    const minimizedPackFile = join(dir, 'minimized-closeout.json');
+    await writeFile(packFile, run('closeout-pack', source, closeoutOptions));
+    await writeFile(minimizedCloseoutOptions, JSON.stringify({ reportOptions: {
+      generatedAt: '2026-11-11T00:00:00Z', includeStudentNames: false, includeStudentIds: false,
+    } }));
+    await writeFile(minimizedPackFile, run('closeout-pack', source, minimizedCloseoutOptions));
+    const inspection = JSON.parse(run('closeout-inspect', minimizedPackFile));
+    assert.equal(inspection.integrity, 'valid');
+    assert.equal(inspection.privacy.containsStudentNames, false);
+    assert.match(run('closeout-inspect-csv', minimizedPackFile), /"name","mimeType","bytes","sha256"/);
+    assert.match(run('closeout-extract', minimizedPackFile, 'report.json'), /"title"/);
+    assert.throws(() => run('closeout-extract', minimizedPackFile, '../snapshot.json'), /unknown package file/);
+    const closeoutDiff = JSON.parse(run('closeout-compare', minimizedPackFile, packFile));
+    assert.ok(closeoutDiff.summary.changed > 0);
+    assert.ok(closeoutDiff.summary.added > 0);
+    assert.match(run('closeout-compare-csv', minimizedPackFile, packFile), /"status"/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('compares policy candidates and missing-data assumptions through opt-in offline commands', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'attendance-workbench-policy-lab-'));
+  try {
+    const run = (...args) => execFileSync(process.execPath, [cli, ...args], { encoding: 'utf8' });
+    const source = join(dir, 'snapshot.json');
+    const gridOptions = join(dir, 'grid.json');
+    const policies = join(dir, 'policies.json');
+    await writeFile(source, run('demo-generate'));
+    const generated = JSON.parse(await readFile(source, 'utf8'));
+    await writeFile(gridOptions, JSON.stringify({ minimumRates: [0.65, 0.8], maximumAbsences: [1, 3] }));
+    const grid = JSON.parse(run('policy-grid', gridOptions));
+    assert.equal(grid.length, 4);
+    await writeFile(policies, JSON.stringify({ policies: grid.slice(0, 2), minimumCohortSize: 5,
+      missingModes: ['bounded', 'assume-present'], cohorts: [{ id: 'demo-groups', label: 'Demo groups',
+        studentIds: generated.roster.slice(0, 2).map((student) => student.id) }] }));
+    const lab = JSON.parse(run('policy-lab', source, policies));
+    assert.equal(lab.format, 'attendance-policy-lab');
+    assert.equal(lab.scenarios.length, 4);
+    assert.equal(lab.scenarios.every((scenario) => !Object.hasOwn(scenario, 'students')), true);
+    assert.match(run('policy-lab-csv', source, policies, 'summary'), /"scenarioId","policyId"/);
+    assert.match(run('policy-lab-csv', source, policies, 'cohorts'), /"cohortLabel"/);
+    assert.match(run('policy-lab-csv', source, policies, 'comparisons'), /"changed","pass_to_pass"/);
+    assert.throws(() => run('policy-lab-csv', source, policies, 'students'), /student rows were not enabled/);
+    await writeFile(policies, JSON.stringify({ policies: grid.slice(0, 1), missingModes: ['bounded'], includeStudentRows: true }));
+    assert.match(run('policy-lab-csv', source, policies, 'students'), /"scenarioId","studentId"/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

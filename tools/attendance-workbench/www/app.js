@@ -24,6 +24,10 @@ import { planSchedule } from '../schedule-planner.mjs';
 import { appendArchiveRevision, archiveToCsv, compareArchiveRevisions, createArchive, getArchiveSnapshot,
   listArchiveRevisions, parseArchive, serializeArchive } from '../archive.mjs';
 import { generateSyntheticDataset, listSyntheticProfiles } from '../dataset-lab.mjs';
+import { buildReviewPlan, reviewPlanToCsv } from '../review-plan.mjs';
+import { casebookToCsv, createCasebook, parseCasebook, reconcileCasebook, serializeCasebook, summarizeCasebook,
+  updateCasebook } from '../casebook.mjs';
+import { buildReportStudio, renderReportStudioHtml, reportStudioToCsv } from '../report-studio.mjs';
 
 const labels = {
   overview: ['TỔNG QUAN', 'Tổng quan'],
@@ -52,6 +56,8 @@ const state = {
   auditFilter: 'all',
   archive: null,
   savedArchiveText: null,
+  casebook: null,
+  savedCasebookText: null,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -198,7 +204,8 @@ function commitSnapshot(next, description) {
 
 function updateHistoryControls() {
   const dirty = (state.snapshot && serializeAttendanceSnapshot(state.snapshot) !== state.savedSnapshotText) ||
-    (state.archive && serializeArchive(state.archive) !== state.savedArchiveText);
+    (state.archive && serializeArchive(state.archive) !== state.savedArchiveText) ||
+    (state.casebook && serializeCasebook(state.casebook) !== state.savedCasebookText);
   const indicator = $('#dirty-indicator');
   if (indicator) indicator.hidden = !dirty;
   const undo = $('#undo-action');
@@ -328,7 +335,7 @@ function renderAnalysis() {
   const policyRows = policyResults.map((item) => `<tr><td>${personCell(item.student, item.student.id)}</td><td>${statusBadge(item.status)}</td><td>${item.reasons.map(esc).join(', ') || '—'}</td><td>${item.minimumRate === null ? '—' : `${ratePercent(item.minimumRate)} – ${ratePercent(item.maximumRate)}`}</td></tr>`).join('');
   const windows = rolling.flatMap((student) => student.windows.map((window) => ({ student: student.student, ...window }))).slice(0, 12);
   const trendRows = windows.map((item) => `<tr><td>${esc(item.student.name)}</td><td>${esc(item.startSessionId)} – ${esc(item.endSessionId)}</td><td>${item.present} / ${item.present + item.absent}</td><td>${ratePercent(item.attendanceRate)}</td></tr>`).join('');
-  const tools = `<div class="toolbar"><button class="button button-primary" data-scenario>Thử kịch bản</button><button class="button button-secondary" data-audit>Kiểm tra chất lượng</button><button class="button button-secondary" data-import-preview>Kiểm tra tệp nhập</button><button class="button button-secondary" data-edit-policy>⚙ Điều kiện điểm danh</button><button class="button button-secondary" data-analysis-csv>Tải kết quả CSV</button><button class="button button-secondary" data-analysis-html>Tải báo cáo HTML</button></div>`;
+  const tools = `<div class="toolbar"><button class="button button-primary" data-scenario>Thử kịch bản</button><button class="button button-secondary" data-review-plan>Lập danh sách rà soát</button><button class="button button-secondary" data-casebook>Mở phiếu theo dõi</button><button class="button button-secondary" data-report-studio>Thiết kế báo cáo</button><button class="button button-secondary" data-audit>Kiểm tra chất lượng</button><button class="button button-secondary" data-import-preview>Kiểm tra tệp nhập</button><button class="button button-secondary" data-edit-policy>⚙ Điều kiện điểm danh</button><button class="button button-secondary" data-analysis-csv>Tải kết quả CSV</button><button class="button button-secondary" data-analysis-html>Tải báo cáo HTML</button></div>`;
   const summaries = `<div class="metric-grid">${metric('Chuỗi vắng từ 2 buổi', absenceRuns.length, 'chuỗi', '×')}${metric('Điều kiện đạt', policyResults.filter((item) => item.status === 'pass').length, 'sinh viên', '✓')}${metric('Chưa đạt', policyResults.filter((item) => item.status === 'fail').length, 'sinh viên', '！')}${metric('Chưa đủ dữ liệu', policyResults.filter((item) => item.status === 'undetermined').length, 'sinh viên', '…')}</div>`;
   return `${summaries}${tools}<div class="two-col">${panel('Tỷ lệ theo sinh viên', bars || emptyInline('Chưa có sinh viên.'), { description: 'Tính trên kết quả đã ghi nhận.' })}${panel('Điều kiện đang dùng', `<div class="activity-list"><div class="activity-item"><span class="activity-avatar">%</span><span class="activity-name">Tỷ lệ tối thiểu</span><span>${ratePercent(state.policy.minimumRate)}</span></div><div class="activity-item"><span class="activity-avatar">×</span><span class="activity-name">Số buổi vắng tối đa</span><span>${state.policy.maximumAbsences}</span></div><div class="activity-item"><span class="activity-avatar">?</span><span class="activity-name">Cách xử lý dữ liệu thiếu</span><span>Chưa kết luận</span></div></div>`)}</div>${panel('Chuỗi vắng liên tiếp', streakRows ? `<div class="table-wrap"><table><thead><tr><th>SINH VIÊN</th><th>CÁC BUỔI</th><th>SỐ BUỔI</th></tr></thead><tbody>${streakRows}</tbody></table></div>` : emptyInline('Không tìm thấy chuỗi vắng từ 2 buổi liên tiếp.'))}${panel('Xu hướng theo cửa sổ buổi học', trendRows ? `<div class="table-wrap"><table><thead><tr><th>SINH VIÊN</th><th>CỬA SỔ</th><th>CÓ MẶT</th><th>TỶ LỆ</th></tr></thead><tbody>${trendRows}</tbody></table></div>` : emptyInline('Thêm buổi học để xem xu hướng.'))}${panel('Đánh giá theo điều kiện', policyRows ? `<div class="table-wrap"><table><thead><tr><th>SINH VIÊN</th><th>KẾT QUẢ</th><th>LÝ DO</th><th>BIÊN TỶ LỆ</th></tr></thead><tbody>${policyRows}</tbody></table></div>` : emptyInline('Chưa có sinh viên.'))}`;
 }
@@ -369,6 +376,9 @@ function bindViewActions(root) {
   $('[data-import-preview]', root)?.addEventListener('click', importReviewDialog);
   $('[data-analysis-csv]', root)?.addEventListener('click', exportAnalysisCsv);
   $('[data-analysis-html]', root)?.addEventListener('click', exportHtml);
+  $('[data-review-plan]', root)?.addEventListener('click', showReviewPlan);
+  $('[data-report-studio]', root)?.addEventListener('click', reportStudioDialog);
+  $('[data-casebook]', root)?.addEventListener('click', showCasebookManager);
 }
 
 function toggleRecord([studentId, sessionId]) {
@@ -678,6 +688,148 @@ function exportHtml() {
   download('attendance-report.html', html, 'text/html;charset=utf-8');
 }
 
+function showReviewPlan() {
+  try {
+    const plan = buildReviewPlan(state.snapshot, { targetRate: state.policy.minimumRate, futureSessions: 4 });
+    const rows = plan.cases.map((item) => `<div class="session-row"><div><strong>${esc(item.studentName)} · ${esc(item.priority)}</strong><small>${esc(item.studentId)} · ${item.present} có mặt · ${item.absent} vắng · ${item.missing} chưa ghi · ${item.reasons.map((reason) => esc(reason.code)).join(', ')}</small></div><span>${ratePercent(item.attendanceRate)}</span></div>`).join('');
+    showDialog(`<div class="modal-head"><div><h2>Danh sách cần rà soát</h2><p>${esc(plan.notice)}</p></div><button type="button" class="icon-button" data-close>×</button></div><div class="metric-grid">${metric('Tổng hồ sơ', plan.summary.total, 'cần xem', '♧')}${metric('Ưu tiên cao', plan.summary.urgent + plan.summary.high, 'hồ sơ', '！')}${metric('Tín hiệu', Object.keys(plan.summary.byReason).length, 'loại', '⌁')}${metric('Bản ghi', plan.generatedFor.records, 'kết quả đã ghi', '✓')}</div><div class="session-list">${rows || emptyInline('Không có hồ sơ vượt các ngưỡng rà soát.')}</div><p class="pagination-info">Danh sách chỉ gợi ý nơi nên kiểm tra. Nó không thay đổi điểm danh hoặc tự liên hệ sinh viên.</p><div class="modal-actions"><button type="button" class="button button-secondary" data-close>Đóng</button><button type="button" class="button button-secondary" id="export-review-plan">Tải kế hoạch JSON</button><button type="button" class="button button-secondary" id="export-review-csv">Tải danh sách CSV</button><button type="button" class="button button-primary" id="create-review-casebook">Tạo phiếu theo dõi</button></div>`, () => {
+      bindModalClose();
+      $('#export-review-plan').addEventListener('click', () => download('attendance-review-plan.json', `${JSON.stringify(plan, null, 2)}\n`));
+      $('#export-review-csv').addEventListener('click', () => download('attendance-review-plan.csv', reviewPlanToCsv(plan), 'text/csv;charset=utf-8'));
+      $('#create-review-casebook').addEventListener('click', () => {
+        state.casebook = createCasebook(plan, { actor: 'Local reviewer' });
+        state.savedCasebookText = null;
+        updateHistoryControls();
+        showCasebookManager();
+      });
+    });
+  } catch (error) { showError(error); }
+}
+
+function reportStudioDialog() {
+  showDialog(`<div class="modal-head"><div><h2>Thiết kế báo cáo</h2><p>Lọc bản đang mở và chọn mức chi tiết để xuất HTML, CSV hoặc JSON.</p></div><button type="button" class="icon-button" data-close>×</button></div><div class="form-grid"><div class="form-field"><label for="studio-title">Tiêu đề</label><input id="studio-title" maxlength="160" value="Attendance period report"></div><div class="form-field"><label for="studio-limit">Số dòng tối đa</label><input id="studio-limit" type="number" min="1" max="10000" value="500"></div></div><div class="activity-list"><label class="activity-item"><span class="activity-name">Ẩn tên và mã sinh viên</span><input id="studio-redact" type="checkbox"></label><label class="activity-item"><span class="activity-name">Thêm ma trận điểm danh</span><input id="studio-matrix" type="checkbox"></label><label class="activity-item"><span class="activity-name">Thêm phát hiện chất lượng</span><input id="studio-audit" type="checkbox" checked></label></div><p class="pagination-info">Báo cáo tính tỷ lệ trên kết quả đã ghi. Ma trận giới hạn 20.000 ô. Không có dữ liệu nào được ghi vào ứng dụng chính.</p><div class="modal-actions"><button type="button" class="button button-secondary" data-close>Hủy</button><button type="button" class="button button-primary" id="build-studio-report">Tạo xem trước</button></div>`, () => {
+    bindModalClose();
+    $('#build-studio-report').addEventListener('click', () => {
+      try {
+        const hideIdentity = $('#studio-redact').checked;
+        const report = buildReportStudio(state.snapshot, {
+          title: $('#studio-title').value.trim() || 'Attendance period report',
+          generatedAt: new Date().toISOString(),
+          includeStudentNames: !hideIdentity,
+          includeStudentIds: !hideIdentity,
+          includeSessionIds: !hideIdentity,
+          includeMatrix: $('#studio-matrix').checked,
+          includeAudit: $('#studio-audit').checked,
+          maxStudentRows: Number($('#studio-limit').value),
+          maxMatrixCells: 20_000,
+          policy: state.policy,
+        });
+        const matrixButton = report.matrix ? '<button type="button" class="button button-secondary" id="studio-matrix-csv">Ma trận CSV</button>' : '';
+        const auditButton = report.audit ? '<button type="button" class="button button-secondary" id="studio-audit-csv">Chất lượng CSV</button>' : '';
+        showDialog(`<div class="modal-head"><div><h2>${esc(report.title)}</h2><p>${report.summary.students} sinh viên · ${report.summary.sessions} buổi · ${ratePercent(report.summary.coverage)} bao phủ</p></div><button type="button" class="icon-button" data-close>×</button></div><div class="metric-grid">${metric('Có mặt', report.summary.present, 'kết quả', '✓')}${metric('Vắng', report.summary.absent, 'kết quả', '×')}${metric('Chưa ghi', report.summary.missing, 'ô', '…')}${metric('Đã ghi', report.summary.recorded, 'ô', '▦')}</div><div class="session-list">${report.students.slice(0, 8).map((student) => `<div class="session-row"><div><strong>${esc(student.studentName ?? 'Sinh viên ẩn danh')}</strong><small>${esc(student.studentId ?? '')} · ${student.present} có mặt · ${student.absent} vắng · ${student.missing} chưa ghi</small></div><span>${ratePercent(student.attendanceRate)}</span></div>`).join('') || emptyInline('Không có dòng khớp bộ lọc.')}</div><div class="modal-actions"><button type="button" class="button button-secondary" data-close>Đóng</button><button type="button" class="button button-secondary" id="studio-json">Tải JSON</button><button type="button" class="button button-secondary" id="studio-html">Tải HTML</button><button type="button" class="button button-secondary" id="studio-students-csv">Sinh viên CSV</button><button type="button" class="button button-secondary" id="studio-sessions-csv">Buổi học CSV</button>${matrixButton}${auditButton}</div>`, () => {
+          bindModalClose();
+          $('#studio-json').addEventListener('click', () => download('attendance-report.json', `${JSON.stringify(report, null, 2)}\n`));
+          $('#studio-html').addEventListener('click', () => download('attendance-report.html', renderReportStudioHtml(report), 'text/html;charset=utf-8'));
+          $('#studio-students-csv').addEventListener('click', () => download('attendance-students.csv', reportStudioToCsv(report, 'students'), 'text/csv;charset=utf-8'));
+          $('#studio-sessions-csv').addEventListener('click', () => download('attendance-sessions.csv', reportStudioToCsv(report, 'sessions'), 'text/csv;charset=utf-8'));
+          $('#studio-matrix-csv')?.addEventListener('click', () => download('attendance-matrix.csv', reportStudioToCsv(report, 'matrix'), 'text/csv;charset=utf-8'));
+          $('#studio-audit-csv')?.addEventListener('click', () => download('attendance-quality.csv', reportStudioToCsv(report, 'audit'), 'text/csv;charset=utf-8'));
+        });
+      } catch (error) { showError(error); }
+    });
+  });
+}
+
+function showCasebookManager() {
+  if (!state.casebook) {
+    showDialog(`<div class="modal-head"><div><h2>Phiếu theo dõi rà soát</h2><p>Tạo từ danh sách rà soát hoặc mở một phiếu JSON đã lưu.</p></div><button type="button" class="icon-button" data-close>×</button></div><p class="pagination-info">Phiếu lưu lịch sử thao tác và ghi chú trong bộ nhớ trang này. Tải JSON khi muốn lưu tệp.</p><div class="modal-actions"><button type="button" class="button button-secondary" data-close>Đóng</button><button type="button" class="button button-secondary" id="open-casebook">Mở phiếu JSON</button><button type="button" class="button button-primary" id="build-casebook-from-current" ${state.snapshot ? '' : 'disabled'}>Tạo từ dữ liệu hiện tại</button></div>`, () => {
+      bindModalClose();
+      $('#open-casebook').addEventListener('click', () => $('#casebook-file').click());
+      $('#build-casebook-from-current').addEventListener('click', () => {
+        try {
+          const plan = buildReviewPlan(state.snapshot, { targetRate: state.policy.minimumRate });
+          state.casebook = createCasebook(plan, { actor: 'Local reviewer' });
+          state.savedCasebookText = null;
+          updateHistoryControls();
+          showCasebookManager();
+        } catch (error) { showError(error); }
+      });
+    });
+    return;
+  }
+  const book = state.casebook;
+  const summary = summarizeCasebook(book).summary;
+  const statuses = { new: 'Mới', in_review: 'Đang rà soát', data_needed: 'Chờ dữ liệu', resolved: 'Đã xử lý', dismissed: 'Đã bỏ qua', reopened: 'Mở lại' };
+  const transitions = { new: ['in_review', 'data_needed', 'resolved', 'dismissed'], in_review: ['new', 'data_needed', 'resolved', 'dismissed'], data_needed: ['in_review', 'resolved', 'dismissed'], resolved: ['reopened'], dismissed: ['reopened'], reopened: ['in_review', 'data_needed', 'resolved', 'dismissed'] };
+  const rows = book.cases.map((item) => {
+    const note = [...item.events].reverse().find((event) => event.type === 'note')?.note;
+    const choices = [item.status, ...transitions[item.status]].map((status) => `<option value="${status}" ${status === item.status ? 'selected' : ''}>${statuses[status]}</option>`).join('');
+    return `<div class="session-row"><div><strong>${esc(item.studentName)} · ${esc(item.priority)}${item.stale ? ' · dữ liệu đã cũ' : ''}</strong><small>${esc(item.studentId)} · ${item.present} có mặt · ${item.absent} vắng · ${item.missing} chưa ghi${item.assigneeId ? ` · phụ trách ${esc(item.assigneeId)}` : ''}${note ? `<br>Ghi chú: ${esc(note)}` : ''}</small></div><select class="select-field casebook-status" data-case-status="${esc(item.caseId)}" data-case-revision="${item.revision}">${choices}</select><div><button class="icon-button" type="button" data-case-assign="${esc(item.caseId)}" title="Phân công">♙</button><button class="icon-button" type="button" data-case-note="${esc(item.caseId)}" title="Thêm ghi chú">✎</button></div></div>`;
+  }).join('');
+  showDialog(`<div class="modal-head"><div><h2>Phiếu theo dõi rà soát</h2><p>${summary.total} hồ sơ · ${summary.open} đang mở · ${summary.resolved} đã xử lý · phiên bản ${book.revision}</p></div><button type="button" class="icon-button" data-close>×</button></div><div class="toolbar"><button type="button" class="button button-secondary" id="reconcile-casebook" ${state.snapshot ? '' : 'disabled'}>Đối chiếu dữ liệu mới</button><button type="button" class="button button-secondary" id="import-casebook">Mở JSON</button><button type="button" class="button button-secondary" id="export-casebook-csv">Tải CSV</button><button type="button" class="button button-primary" id="export-casebook-json">Tải JSON</button></div><div class="session-list">${rows || emptyInline('Phiếu chưa có hồ sơ.')}</div><div class="modal-actions"><button type="button" class="button button-secondary" data-close>Đóng</button></div>`, () => {
+    bindModalClose();
+    $('#import-casebook').addEventListener('click', () => {
+      if (state.casebook && serializeCasebook(state.casebook) !== state.savedCasebookText && !confirm('Mở tệp sẽ thay phiếu chưa tải xuống. Tiếp tục?')) return;
+      $('#casebook-file').click();
+    });
+    $('#export-casebook-json').addEventListener('click', () => {
+      const content = serializeCasebook(state.casebook);
+      download('attendance-review-casebook.json', content);
+      state.savedCasebookText = content;
+      updateHistoryControls();
+    });
+    $('#export-casebook-csv').addEventListener('click', () => download('attendance-review-casebook.csv', casebookToCsv(state.casebook), 'text/csv;charset=utf-8'));
+    $('#reconcile-casebook').addEventListener('click', () => {
+      if (!state.snapshot) return;
+      try {
+        const plan = buildReviewPlan(state.snapshot, { targetRate: state.policy.minimumRate });
+        state.casebook = reconcileCasebook(state.casebook, plan, { expectedRevision: state.casebook.revision, actor: 'Local reviewer' });
+        updateHistoryControls(); showCasebookManager();
+      } catch (error) { showError(error); }
+    });
+    $$('.casebook-status').forEach((select) => select.addEventListener('change', () => {
+      try {
+        state.casebook = updateCasebook(state.casebook, select.dataset.caseStatus, { status: select.value },
+          { expectedRevision: Number(select.dataset.caseRevision), actor: 'Local reviewer' });
+        updateHistoryControls(); showCasebookManager();
+      } catch (error) { showError(error); showCasebookManager(); }
+    }));
+    $$('[data-case-assign]').forEach((button) => button.addEventListener('click', () => {
+      const current = state.casebook.cases.find((item) => item.caseId === button.dataset.caseAssign);
+      if (!current) return;
+      const value = prompt('Mã người phụ trách (để trống để bỏ phân công)', current.assigneeId ?? '');
+      if (value === null) return;
+      try {
+        state.casebook = updateCasebook(state.casebook, current.caseId, { assigneeId: value.trim() || null },
+          { expectedRevision: current.revision, actor: 'Local reviewer' });
+        updateHistoryControls(); showCasebookManager();
+      } catch (error) { showError(error); }
+    }));
+    $$('[data-case-note]').forEach((button) => button.addEventListener('click', () => {
+      const current = state.casebook.cases.find((item) => item.caseId === button.dataset.caseNote);
+      if (!current) return;
+      const value = prompt('Ghi chú rà soát (chỉ lưu trong phiếu cục bộ)');
+      if (!value?.trim()) return;
+      try {
+        state.casebook = updateCasebook(state.casebook, current.caseId, { note: value.trim() },
+          { expectedRevision: current.revision, actor: 'Local reviewer' });
+        updateHistoryControls(); showCasebookManager();
+      } catch (error) { showError(error); }
+    }));
+  });
+}
+
+async function openCasebookFile(file) {
+  try {
+    state.casebook = parseCasebook(await file.text());
+    state.savedCasebookText = serializeCasebook(state.casebook);
+    updateHistoryControls();
+    if ($('#modal').open) closeDialog();
+    showCasebookManager();
+    notify(`Đã mở phiếu ${file.name}.`);
+  } catch (error) { showError(error); }
+}
+
 function importRoster() {
   $('#roster-file').click();
 }
@@ -980,6 +1132,11 @@ function loadEventBindings() {
     const file = event.target.files?.[0]; if (file) handleSnapshotFile(file);
     event.target.value = '';
   });
+  $('#casebook-file').addEventListener('change', async (event) => {
+    const file = event.target.files?.[0];
+    if (file) await openCasebookFile(file);
+    event.target.value = '';
+  });
   $('#roster-file').addEventListener('change', (event) => {
     const file = event.target.files?.[0]; if (file && state.snapshot) handleRosterFile(file);
     event.target.value = '';
@@ -991,6 +1148,8 @@ function loadEventBindings() {
   $('#download-snapshot').addEventListener('click', exportSnapshot);
   $('#manage-bundle').addEventListener('click', showBundleManager);
   $('#manage-archive').addEventListener('click', showArchiveManager);
+  $('#manage-casebook').addEventListener('click', showCasebookManager);
+  $('#manage-casebook-empty').addEventListener('click', showCasebookManager);
   $('#compare-snapshot').addEventListener('click', compareSnapshotFile);
   $('#undo-action').addEventListener('click', undo);
   $('#redo-action').addEventListener('click', redo);
@@ -1028,7 +1187,8 @@ function loadEventBindings() {
   });
   window.addEventListener('beforeunload', (event) => {
     if ((state.snapshot && serializeAttendanceSnapshot(state.snapshot) !== state.savedSnapshotText) ||
-        (state.archive && serializeArchive(state.archive) !== state.savedArchiveText)) {
+        (state.archive && serializeArchive(state.archive) !== state.savedArchiveText) ||
+        (state.casebook && serializeCasebook(state.casebook) !== state.savedCasebookText)) {
       event.preventDefault();
       event.returnValue = '';
     }
