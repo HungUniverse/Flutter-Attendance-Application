@@ -12,6 +12,7 @@ TeacherWorkspace fixtureWorkspace({
   MeetingState state = MeetingState.active,
   String semester = 'FA26',
   String courseCode = 'PRM393',
+  String firstRollNumber = 'S1',
 }) => TeacherWorkspace(
   id: 'w1',
   semester: semester,
@@ -22,18 +23,18 @@ TeacherWorkspace fixtureWorkspace({
       courseCode: courseCode,
       classCode: 'SE1901',
       scheduleCode: '22',
-      students: const [
+      students: [
         Student(
-          rollNumber: 'S1',
+          rollNumber: firstRollNumber,
           email: 'one@example.com',
           fullName: 'Nguyễn Thị Minh Anh',
         ),
-        Student(
+        const Student(
           rollNumber: 'S2',
           email: 'two@example.com',
           fullName: 'Trần Nguyễn Hoàng Phương Thảo',
         ),
-        Student(
+        const Student(
           rollNumber: 'S3',
           email: 'three@example.com',
           fullName: 'Lê Quốc Bảo',
@@ -132,6 +133,7 @@ class FakeConfig implements ConfigService {
 class FakeNotices implements NotificationService {
   final controller = StreamController<AppNotice>.broadcast();
   bool fail = false;
+  bool failHistory = false;
   @override
   Stream<AppNotice> get opened => controller.stream;
   @override
@@ -147,7 +149,12 @@ class FakeNotices implements NotificationService {
   @override
   Future<String?> token() async => 'fake-device-token';
   @override
-  Future<List<AppNotice>> history(String uid) async => [];
+  Future<List<AppNotice>> history(String uid) async {
+    if (failHistory) {
+      throw const FormatException('Invalid notification history');
+    }
+    return [];
+  }
 }
 
 class FakeUpload implements UploadService {
@@ -192,6 +199,7 @@ class FakeLinks implements AttendanceLinkService {
   bool configured = true;
   bool fail = false;
   bool receiving = true;
+  Completer<LinkUpdate>? pendingPoll;
   List<LinkSubmission> submissions = [];
   LinkSession get session => LinkSession(
     id: 'session1',
@@ -211,6 +219,8 @@ class FakeLinks implements AttendanceLinkService {
   @override
   Future<LinkUpdate> poll(LinkSession s) async {
     if (fail) throw const SocketException('offline');
+    final pending = pendingPoll;
+    if (pending != null) return pending.future;
     return LinkUpdate(session, submissions);
   }
 
@@ -224,10 +234,19 @@ class FakeLinks implements AttendanceLinkService {
 class FailingRepository extends FileMobileWorkspaceRepository {
   FailingRepository(super.root);
   bool failSave = false;
+  bool failClearLink = false;
   @override
   Future<void> save(String uid, TeacherWorkspace workspace) async {
     if (failSave) throw const FileSystemException('disk full');
     await super.save(uid, workspace);
+  }
+
+  @override
+  Future<void> saveLink(String uid, LinkSession? session) async {
+    if (session == null && failClearLink) {
+      throw const FileSystemException('Cannot remove the link cache');
+    }
+    await super.saveLink(uid, session);
   }
 }
 

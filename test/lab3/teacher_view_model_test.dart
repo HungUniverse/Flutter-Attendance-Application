@@ -1,5 +1,8 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:csv/csv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fap_attendance/domain/models.dart';
 import 'package:fap_attendance/lab3/services/contracts.dart';
@@ -16,6 +19,100 @@ void main() {
   tearDown(() async {
     await h.dispose();
   });
+  test('notification history failure leaves the workspace available', () async {
+    h.notices.failHistory = true;
+
+    await h.vm.retryLoad();
+
+    expect(h.vm.workspaceLoadFailed, isFalse);
+    expect(h.vm.course('c1').students, hasLength(3));
+    expect(h.telemetry.errors, contains('notification_history'));
+    expect(await h.vm.refresh(), isTrue);
+  });
+
+  test(
+    'startup discards the saved link for an already closed meeting',
+    () async {
+      await h.vm.close('c1', 'm1');
+      await h.repo.saveLink('teacher1', h.links.session);
+
+      await h.vm.retryLoad();
+
+      expect(h.vm.meeting('c1', 'm1').state, MeetingState.closed);
+      expect(h.vm.link, isNull);
+      expect(h.links.receiving, isFalse);
+      expect(await h.repo.loadLink('teacher1'), isNull);
+    },
+  );
+
+  test(
+    'link cache cleanup failure does not block a closed workspace',
+    () async {
+      expect(await h.vm.close('c1', 'm1'), isTrue);
+      await h.repo.saveLink('teacher1', h.links.session);
+      h.repo.failClearLink = true;
+
+      await h.vm.retryLoad();
+
+      expect(h.vm.workspaceLoadFailed, isFalse);
+      expect(h.vm.meeting('c1', 'm1').state, MeetingState.closed);
+      expect(h.vm.link, isNull);
+      expect(h.links.receiving, isFalse);
+      expect(h.telemetry.errors, contains('clear_closed_link'));
+      expect(await h.repo.loadLink('teacher1'), isNotNull);
+    },
+  );
+
+  test(
+    'offline relay cleanup keeps the saved handle until it can stop',
+    () async {
+      expect(await h.vm.close('c1', 'm1'), isTrue);
+      await h.repo.saveLink('teacher1', h.links.session);
+      h.links.fail = true;
+
+      await h.vm.retryLoad();
+
+      expect(h.vm.workspaceLoadFailed, isFalse);
+      expect(h.vm.link, isNull);
+      expect(h.links.receiving, isTrue);
+      expect(await h.repo.loadLink('teacher1'), isNotNull);
+      h.links.fail = false;
+
+      await h.vm.retryLoad();
+
+      expect(h.links.receiving, isFalse);
+      expect(await h.repo.loadLink('teacher1'), isNull);
+    },
+  );
+
+  test('a poll started before reload cannot restore the closed link', () async {
+    expect(await h.vm.createLink('c1', 'm1'), isTrue);
+    final session = h.links.session;
+    final poll = Completer<LinkUpdate>();
+    h.links.pendingPoll = poll;
+    final refreshing = h.vm.refresh();
+    final closed = h.vm.attendance.closeMeeting(
+      h.vm.course('c1'),
+      'm1',
+      now: fixtureNow,
+    );
+    await h.repo.save('teacher1', h.vm.workspace!.copyWith(classes: [closed]));
+    await h.vm.retryLoad();
+
+    poll.complete(
+      LinkUpdate(session, [LinkSubmission('one@example.com', fixtureNow)]),
+    );
+    expect(await refreshing, isFalse);
+    expect(h.vm.link, isNull);
+    expect(h.vm.linkError, isNull);
+    expect(h.vm.meeting('c1', 'm1').state, MeetingState.closed);
+    expect(
+      h.vm.course('c1').recordFor('m1', 'S1')?.status,
+      AttendanceStatus.absent,
+    );
+    expect(await h.repo.loadLink('teacher1'), isNull);
+  });
+
   test(
     'legacy workspace metadata does not prevent restoring attendance',
     () async {
@@ -103,6 +200,105 @@ void main() {
       expect(audit.reason, 'Kiểm tra lại danh sách');
     },
   );
+  test(
+    'reload restores a closed meeting, its correction and audit reason',
+    () async {
+      const reason = 'Đối chiếu danh sách đã ký';
+      expect(await h.vm.close('c1', 'm1'), isTrue);
+      expect(
+        await h.vm.edit('c1', 'm1', 'S1', AttendanceStatus.present, reason),
+        isTrue,
+      );
+
+      await h.vm.retryLoad();
+
+      final course = h.vm.course('c1');
+      expect(h.vm.meeting('c1', 'm1').state, MeetingState.closed);
+      expect(course.recordFor('m1', 'S1')?.status, AttendanceStatus.present);
+      final audit = course.auditEvents.single;
+      expect(audit.rollNumber, 'S1');
+      expect(audit.oldValue, 'A');
+      expect(audit.newValue, 'P');
+      expect(audit.reason, reason);
+      expect(h.vm.counts('c1', 'm1'), {
+        AttendanceStatus.present: 1,
+        AttendanceStatus.absent: 2,
+        AttendanceStatus.unmarked: 0,
+      });
+    },
+  );
+
+  test(
+    'failed correction leaves the closed meeting unchanged after reload',
+    () async {
+      expect(await h.vm.close('c1', 'm1'), isTrue);
+      h.repo.failSave = true;
+      expect(
+        await h.vm.edit(
+          'c1',
+          'm1',
+          'S1',
+          AttendanceStatus.present,
+          'Đối chiếu danh sách đã ký',
+        ),
+        isFalse,
+      );
+      expect(h.vm.message, isNull);
+      expect(h.telemetry.errors, contains('attendance_edit'));
+
+      await h.vm.retryLoad();
+
+      final course = h.vm.course('c1');
+      expect(h.vm.meeting('c1', 'm1').state, MeetingState.closed);
+      expect(course.recordFor('m1', 'S1')?.status, AttendanceStatus.absent);
+      expect(course.auditEvents, isEmpty);
+    },
+  );
+
+  test('JSON and CSV exports use the corrected result after reload', () async {
+    const reason = 'Đối chiếu danh sách đã ký';
+    const rollNumber = '001';
+    await h.repo.save(
+      'teacher1',
+      fixtureWorkspace(firstRollNumber: rollNumber),
+    );
+    await h.vm.retryLoad();
+    expect(await h.vm.close('c1', 'm1'), isTrue);
+    expect(
+      await h.vm.edit('c1', 'm1', rollNumber, AttendanceStatus.present, reason),
+      isTrue,
+    );
+    await h.vm.retryLoad();
+
+    expect(await h.vm.export('c1', 'm1', 'json'), isTrue);
+    final jsonFile = h.vm.exportedFile!;
+    final report =
+        jsonDecode(await jsonFile.readAsString()) as Map<String, dynamic>;
+    final records = (report['attendance'] as List).cast<Map<String, dynamic>>();
+    expect(report['state'], 'final');
+    expect(
+      {
+        for (final row in records)
+          row['rollNumber']: row['attendance']['status'],
+      },
+      {rollNumber: 'P', 'S2': 'A', 'S3': 'A'},
+    );
+    final audit =
+        (report['auditEvents'] as List).single as Map<String, dynamic>;
+    expect(audit['reason'], reason);
+
+    expect(await h.vm.export('c1', 'm1', 'csv'), isTrue);
+    final csvFile = h.vm.exportedFile!;
+    final rows = const CsvToListConverter(shouldParseNumbers: false)
+        .convert(await csvFile.readAsString());
+    final rollIndex = rows.first.indexOf('roll_number');
+    final statusIndex = rows.first.indexOf('status');
+    expect(
+      {for (final row in rows.skip(1)) row[rollIndex]: row[statusIndex]},
+      {rollNumber: 'P', 'S2': 'A', 'S3': 'A'},
+    );
+  });
+
   test('failed local write never publishes a false success', () async {
     h.repo.failSave = true;
     expect(await h.vm.mark('c1', 'm1', 'S1', AttendanceStatus.present), false);

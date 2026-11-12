@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 
 import '../../data/workspace_store.dart';
 import '../../data/attendance_csv_exporter.dart';
+import '../../data/report_file_writer.dart';
 import '../../domain/models.dart';
 import 'contracts.dart';
 
@@ -79,8 +80,7 @@ class FileMobileWorkspaceRepository implements MobileWorkspaceRepository {
     final file = File(p.join(directory.path, name));
     final session = await _store(uid)
         .saveFinalVersion(workspace, course, meeting);
-    await file.writeAsString(await session.readAsString(), flush: true);
-    return file;
+    return writeReportAtomically(file, session.openRead());
   }
 
   @override
