@@ -3,20 +3,21 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
-import 'services/attendance_link_service.dart';
+import 'services/firestore_attendance_links.dart';
+import 'services/firestore_notifications.dart';
 import 'services/device_service.dart';
 import 'services/firebase_services.dart';
-import 'services/mobile_workspace_repository.dart';
 import '../data/shared_workspace_sync.dart';
+import '../data/firestore_workspace_remote.dart';
 import 'services/synced_workspace_repository.dart';
 import 'ui/mobile_theme.dart';
 import 'ui/teacher_app.dart';
@@ -53,20 +54,19 @@ class MobileBootstrapService {
     await config.initialize();
     final directory = await getApplicationDocumentsDirectory();
     final root = Directory('${directory.path}/FAP Attendance Mobile');
-    final api = SharedApi(auth);
-    final sync = api.configured ? SharedWorkspaceSync(api, root) : null;
-    final model = TeacherViewModel(
+    final db = FirebaseFirestore.instance;
+    final sync = SharedWorkspaceSync(FirestoreWorkspaceRemote(db, auth), root);
+    late TeacherViewModel model;
+    model = TeacherViewModel(
       auth: auth,
-      repository: sync == null
-          ? FileMobileWorkspaceRepository(root)
-          : SyncedMobileWorkspaceRepository(root, sync),
+      repository: SyncedMobileWorkspaceRepository(root, sync),
       sync: sync,
       telemetry: telemetry,
       config: config,
-      notifications: FirebaseNotificationService(FirebaseMessaging.instance),
-      uploads: FirebaseReportUpload(FirebaseStorage.instance),
+      notifications: FirestoreNotifications(FirebaseMessaging.instance, db),
       device: AndroidDeviceService(),
-      links: HttpAttendanceLinkService(auth),
+      links: FirestoreAttendanceLinks(db, auth, () => model.workspace?.semester,
+        hostingUrl: 'https://${db.app.options.projectId}.web.app'),
     );
     await model.initialize();
     return model;

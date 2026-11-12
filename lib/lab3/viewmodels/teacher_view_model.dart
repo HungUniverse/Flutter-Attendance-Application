@@ -24,7 +24,7 @@ class TeacherViewModel extends ChangeNotifier {
     required this.telemetry,
     required this.config,
     required this.notifications,
-    required this.uploads,
+    this.uploads,
     required this.device,
     required this.links,
     this.sync,
@@ -37,7 +37,7 @@ class TeacherViewModel extends ChangeNotifier {
   final TelemetryService telemetry;
   final ConfigService config;
   final NotificationService notifications;
-  final UploadService uploads;
+  final UploadService? uploads;
   final DeviceService device;
   final AttendanceLinkService links;
   final DateTime Function() now;
@@ -691,7 +691,8 @@ class TeacherViewModel extends ChangeNotifier {
     }
     cloudUrl = null;
     uploadProgress = 0;
-    cloudUrl = await uploads.upload(file, destination, (progress) {
+    if (uploads == null) throw const AppProblem('Báo cáo Final được lưu và chia sẻ trên thiết bị.');
+    cloudUrl = await uploads!.upload(file, destination, (progress) {
       uploadProgress = progress;
       _notify();
     });

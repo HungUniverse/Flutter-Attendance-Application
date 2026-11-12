@@ -29,7 +29,7 @@ abstract class TelemetryService {
 class FeatureSettings {
   const FeatureSettings({
     this.enableLink = true,
-    this.exportHelp = 'Lưu trên thiết bị trước; sao lưu đám mây tùy chọn.',
+    this.exportHelp = 'Lưu PDF, JSON hoặc CSV trên thiết bị và chia sẻ tệp.',
   });
   final bool enableLink;
   final String exportHelp;
