@@ -28,7 +28,7 @@ const auth = { currentUser: null };
 let listener, submitted;
 const subscriptions = new Map();
 mock.module("firebase/auth", {
-  exports: {
+  namedExports: {
     onAuthStateChanged: (_auth, fn) => {
       listener = fn;
     },
@@ -40,7 +40,7 @@ mock.module("firebase/auth", {
   },
 });
 mock.module("firebase/firestore", {
-  exports: {
+  namedExports: {
     collection: (_db, name) => name,
     where: (field) => field,
     query: (name, field) => `${name}/${field}`,
@@ -53,10 +53,10 @@ mock.module("firebase/firestore", {
   },
 });
 mock.module(new URL("../src/firebase-client.js", import.meta.url).href, {
-  exports: { auth, db: {}, googleProvider: {} },
+  namedExports: { auth, db: {}, googleProvider: {} },
 });
 mock.module(new URL("../src/student/repository.js", import.meta.url).href, {
-  exports: {
+  namedExports: {
     createRequest: async (_db, user, input) => {
       submitted = { user, input };
     },

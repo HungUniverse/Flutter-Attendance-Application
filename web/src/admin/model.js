@@ -19,7 +19,10 @@ export function semesterCode(value) {
 }
 export function parseRoster(text, previous = [], expectedClass = "") {
   const members = new Map(
-    previous.map((s) => [s.rollNumber, s.memberCode || ""]),
+    previous.map((s) => [
+      String(s.rollNumber ?? "").trim().toUpperCase(),
+      String(s.memberCode ?? "").trim(),
+    ]),
   );
   const rolls = new Set(),
     emails = new Set();
@@ -73,7 +76,8 @@ export function parseRoster(text, previous = [], expectedClass = "") {
       rollNumber,
       fullName,
       email,
-      memberCode: standard ? cells[3] : members.get(rollNumber) || "",
+      memberCode:
+        (standard ? cells[3].trim() : "") || members.get(rollNumber) || "",
     };
   });
 }
@@ -147,18 +151,24 @@ export function generateMeetings(localId, scheduleCode, start, weeks, perWeek) {
   return meetings;
 }
 export function protectHistory(students, meetings, previousStudents = []) {
-  const rolls = new Set(students.map((s) => s.rollNumber));
-  const previous = new Set(previousStudents.map((s) => s.rollNumber));
+  const rolls = new Set(
+    students.map((s) => String(s.rollNumber ?? "").trim().toUpperCase()),
+  );
+  const previous = new Set(
+    previousStudents.map((s) => String(s.rollNumber ?? "").trim().toUpperCase()),
+  );
   if (
     meetings.some((m) => m.state === "closed") &&
-    students.some((s) => !previous.has(s.rollNumber))
+    students.some(
+      (s) => !previous.has(String(s.rollNumber ?? "").trim().toUpperCase()),
+    )
   )
     throw new AdminError(
       "Lớp đã có buổi chốt: chỉ sửa thông tin sinh viên hiện có. Thêm sinh viên vào lớp mới để không tạo kết quả trống trong lịch sử.",
     );
   for (const m of meetings)
     for (const roll of Object.keys(m.records || {})) {
-      if (!rolls.has(roll))
+      if (!rolls.has(roll.trim().toUpperCase()))
         throw new AdminError(
           `Không thể bỏ ${roll}: sinh viên đã có kết quả điểm danh. Giữ MSSV để bảo toàn lịch sử.`,
         );
@@ -173,19 +183,29 @@ export function correction(
   now = new Date(),
 ) {
   reason = required(reason, "Lý do duyệt", 1000);
-  const oldValue = meeting.records?.[rollNumber]?.status;
-  if (meeting.state !== "closed" || !["A", "P"].includes(oldValue))
+  const normalizedRoll = required(rollNumber, "MSSV", 40).toUpperCase();
+  const existingKey =
+    Object.keys(meeting?.records || {}).find(
+      (k) => k.trim().toUpperCase() === normalizedRoll,
+    ) || normalizedRoll;
+  const oldValue = meeting?.records?.[existingKey]?.status;
+  if (meeting?.state !== "closed" || !["A", "P"].includes(oldValue))
     throw new AdminError("Buổi học phải được chốt và có kết quả hiện tại.");
   if (!["A", "P"].includes(status) || status === oldValue)
     throw new AdminError(
       "Kết quả đề nghị trùng kết quả hiện tại. Hãy từ chối hoặc kiểm tra lại yêu cầu.",
     );
   const at = now.toISOString();
+  const nextRecords = { ...meeting.records };
+  if (existingKey !== normalizedRoll) delete nextRecords[existingKey];
+  nextRecords[normalizedRoll] = {
+    status,
+    source: "manual",
+    recordedAt: at,
+    note: reason,
+  };
   return {
-    records: {
-      ...meeting.records,
-      [rollNumber]: { status, source: "manual", recordedAt: at, note: reason },
-    },
+    records: nextRecords,
     auditEvents: [
       ...(meeting.auditEvents || []),
       {
@@ -193,7 +213,7 @@ export function correction(
         createdAt: at,
         action: "attendance_override",
         reason,
-        rollNumber,
+        rollNumber: normalizedRoll,
         meetingId: meeting.id,
         oldValue,
         newValue: status,

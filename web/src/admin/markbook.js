@@ -1,13 +1,28 @@
 import { unzip, strFromU8 } from "fflate";
 import { AdminError, parseRoster } from "./model.js";
 
-export const semesterFromFileName = (name) =>
-  name.match(/^(FA|SP|SU)\d{2}(?=[_ .-]|$)/i)?.[0].toUpperCase() || "";
-const elements = (node, local) => [...node.getElementsByTagNameNS("*", local)];
+export const semesterFromFileName = (name) => {
+  const base = String(name ?? "").split(/[/\\]/).pop() || "";
+  return (
+    base
+      .match(/(?:^|[_ .-])(FA|SP|SU)\d{2}(?=[_ .-]|$)/i)?.[0]
+      .replace(/^[_ .-]/, "")
+      .toUpperCase() || ""
+  );
+};
+const localOf = (name) => String(name || "").split(":").pop();
+const elements = (node, local) => {
+  const byNs = [...node.getElementsByTagNameNS("*", local)];
+  if (byNs.length) return byNs;
+  return [...node.getElementsByTagName("*")].filter(
+    (n) => localOf(n.localName || n.tagName) === local,
+  );
+};
 const children = (node, local) =>
-  [...node.children].filter((n) => n.localName === local);
+  [...node.children].filter((n) => localOf(n.localName || n.tagName) === local);
 const attr = (node, local) =>
-  [...node.attributes].find((a) => a.localName === local)?.value;
+  [...node.attributes].find((a) => localOf(a.localName || a.name) === local)
+    ?.value;
 const normalized = (text) =>
   String(text)
     .trim()
@@ -17,10 +32,11 @@ const columns = ["Class", "RollNumber", "Email", "MemberCode", "FullName"];
 function xml(files, name) {
   if (!files[name])
     throw new AdminError(`Markbook thiếu ${name}. Hãy chọn file ODS/XLSX gốc.`);
-  const root = new DOMParser().parseFromString(
-    strFromU8(files[name]),
-    "application/xml",
+  const source = strFromU8(files[name]).replace(
+    /^\uFEFF?\s*<\?xml[^?]*\?>\s*/i,
+    "",
   );
+  const root = new DOMParser().parseFromString(source, "application/xml");
   if (elements(root, "parsererror").length)
     throw new AdminError("XML trong Markbook không hợp lệ.");
   return root;
@@ -31,7 +47,11 @@ function odsSheets(files) {
     rows: elements(table, "table-row").map((row) => {
       const values = [];
       for (const cell of row.children) {
-        if (!["table-cell", "covered-table-cell"].includes(cell.localName))
+        if (
+          !["table-cell", "covered-table-cell"].includes(
+            localOf(cell.localName || cell.tagName),
+          )
+        )
           continue;
         const value = elements(cell, "p")
           .map((p) => p.textContent)
@@ -80,10 +100,15 @@ function xlsxSheets(files) {
           const values = [];
           for (const cell of children(row, "c")) {
             const address = attr(cell, "r")?.match(/^([A-Z]+)\d+$/)?.[1];
-            if (!address) continue;
             let index = 0;
-            for (const c of address) index = index * 26 + c.charCodeAt(0) - 64;
+            if (address) {
+              for (const c of address)
+                index = index * 26 + c.charCodeAt(0) - 64;
+            } else {
+              index = values.length + 1;
+            }
             if (index > 100) continue;
+            while (values.length < index - 1) values.push("");
             const type = attr(cell, "t"),
               raw = elements(cell, "v")[0]?.textContent || "";
             values[index - 1] =
@@ -132,6 +157,12 @@ export function parseMarkbookSheets(sheets) {
       const source = sheet.rows[i],
         values = indices.map((index) => String(source[index] ?? "").trim());
       if (!values[1] && !values[2] && !values[4]) continue;
+      if (!values[0] || !values[1] || !values[2] || !values[4]) {
+        warnings.push(
+          `${sheet.name}: bỏ qua dòng ${i + 1} vì thiếu Class/MSSV/Email/Họ tên.`,
+        );
+        continue;
+      }
       // Grades and exam comments never enter the attendance roster.
       data.push(values.join("\t"));
     }
@@ -161,7 +192,12 @@ export function parseMarkbookSheets(sheets) {
   return { courses, warnings };
 }
 export async function readMarkbook(file) {
-  const extension = file.name.split(".").pop().toLowerCase();
+  const baseName = String(file?.name ?? "").trim().split(/[/\\]/).pop() || "";
+  const dotIndex = baseName.lastIndexOf(".");
+  const extension =
+    dotIndex <= 0 || dotIndex === baseName.length - 1
+      ? ""
+      : baseName.slice(dotIndex + 1).toLowerCase();
   if (!["ods", "xlsx"].includes(extension))
     throw new AdminError("Chọn file .ods hoặc .xlsx của giảng viên.");
   if (file.size > 20 * 1024 * 1024)

@@ -110,7 +110,7 @@ class FakeRepository {
   }
 }
 mock.module("firebase/auth", {
-  exports: {
+  namedExports: {
     onAuthStateChanged: (_auth, listener) => {
       authListener = listener;
     },
@@ -122,13 +122,13 @@ mock.module("firebase/auth", {
   },
 });
 mock.module(new URL("../src/firebase-client.js", import.meta.url).href, {
-  exports: { auth, db: {}, googleProvider: {} },
+  namedExports: { auth, db: {}, googleProvider: {} },
 });
 mock.module(new URL("../src/admin/repository.js", import.meta.url).href, {
-  exports: { AdminRepository: FakeRepository },
+  namedExports: { AdminRepository: FakeRepository },
 });
 mock.module(new URL("../src/telemetry.js", import.meta.url).href, {
-  exports: {
+  namedExports: {
     startWebTelemetry: async () => {},
     track: () => {},
     webSettings: {
