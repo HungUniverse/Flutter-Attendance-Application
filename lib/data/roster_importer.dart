@@ -27,6 +27,12 @@ class RosterImporter {
 
   final ScheduleService _scheduleService;
 
+  static String? semesterFromFileName(String fileName) =>
+      RegExp(r'^(FA|SP|SU)\d{2}(?=[_ .-]|$)', caseSensitive: false)
+          .firstMatch(fileName.split(RegExp(r'[/\\]')).last)
+          ?.group(0)
+          ?.toUpperCase();
+
   RosterImportResult importBytes(
     Uint8List bytes, {
     required String fileName,
@@ -85,7 +91,7 @@ class RosterImporter {
     required int weeks,
     required int meetingsPerWeek,
   }) {
-    final nameMatch = RegExp(r'^([1-3][1-4])_([A-Za-z0-9]+)(?:_.*)?$')
+    final nameMatch = RegExp(r'^([1-3][1-4])_([A-Za-z0-9]+)(?:_([A-Za-z0-9_-]+))?$')
         .firstMatch(sheetName.trim());
     if (nameMatch == null) {
       throw const RosterImportException(
@@ -173,6 +179,12 @@ class RosterImporter {
       throw const RosterImportException('Sheet không có sinh viên hợp lệ.');
     }
     final classCode = classCodes.single;
+    final namedClass = nameMatch.group(3)?.toUpperCase();
+    if (namedClass != null && namedClass != classCode) {
+      throw RosterImportException(
+        'Mã lớp trong tên sheet ($namedClass) khác cột Class ($classCode).',
+      );
+    }
     final classId = '${semester}_${courseCode}_$classCode';
     final rule = ScheduleRule(
       scheduleCode: scheduleCode,
