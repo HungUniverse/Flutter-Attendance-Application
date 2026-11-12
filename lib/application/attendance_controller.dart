@@ -85,8 +85,21 @@ class AttendanceController extends ChangeNotifier {
     if (busy) return;
     busy = true;
     try {
+      final service = sharedLinks;
+      if (service is LiveAttendanceLinks && workspace != null) {
+        for (final course in workspace!.classes) {
+          for (final meeting in course.meetings.where(
+            (m) => m.state == MeetingState.active,
+          )) {
+            final session = await service.forMeeting(course, meeting);
+            if (session != null) {
+              await service.stop(session);
+              await sharedResults(session);
+            }
+          }
+        }
+      }
       await desktopAuth.signOut();
-    } finally {
       sync?.removeListener(notifyListeners);
       sync?.dispose();
       sync = null;
@@ -95,6 +108,7 @@ class AttendanceController extends ChangeNotifier {
       workspacePath = null;
       final documents = await getApplicationDocumentsDirectory();
       _store = WorkspaceStore(Directory('${documents.path}/FAP Attendance'));
+    } finally {
       busy = false;
       notifyListeners();
     }
@@ -105,44 +119,47 @@ class AttendanceController extends ChangeNotifier {
     busy = true;
     notifyListeners();
     try {
-      await desktopAuth.signIn();
-      final remote = finalFirebase
-          ? FirestoreWorkspaceRemote(FirebaseFirestore.instance, desktopAuth)
-          : null;
-      if (remote != null) {
-        try {
-          await remote.requireTeacher();
-        } on Object {
-          await desktopAuth.signOut();
-          rethrow;
-        }
-      }
-      if (sync == null && workspace != null) _legacyWorkspace = workspace;
-      final documents = await getApplicationDocumentsDirectory();
-      sync?.removeListener(notifyListeners);
-      sync?.dispose();
-      sync = SharedWorkspaceSync(
-        remote ?? SharedApi(desktopAuth),
-        Directory('${documents.path}/FAP Attendance Shared'),
-      );
-      sync!.addListener(notifyListeners);
-      _store = SyncedDesktopStore(sync!, desktopAuth.current!.uid);
-      sharedLinks = finalFirebase
-          ? FirestoreAttendanceLinks(
-              FirebaseFirestore.instance,
-              desktopAuth,
-              () => workspace?.semester,
-              hostingUrl:
-                  'https://${FirebaseFirestore.instance.app.options.projectId}.web.app',
-            )
-          : HttpAttendanceLinkService(desktopAuth);
-      workspace = await _store!.loadMostRecentWorkspace();
-      lastMessage =
-          'Đã đăng nhập ${desktopAuth.current!.email}. Dữ liệu cũ trên máy được giữ riêng; import vào tài khoản nếu cần.';
+      if (desktopAuth.current == null) await desktopAuth.signIn();
+      await _attachAccount();
     } finally {
       busy = false;
       notifyListeners();
     }
+  }
+
+  Future<void> _attachAccount() async {
+    final remote = finalFirebase
+        ? FirestoreWorkspaceRemote(FirebaseFirestore.instance, desktopAuth)
+        : null;
+    if (remote != null) {
+      try {
+        await remote.requireTeacher();
+      } on WorkspaceAccessDenied {
+        await desktopAuth.signOut();
+        rethrow;
+      }
+    }
+    if (sync == null && workspace != null) _legacyWorkspace = workspace;
+    final documents = await getApplicationDocumentsDirectory();
+    sync?.removeListener(notifyListeners);
+    sync?.dispose();
+    sync = SharedWorkspaceSync(
+      remote ?? SharedApi(desktopAuth),
+      Directory('${documents.path}/FAP Attendance Shared'),
+    );
+    sync!.addListener(notifyListeners);
+    _store = SyncedDesktopStore(sync!, desktopAuth.current!.uid);
+    sharedLinks = finalFirebase
+        ? FirestoreAttendanceLinks(
+            FirebaseFirestore.instance,
+            desktopAuth,
+            () => workspace?.semester,
+            hostingUrl:
+                'https://${FirebaseFirestore.instance.app.options.projectId}.web.app',
+          )
+        : HttpAttendanceLinkService(desktopAuth);
+    workspace = await _store!.loadMostRecentWorkspace();
+    lastMessage = 'Đã kết nối ${desktopAuth.current!.email}. ${sync!.status}.';
   }
 
   Future<void> refreshShared({bool useServer = false}) async {
@@ -200,6 +217,13 @@ class AttendanceController extends ChangeNotifier {
     if (finalFirebase) {
       _legacyWorkspace = workspace;
       workspace = null;
+      if (desktopAuth.current != null) {
+        try {
+          await _attachAccount();
+        } on Object {
+          lastMessage = 'Chưa tải được dữ liệu Firebase. Bấm kết nối tài khoản để thử lại.';
+        }
+      }
     }
     if (workspace != null) {
       final migratedSessions = await _store!.migrateLegacySessions(workspace!);
@@ -231,10 +255,11 @@ class AttendanceController extends ChangeNotifier {
     int weeks = 10,
     int meetingsPerWeek = 2,
   }) async {
-    if (finalFirebase && sync == null)
+    if (finalFirebase && sync == null) {
       throw const AppProblem(
         'Vui lòng đăng nhập Google trước khi nạp lớp vào Firebase.',
       );
+    }
     busy = true;
     lastMessage = null;
     notifyListeners();
@@ -338,13 +363,18 @@ class AttendanceController extends ChangeNotifier {
     final value = workspace;
     if (value == null || _store == null || _reconcilingCalendar) return 0;
     _reconcilingCalendar = true;
+    final previouslyBusy = busy;
+    busy = true;
     try {
       final current = now ?? DateTime.now();
       final finalized = <(String, String)>[];
       for (final c in value.classes) {
-        for (final m in c.meetings.where((m) => m.state == MeetingState.active && m.isBeforeDate(current))) {
+        for (final m in c.meetings.where(
+          (m) => m.state == MeetingState.active && m.isBeforeDate(current),
+        )) {
           if (sharedLinks is LiveAttendanceLinks) {
-            final session = await (sharedLinks as LiveAttendanceLinks).forMeeting(c, m);
+            final session = await (sharedLinks as LiveAttendanceLinks)
+                .forMeeting(c, m);
             if (session != null) {
               await sharedLinks!.stop(session);
               await sharedResults(session);
@@ -382,13 +412,21 @@ class AttendanceController extends ChangeNotifier {
       return finalized.length;
     } finally {
       _reconcilingCalendar = false;
+      busy = previouslyBusy;
+      notifyListeners();
     }
   }
 
   void _startCalendarReconciliation() {
     _calendarReconciliation?.cancel();
     _calendarReconciliation = Timer.periodic(const Duration(minutes: 1), (_) {
-      unawaited(finalizeOverdueMeetings());
+      unawaited(
+        finalizeOverdueMeetings().catchError((Object error) {
+          lastMessage = 'Chưa chốt được buổi quá hạn. Kiểm tra kết nối Firebase và thử lại.';
+          notifyListeners();
+          return 0;
+        }),
+      );
     });
   }
 
@@ -441,7 +479,10 @@ class AttendanceController extends ChangeNotifier {
     if (sharedLinks != null) {
       final service = sharedLinks!;
       final session = service is LiveAttendanceLinks
-          ? await service.forMeeting(classById(classId), meetingById(classId, meetingId))
+          ? await service.forMeeting(
+              classById(classId),
+              meetingById(classId, meetingId),
+            )
           : await (service as HttpAttendanceLinkService).current();
       if (session != null &&
           session.classId == classId &&

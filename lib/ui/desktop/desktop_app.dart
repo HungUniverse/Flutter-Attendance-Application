@@ -38,7 +38,7 @@ class _DesktopHomePageState extends State<DesktopHomePage> {
         return Scaffold(
           persistentFooterButtons: [
             Text(widget.controller.syncLabel),
-            if (widget.controller.desktopAuth.current == null)
+            if (widget.controller.sync == null)
               FilledButton.icon(
                 onPressed: widget.controller.busy
                     ? null
