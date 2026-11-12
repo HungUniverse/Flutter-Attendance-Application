@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 
 import '../../data/workspace_store.dart';
 import '../../data/attendance_csv_exporter.dart';
+import '../../data/attendance_pdf_exporter.dart';
 import '../../data/report_file_writer.dart';
 import '../../domain/models.dart';
 import 'contracts.dart';
@@ -64,6 +65,7 @@ class FileMobileWorkspaceRepository implements MobileWorkspaceRepository {
     // Also validates complete P/A for JSON exports.
     AttendanceCsvExporter().encode(workspace, course, meeting);
     final directory = await _store(uid).exportDirectory(workspace, course);
+    if (format == 'pdf') return AttendancePdfExporter().export(directory, workspace, course, meeting);
     if (format == 'csv') {
       final file = await AttendanceCsvExporter().export(
         directory,
