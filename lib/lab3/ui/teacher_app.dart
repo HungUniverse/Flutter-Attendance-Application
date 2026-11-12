@@ -102,6 +102,10 @@ class _TeacherMobileAppState extends State<TeacherMobileApp>
                       onPressed: vm.retryLoad,
                       child: const Text('Thử lại'),
                     ),
+                    OutlinedButton(
+                      onPressed: vm.busy ? null : vm.signOut,
+                      child: const Text('Đăng xuất / Đổi tài khoản'),
+                    ),
                   ],
                 ),
               )

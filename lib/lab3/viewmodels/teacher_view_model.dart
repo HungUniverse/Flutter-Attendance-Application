@@ -444,7 +444,10 @@ class TeacherViewModel extends ChangeNotifier {
           throw const AppProblem('Buổi học chưa mở hoặc đã chốt.');
         }
         if (links is LiveAttendanceLinks) {
-          link = await (links as LiveAttendanceLinks).forMeeting(course(classId), meeting(classId, meetingId));
+          link = await (links as LiveAttendanceLinks).forMeeting(
+            course(classId),
+            meeting(classId, meetingId),
+          );
           await repository.saveLink(uid, link);
         }
         if (link != null) {
@@ -476,8 +479,9 @@ class TeacherViewModel extends ChangeNotifier {
     'ai_review',
     () async {
       aiReview = null;
-      if (ai == null || !settings.enableAi)
+      if (ai == null || !settings.enableAi) {
         throw const AppProblem('Gợi ý AI đang tắt. Bạn có thể tiếp tục chốt.');
+      }
       final owner = uid;
       final totals = counts(classId, meetingId);
       final review = await ai!.review(
@@ -490,9 +494,11 @@ class TeacherViewModel extends ChangeNotifier {
   );
 
   Future<bool> acceptAiReview(String edited) => _run('ai_accept', () async {
-    if (aiReview == null || ai == null)
+    if (aiReview == null || ai == null) {
       throw const AppProblem('Hãy lấy gợi ý AI trước.');
+    }
     await ai!.accept(edited);
+    aiReview = AiAttendanceReview(edited.trim(), const []);
     message = 'Đã xác nhận nội dung kiểm tra AI.';
   });
   Future<bool> createLink(String classId, String meetingId) =>
@@ -539,7 +545,8 @@ class TeacherViewModel extends ChangeNotifier {
       final m = meeting(current.classId, current.meetingId);
       if (m.state == MeetingState.active) {
         for (final submission in update.submissions) {
-          if (!m.isOnDate(submission.at) || submission.at.isAfter(now())) {
+          if (!m.isOnDate(submission.at) ||
+              (links is! LiveAttendanceLinks && submission.at.isAfter(now()))) {
             throw const AppProblem(
               'Dịch vụ link trả về thời điểm không hợp lệ.',
             );
@@ -684,7 +691,9 @@ class TeacherViewModel extends ChangeNotifier {
     )) {
       if (link == null && links is LiveAttendanceLinks) {
         for (final c in value.classes) {
-          for (final m in c.meetings.where((m) => m.state == MeetingState.active && m.isBeforeDate(now()))) {
+          for (final m in c.meetings.where(
+            (m) => m.state == MeetingState.active && m.isBeforeDate(now()),
+          )) {
             link = await (links as LiveAttendanceLinks).forMeeting(c, m);
             if (link != null) await repository.saveLink(uid, link);
           }
@@ -777,10 +786,11 @@ class TeacherViewModel extends ChangeNotifier {
     }
     cloudUrl = null;
     uploadProgress = 0;
-    if (uploads == null)
+    if (uploads == null) {
       throw const AppProblem(
         'Báo cáo Final được lưu và chia sẻ trên thiết bị.',
       );
+    }
     cloudUrl = await uploads!.upload(file, destination, (progress) {
       uploadProgress = progress;
       _notify();
