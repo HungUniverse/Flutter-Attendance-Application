@@ -43,6 +43,10 @@ flutter build windows --debug --dart-define-from-file=mobile/firebase-debug.json
 
 Windows mở trang Hosting `/desktop-login` trong trình duyệt hệ thống. Giảng viên đăng nhập Google, bấm kết nối với app trên máy. Listener loopback chỉ tồn tại hai phút, kiểm tra Origin và state ngẫu nhiên, sau đó Firebase SDK native xác thực Google credential. Mở app lại sẽ phục hồi tài khoản đã đăng nhập và tải workspace.
 
+Trình duyệt có thể ẩn Origin khi gửi form từ HTTPS về HTTP loopback. Callback chấp nhận Origin của Hosting, `null` hoặc header bị lược bỏ, đồng thời kiểm tra state ngẫu nhiên riêng cho lần đăng nhập, POST dạng form và giới hạn dữ liệu. Origin khác bị từ chối. App nhận đúng một callback hợp lệ và gửi hết phản hồi cho trình duyệt trước khi đóng listener.
+
+Nếu từng gặp HTTP 403 ở `/callback`, đóng app và trang callback cũ, chạy lại bản Windows đã build mới rồi bắt đầu đăng nhập từ app để tạo phiên mới.
+
 APK nằm tại `build/app/outputs/flutter-apk/app-debug.apk`. Windows demo nằm tại `build/windows/x64/runner/Debug/fap_attendance.exe`. Chuyển toàn bộ thư mục Debug khi đưa sang máy khác. Đây là bản demo debug. Bản Android phát hành cần signing key và Play Integrity tương ứng.
 
 Để đối chiếu desktop local Lab 3, dùng `flutter run -d windows --dart-define=LAB3_LEGACY=true`. Dữ liệu cũ chỉ được nhập vào tài khoản Firebase khi giảng viên chọn thao tác chuyển dữ liệu.
