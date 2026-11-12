@@ -84,3 +84,9 @@ Sau lượt Rules 39/39, mã được siết ID yêu cầu theo lớp/buổi/UID
 Công cụ trình duyệt báo `The browser access host is unavailable` trong lượt web admin này; chưa kiểm tra trực quan dashboard, responsive và đăng nhập Google trên trình duyệt thật. Production bundle đã build thành công. Không có thay đổi mã Flutter trong lượt web admin.
 
 Windows dùng App Check debug provider cho bản demo. Cách setup và tái chạy kiểm thử nằm trong [FINAL_SETUP.md](FINAL_SETUP.md), luồng web trong [admin-web.md](admin-web.md).
+
+## Đính chính vai trò admin ngày 13/11/2026
+
+Người dùng xác nhận admin là chủ hệ thống quản lý giảng viên. `/admin` được thay bằng CRUD hồ sơ giảng viên, khóa/mở lại và xóa quyền, có audit. Cổng quản lý lớp chuyển sang `/teacher`. Danh mục `teacherDirectory` thay quyền teacher cũ trong `users`; `users.role == admin` chỉ được cấp bằng công cụ chủ project. Công cụ bootstrap đã ghi và đọc lại tài khoản admin được chỉ định, chuyển hồ sơ giảng viên cũ một lần.
+
+Không chạy thêm test theo yêu cầu trước đó; số liệu Rules/DOM ở trên thuộc lượt trước khi đổi mô hình phân quyền. Kiểm tra biên dịch Rules diễn ra khi deploy. Chưa kiểm chứng CRUD trên trình duyệt thật hoặc đăng nhập thiết bị thật trong lượt này.
