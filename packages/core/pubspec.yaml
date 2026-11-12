@@ -1,0 +1,6 @@
+name: attendance_core
+description: Shared attendance models, schedule constraints and finalization rules.
+version: 1.0.0
+publish_to: none
+environment:
+  sdk: ^3.13.2

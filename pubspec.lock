@@ -33,6 +33,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.13.1"
+  attendance_core:
+    dependency: "direct main"
+    description:
+      path: "packages/core"
+      relative: true
+    source: path
+    version: "1.0.0"
   barcode:
     dependency: transitive
     description:
