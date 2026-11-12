@@ -6,6 +6,7 @@ import 'package:fap_attendance/lab3/services/contracts.dart';
 import 'package:fap_attendance/lab3/services/report_destination.dart';
 import 'package:fap_attendance/lab3/services/mobile_workspace_repository.dart';
 import 'package:fap_attendance/lab3/viewmodels/teacher_view_model.dart';
+import 'package:fap_attendance/lab3/services/ai_attendance_review.dart';
 
 final fixtureNow = DateTime(2026, 11, 3, 10);
 TeacherWorkspace fixtureWorkspace({
@@ -251,7 +252,7 @@ class FailingRepository extends FileMobileWorkspaceRepository {
 }
 
 class Harness {
-  Harness(this.directory, {bool signedIn = true, this.inMemory = false})
+  Harness(this.directory, {bool signedIn = true, this.inMemory = false, AttendanceReviewService? ai, AttendanceLinkService? linkService})
     : auth = FakeAuth(signedIn: signedIn) {
     repo = inMemory
         ? MemoryRepository(directory)
@@ -264,7 +265,8 @@ class Harness {
       notifications: notices,
       uploads: upload,
       device: device,
-      links: links,
+      links: linkService ?? links,
+      ai: ai,
       clock: () => clock,
     );
   }
