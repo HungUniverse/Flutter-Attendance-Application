@@ -89,7 +89,16 @@ export const rosterText = (students, classCode = "") =>
     )
     .join("\n");
 export const rosterMap = (students) =>
-  Object.fromEntries(students.map((s) => [s.email, s.rollNumber]));
+  Object.fromEntries(
+    (students || []).map((s) => [
+      String(s.email ?? "")
+        .trim()
+        .toLowerCase(),
+      String(s.rollNumber ?? "")
+        .trim()
+        .toUpperCase(),
+    ]),
+  );
 export function localIso(date) {
   const pad = (n) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:00.000`;
@@ -230,8 +239,18 @@ export function attendanceSummary(classes) {
     for (const m of course.meetings || []) {
       if (m.state === "closed") closed++;
       if (m.state === "upcoming") continue;
+      const normalizedRecords = new Map(
+        Object.entries(m.records || {}).map(([roll, rec]) => [
+          roll.trim().toUpperCase(),
+          rec,
+        ]),
+      );
       for (const s of course.data.students || []) {
-        const status = m.records?.[s.rollNumber]?.status;
+        const rollKey = String(s.rollNumber ?? "")
+          .trim()
+          .toUpperCase();
+        const status = (m.records?.[s.rollNumber] ?? normalizedRecords.get(rollKey))
+          ?.status;
         if (status === "P") present++;
         else if (status === "A") absent++;
         else unmarked++;

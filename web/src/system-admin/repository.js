@@ -75,8 +75,13 @@ export class TeacherDirectoryRepository {
   async save(previous, input) {
     const value = teacherFields(input),
       ref = doc(this.db, "teacherDirectory", value.email);
+    const prevEmail = previous
+      ? String(previous.email ?? "")
+          .trim()
+          .toLowerCase()
+      : "";
     const oldRef = previous
-      ? doc(this.db, "teacherDirectory", previous.email)
+      ? doc(this.db, "teacherDirectory", prevEmail)
       : undefined;
     return runTransaction(this.db, async (tx) => {
       const current = oldRef ? await tx.get(oldRef) : undefined;
@@ -86,11 +91,11 @@ export class TeacherDirectoryRepository {
         throw new AdminError(
           "Email này đã có hồ sơ giảng viên. Hãy sửa hồ sơ hiện có.",
         );
-      const sameRecord = previous && previous.email === value.email;
+      const sameRecord = previous && prevEmail === value.email;
       const old = current?.data();
       const action = !previous
         ? "create"
-        : previous.status !== value.status && previous.email === value.email
+        : previous.status !== value.status && prevEmail === value.email
           ? value.status === "active"
             ? "activate"
             : "suspend"
@@ -114,14 +119,17 @@ export class TeacherDirectoryRepository {
     });
   }
   async remove(previous) {
-    const ref = doc(this.db, "teacherDirectory", previous.email);
+    const prevEmail = String(previous?.email ?? "")
+      .trim()
+      .toLowerCase();
+    const ref = doc(this.db, "teacherDirectory", prevEmail);
     return runTransaction(this.db, async (tx) => {
       const current = await tx.get(ref);
       this.checkCurrent(current, previous);
       tx.delete(ref);
       tx.set(doc(collection(this.db, "teacherAudit")), {
         actorUid: this.user.uid,
-        email: previous.email,
+        email: prevEmail,
         action: "delete",
         before: snapshotFields(current.data()),
         after: {},

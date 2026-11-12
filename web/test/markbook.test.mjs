@@ -97,10 +97,10 @@ test("readMarkbook parses bundled FA26_Markbook.ods and synthetic XLSX workbooks
       `<?xml version="1.0"?><workbook><sheets><sheet name="13_PRN232_SE1920" r:id="rId1" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/></sheets></workbook>`,
     ),
     "xl/_rels/workbook.xml.rels": strToU8(
-      `<?xml version="1.0"?><Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>`,
+      `<?xml version="1.0"?><Relationships><Relationship Id="rId1" Target="/xl/worksheets/sheet1.xml"/></Relationships>`,
     ),
     "xl/sharedStrings.xml": strToU8(
-      `<?xml version="1.0"?><sst><si><t>Class</t></si><si><t>RollNumber</t></si><si><t>Email</t></si><si><t>MemberCode</t></si><si><t>FullName</t></si></sst>`,
+      `<?xml version="1.0"?><sst><si><t>Class</t><rPh><t>PHONETIC</t></rPh></si><si><t>RollNumber</t></si><si><t>Email</t></si><si><t>MemberCode</t></si><si><t>FullName</t></si></sst>`,
     ),
     "xl/worksheets/sheet1.xml": strToU8(
       `<?xml version="1.0"?><worksheet><sheetData>
@@ -109,7 +109,7 @@ test("readMarkbook parses bundled FA26_Markbook.ods and synthetic XLSX workbooks
           <c r="A2" t="inlineStr"><is><t>SE1920</t></is></c>
           <c r="B2" t="inlineStr"><is><t>SE190001</t></is></c>
           <c r="C2" t="inlineStr"><is><t>sv1@fpt.edu.vn</t></is></c>
-          <c r="E2" t="inlineStr"><is><t>Lê Hoàng Nam</t></is></c>
+          <c r="E2" t="inlineStr"><is><t>Lê Hoàng Nam</t><rPh><t>LE HOANG NAM</t></rPh></is></c>
         </row>
       </sheetData></worksheet>`,
     ),

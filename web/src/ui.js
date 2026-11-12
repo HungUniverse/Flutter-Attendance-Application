@@ -7,6 +7,7 @@ export const escapeHtml = (value) =>
       ],
   );
 export const dateText = (value) => {
+  if (value == null || value === "" || typeof value === "boolean") return "—";
   const d = value?.toDate ? value.toDate() : new Date(value);
   return Number.isFinite(+d)
     ? new Intl.DateTimeFormat("vi-VN", {

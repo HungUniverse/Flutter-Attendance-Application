@@ -76,19 +76,25 @@ function xlsxSheets(files) {
       attr(r, "Target"),
     ]),
   );
+  const nonPhoneticText = (node) =>
+    elements(node, "t")
+      .filter(
+        (t) => localOf(t.parentNode?.localName || t.parentNode?.tagName) !== "rPh",
+      )
+      .map((t) => t.textContent)
+      .join("");
   const shared = files["xl/sharedStrings.xml"]
     ? elements(xml(files, "xl/sharedStrings.xml"), "si").map((si) =>
-        elements(si, "t")
-          .map((t) => t.textContent)
-          .join(""),
+        nonPhoneticText(si),
       )
     : [];
   return elements(book, "sheet").map((sheet) => {
     const target = targets.get(attr(sheet, "id"));
     if (!target)
       throw new AdminError("Không tìm được nội dung sheet trong XLSX.");
+    const cleanTarget = target.replace(/^\/?xl\//i, "");
     const resolved = new URL(
-      target,
+      cleanTarget,
       "https://markbook.invalid/xl/workbook.xml",
     );
     if (resolved.origin !== "https://markbook.invalid")
@@ -115,9 +121,7 @@ function xlsxSheets(files) {
               type === "s"
                 ? shared[Number(raw)] || ""
                 : type === "inlineStr"
-                  ? elements(cell, "t")
-                      .map((t) => t.textContent)
-                      .join("")
+                  ? nonPhoneticText(cell)
                   : raw;
           }
           return values;
