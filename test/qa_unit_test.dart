@@ -500,10 +500,11 @@ void main() {
       // Act
       final success = await vm.mark('c1', 'm1', 'S01', AttendanceStatus.present);
 
-      // Assert
+      // Assert: manual mark stages draft immediately in memory and persists when closing
       expect(success, isTrue);
       expect(vm.course('c1').recordFor('m1', 'S01')?.status, equals(AttendanceStatus.present));
-      verify(() => mockRepo.save('t1', any())).called(1);
+      expect(vm.draftCount, equals(1));
+      verifyNever(() => mockRepo.save('t1', any()));
     });
 
     test('should finalize attendance by closing meeting and auto-marking blank students absent', () async {

@@ -95,7 +95,7 @@ void main() {
         await h.dispose();
         _cleanupDir(tempDir);
       });
-      await tester.binding.setSurfaceSize(const Size(412, 1000));
+      await tester.binding.setSurfaceSize(const Size(412, 1300));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
       // Act
@@ -271,7 +271,7 @@ void main() {
         await h.dispose();
         _cleanupDir(tempDir);
       });
-      await tester.binding.setSurfaceSize(const Size(412, 1000));
+      await tester.binding.setSurfaceSize(const Size(412, 1300));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
       await tester.pumpWidget(TeacherMobileApp(model: h.vm));

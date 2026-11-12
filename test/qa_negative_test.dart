@@ -294,17 +294,17 @@ void main() {
         _cleanupDir(tempDir);
       });
 
-      // Simulate disk write failure
+      // Simulate disk write failure when finalizing/persisting workspace
       h.repo.failSave = true;
 
-      // Act: Attempt to mark attendance
-      final success = await h.vm.mark('c1', 'm1', 'S1', AttendanceStatus.present);
+      // Act: Attempt to finalize attendance (which writes to repository.save)
+      final success = await h.vm.close('c1', 'm1');
 
       // Assert
       expect(success, isFalse);
       expect(h.vm.error, isNotNull);
       expect(h.vm.error, contains('Không thể hoàn tất thao tác'));
-      expect(h.telemetry.errors, contains('attendance_mark'));
+      expect(h.telemetry.errors, contains('close_attendance'));
     });
 
     test('should handle upload failure, clear progress and surface error message', () async {
