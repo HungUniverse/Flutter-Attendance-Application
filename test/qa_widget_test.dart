@@ -57,10 +57,10 @@ void main() {
 
       // Assert
       expect(find.byType(DashboardPage), findsOneWidget);
-      expect(find.text('PRM393'), findsOneWidget);
-      expect(find.byKey(const ValueKey('timetable-nav-0')), findsOneWidget);
-      expect(find.byKey(const ValueKey('timetable-nav-1')), findsOneWidget);
-      expect(find.byKey(const ValueKey('timetable-nav-2')), findsOneWidget);
+      expect(find.text('PRM393 · SE1901'), findsWidgets);
+      expect(find.byType(NavigationBar), findsOneWidget);
+      expect(find.text('Lịch & lớp'), findsOneWidget);
+      expect(find.text('Thông báo'), findsOneWidget);
     });
 
     testWidgets('should render SectionCard and StatusTag correctly with provided content', (
@@ -246,14 +246,14 @@ void main() {
       await tester.pumpAndSettle();
 
       // Act: Tap 'Thông báo'
-      await tester.tap(find.byKey(const ValueKey('timetable-nav-1')));
+      await tester.tap(find.text('Thông báo'));
       await tester.pumpAndSettle();
 
       // Assert
       expect(find.byType(NotificationsPage), findsOneWidget);
 
       // Act: Tap 'Lịch & lớp'
-      await tester.tap(find.byKey(const ValueKey('timetable-nav-0')));
+      await tester.tap(find.text('Lịch & lớp'));
       await tester.pumpAndSettle();
 
       // Assert
