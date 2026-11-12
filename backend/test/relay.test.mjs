@@ -102,6 +102,23 @@ test('polling and issuing a challenge leave the session file untouched', async t
   assert.equal((await stat(file)).mtimeMs, previous.getTime());
 });
 
+test('workspace writes reject non-string semesters and revisions without room to increment', async t => {
+  const f = await fixture(t);
+  const write = (semester, revision) => f.request('/api/workspaces', {
+    method: 'PUT', user: 'teacher',
+    data: { workspace: { id: 'workspace', semester, classes: [] }, revision, mutationId: randomUUID() },
+  });
+  for (const semester of [null, 2026, ['FA26'], undefined]) {
+    assert.equal((await write(semester, 0)).status, 400);
+  }
+  assert.equal((await write('FA26', Number.MAX_SAFE_INTEGER)).status, 400);
+  assert.deepEqual((await f.request('/api/workspaces', { user: 'teacher' })).data, { data: null });
+  const saved = await write('fa26', 0);
+  assert.equal(saved.status, 200);
+  assert.equal(saved.data.data.workspace.semester, 'FA26');
+  assert.equal(saved.data.data.revision, 1);
+});
+
 test('a failed check-in write preserves the challenge for a retry', async t => {
   const f = await fixture(t);
   const { data: session } = await f.create();

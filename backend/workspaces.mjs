@@ -62,8 +62,9 @@ export class FirestoreWorkspaceStore {
 
 export function validateWorkspace(input) {
   const w = input?.workspace;
-  if (!w || !/^[A-Za-z0-9_-]{1,32}$/.test(w.semester) || typeof w.id !== 'string'
-      || !Array.isArray(w.classes) || !Number.isSafeInteger(input.revision) || input.revision < 0
+  if (!w || typeof w.semester !== 'string' || !/^[A-Za-z0-9_-]{1,32}$/.test(w.semester)
+      || typeof w.id !== 'string' || !Array.isArray(w.classes)
+      || !Number.isSafeInteger(input.revision) || input.revision < 0 || input.revision === Number.MAX_SAFE_INTEGER
       || typeof input.mutationId !== 'string' || !/^[a-f0-9-]{36}$/.test(input.mutationId)
       || Buffer.byteLength(JSON.stringify(w)) > 700000) {
     const error = new Error('Workspace không hợp lệ hoặc quá lớn (tối đa 700 KB).'); error.status = 400; throw error;
