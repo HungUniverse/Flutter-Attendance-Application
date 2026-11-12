@@ -198,6 +198,7 @@ class FakeLinks implements AttendanceLinkService {
   @override
   bool configured = true;
   bool fail = false;
+  AppProblem? stopProblem;
   bool receiving = true;
   Completer<LinkUpdate>? pendingPoll;
   List<LinkSubmission> submissions = [];
@@ -227,6 +228,7 @@ class FakeLinks implements AttendanceLinkService {
   @override
   Future<void> stop(LinkSession s) async {
     if (fail) throw const SocketException('offline');
+    if (stopProblem case final problem?) throw problem;
     receiving = false;
   }
 }

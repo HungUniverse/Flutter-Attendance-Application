@@ -379,6 +379,28 @@ void main() {
     expect(await h.vm.mark('c1', 'm1', 'S1', AttendanceStatus.present), true);
     expect(h.vm.settings.exportHelp, 'New guidance');
   });
+  test('sign out discards a cached link missing on the server', () async {
+    expect(await h.vm.createLink('c1', 'm1'), isTrue);
+    expect(await h.repo.loadLink('teacher1'), isNotNull);
+    h.links.stopProblem = const AttendanceLinkNotFound();
+
+    expect(await h.vm.signOut(), isTrue);
+
+    expect(h.auth.current, isNull);
+    expect(await h.repo.loadLink('teacher1'), isNull);
+    expect(await h.repo.load('teacher1'), isNotNull);
+  });
+
+  test('sign out keeps the link when stopping it is denied', () async {
+    expect(await h.vm.createLink('c1', 'm1'), isTrue);
+    h.links.stopProblem = const AppProblem('permission-denied');
+
+    expect(await h.vm.signOut(), isFalse);
+
+    expect(h.auth.current, isNotNull);
+    expect(await h.repo.loadLink('teacher1'), isNotNull);
+  });
+
   test('separate accounts cannot open each other local workspace', () async {
     expect(await h.repo.load('teacher2'), isNull);
     await h.vm.close('c1', 'm1');
