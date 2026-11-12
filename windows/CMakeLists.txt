@@ -49,10 +49,8 @@ endfunction()
 set(FLUTTER_MANAGED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/flutter")
 add_subdirectory(${FLUTTER_MANAGED_DIR})
 
-# Desktop authentication and synchronization use the HTTPS backend. Native
-# FlutterFire plugins belong to Android, so do not download/link Firebase C++
-# into this desktop executable. Keep generated Flutter files untouched.
-option(FAP_WINDOWS_NATIVE_FIREBASE "Enable native Firebase on Windows" OFF)
+# Final uses native Firebase Auth, Firestore and App Check on Windows.
+set(FAP_WINDOWS_NATIVE_FIREBASE ON)
 set(DESKTOP_PLUGIN_REGISTRANT "${FLUTTER_MANAGED_DIR}/generated_plugin_registrant.cc")
 if(NOT FAP_WINDOWS_NATIVE_FIREBASE)
   file(READ "${DESKTOP_PLUGIN_REGISTRANT}" desktop_registrant)
