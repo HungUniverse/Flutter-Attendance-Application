@@ -37,10 +37,18 @@ void main() {
     addTearDown(h.dispose);
     await tester.pumpWidget(TeacherMobileApp(model: h.vm));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('timetable-nav-1')));
+    final nav = find.byType(NavigationBar);
+    await tester.tap(
+      find.descendant(of: nav, matching: find.text('Thông báo')),
+    );
     await tester.pumpAndSettle();
     expect(find.byType(NotificationsPage), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('timetable-nav-0')));
+    await tester.tap(
+      find.descendant(
+        of: find.byType(NavigationBar),
+        matching: find.text('Lịch & lớp'),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.byType(DashboardPage), findsOneWidget);
     expect(h.vm.course('c1').students.length, 3);
@@ -166,145 +174,6 @@ void main() {
       });
       await tester.pumpWidget(const SizedBox());
     });
-    testWidgets(
-      'weekly timetable keeps calendar fixed and opens the right session at $width',
-      (tester) async {
-        final h = Harness(Directory('unused-ui-fixture'), inMemory: true);
-        final base = fixtureWorkspace();
-        final course = base.classes.single;
-        final start = DateTime(2026, 11, 2);
-        await h.repo.save('teacher1', fixtureWorkspace(semester: 'SP26'));
-        await h.repo.save('teacher1', fixtureWorkspace(semester: 'SU26'));
-        await h.repo.save(
-          'teacher1',
-          base.copyWith(
-            classes: [
-              course.copyWith(
-                meetings: [
-                  ...course.meetings,
-                  Meeting(
-                    id: 'm2',
-                    number: 2,
-                    startAt: DateTime(2026, 11, 6, 9, 30),
-                    endAt: DateTime(2026, 11, 6, 11, 45),
-                  ),
-                ],
-              ),
-              CourseClass(
-                id: 'monday',
-                courseCode: 'MLN122',
-                classCode: 'SE1915',
-                scheduleCode: '13',
-                students: const [],
-                scheduleRule: ScheduleRule(
-                  scheduleCode: '13',
-                  semesterStart: start,
-                ),
-                meetings: [
-                  for (final (number, hour, minute) in [
-                    (1, 12, 30),
-                    (2, 15, 0),
-                  ])
-                    Meeting(
-                      id: 'monday-$number',
-                      number: number,
-                      startAt: DateTime(2026, 11, 2, hour, minute),
-                      endAt: DateTime(2026, 11, 2, hour + 2, minute + 15),
-                      state: MeetingState.closed,
-                    ),
-                ],
-              ),
-            ],
-          ),
-        );
-        await h.initialize(seed: false);
-        await tester.binding.setSurfaceSize(Size(width, 800));
-        addTearDown(() async {
-          await tester.binding.setSurfaceSize(null);
-          await h.dispose();
-        });
-        final repaint = GlobalKey();
-        await tester.pumpWidget(
-          RepaintBoundary(
-            key: repaint,
-            child: TeacherMobileApp(model: h.vm),
-          ),
-        );
-        await tester.pumpAndSettle();
-        expect(find.text('Weekly timetable'), findsOneWidget);
-        expect(
-          find.text('Current week: 02/11/2026 – 08/11/2026'),
-          findsOneWidget,
-        );
-        expect(find.text('FALL2026'), findsOneWidget);
-        expect(find.text('Slot 3'), findsOneWidget);
-        const meetChannel = MethodChannel('vn.edu.fpt.fap_attendance/meet');
-        MethodCall? openedMeeting;
-        final messenger =
-            TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-        messenger.setMockMethodCallHandler(meetChannel, (call) async {
-          openedMeeting = call;
-          return null;
-        });
-        addTearDown(
-          () => messenger.setMockMethodCallHandler(meetChannel, null),
-        );
-        await tester.tap(find.text('Meet URL').hitTestable().first);
-        await tester.pumpAndSettle();
-        expect(openedMeeting?.method, 'open');
-        expect(
-          openedMeeting?.arguments,
-          'https://meet.google.com/meet/ptq-remp-zui',
-        );
-        expect(find.byType(AttendancePage), findsNothing);
-        final month = find.text('November 2026');
-        final monthPosition = tester.getTopLeft(month);
-        await tester.runAsync(() async {
-          final boundary =
-              repaint.currentContext!.findRenderObject()!
-                  as RenderRepaintBoundary;
-          final image = await boundary.toImage(pixelRatio: 1);
-          final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-          final file = File(
-            'build/lab3-previews/timetable-${width.toInt()}.png',
-          );
-          await file.parent.create(recursive: true);
-          await file.writeAsBytes(bytes!.buffer.asUint8List());
-          image.dispose();
-        });
-        await tester.tap(
-          find.bySemanticsLabel('Friday, 6 November 2026, có lịch dạy'),
-        );
-        await tester.pumpAndSettle();
-        expect(tester.getTopLeft(month), monthPosition);
-        await tester.tap(find.text('NOT YET').hitTestable());
-        await tester.pumpAndSettle();
-        final attendance = tester.widget<AttendancePage>(
-          find.byType(AttendancePage),
-        );
-        expect((attendance.classId, attendance.meetingId), ('c1', 'm2'));
-        await tester.pageBack();
-        await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('Tuần sau'));
-        await tester.pumpAndSettle();
-        expect(find.text('Chưa có lịch dạy trong tuần này.'), findsOneWidget);
-        await tester.tap(find.text('Week: 09/11/2026 – 15/11/2026'));
-        await tester.pumpAndSettle();
-        expect(
-          find.text('Current week: 02/11/2026 – 08/11/2026'),
-          findsOneWidget,
-        );
-        await tester.tap(find.text('SUMMER2026'));
-        await tester.pumpAndSettle();
-        expect(h.vm.workspace!.semester, 'SU26');
-        await tester.tap(find.text('Home'));
-        await tester.pumpAndSettle();
-        expect(find.text('Danh sách lớp'), findsOneWidget);
-        expect(find.text('Nạp danh sách lớp'), findsOneWidget);
-        expect(tester.takeException(), isNull);
-        await tester.pumpWidget(const SizedBox());
-      },
-    );
   }
   testWidgets('editing validates a new reason and cancellation keeps record', (
     tester,

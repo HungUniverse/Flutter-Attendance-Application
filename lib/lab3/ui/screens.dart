@@ -13,7 +13,6 @@ import '../../ui/theme.dart';
 import '../viewmodels/teacher_view_model.dart';
 import 'components.dart';
 import 'attendance_screens.dart';
-import 'weekly_timetable_page.dart';
 export 'attendance_screens.dart';
 
 void openPage(BuildContext context, Widget page) =>
@@ -389,66 +388,16 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  late final String _initialSemester = context
-      .read<TeacherViewModel>()
-      .workspace!
-      .semester;
-
-  void _openClasses() => openPage(context, const _ClassManagementPage());
-
-  @override
-  Widget build(BuildContext context) {
-    final semester = context.select(
-      (TeacherViewModel vm) => vm.workspace?.semester,
-    );
-    if (semester == null) return const SizedBox.shrink();
-    return WeeklyTimetablePage(
-      key: ValueKey(semester),
-      startAtSemester: semester != _initialSemester,
-      onHome: _openClasses,
-      onMeeting: (classId, meetingId) => openPage(
-        context,
-        AttendancePage(classId: classId, meetingId: meetingId),
-      ),
-      bottom: TimetableNavigation(
-        selected: 0,
-        onSelected: (index) {
-          switch (index) {
-            case 0:
-              _openClasses();
-            case 1:
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (context) => NotificationsPage(
-                    bottom: TimetableNavigation(
-                      selected: 1,
-                      onSelected: (index) {
-                        if (index == 0) Navigator.of(context).pop();
-                        if (index == 2) openPage(context, const AccountPage());
-                      },
-                    ),
-                  ),
-                ),
-              );
-            case 2:
-              openPage(context, const AccountPage());
-          }
-        },
-      ),
-    );
-  }
-}
-
-class _ClassManagementPage extends StatelessWidget {
-  const _ClassManagementPage();
-
+  int _tab = 0;
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<TeacherViewModel>();
-    if (vm.workspace == null) return const SizedBox.shrink();
+    if (_tab == 1) {
+      return NotificationsPage(onHome: () => setState(() => _tab = 0));
+    }
     final classes = vm.workspace!.classes;
     return MobilePage(
-      title: 'Danh sách lớp',
+      title: 'Lịch tuần & lớp học',
       actions: [
         if (vm.sync != null)
           IconButton(
@@ -467,6 +416,20 @@ class _ClassManagementPage extends StatelessWidget {
           icon: const Icon(Icons.account_circle_outlined),
         ),
       ],
+      bottom: NavigationBar(
+        selectedIndex: _tab,
+        onDestinationSelected: (v) => setState(() => _tab = v),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.calendar_month),
+            label: 'Lịch & lớp',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.notifications_outlined),
+            label: 'Thông báo',
+          ),
+        ],
+      ),
       child: RefreshIndicator(
         onRefresh: () async {
           await vm.refresh();
@@ -846,14 +809,31 @@ class _SchedulePageState extends State<SchedulePage> {
 }
 
 class NotificationsPage extends StatelessWidget {
-  const NotificationsPage({super.key, this.bottom});
-  final Widget? bottom;
+  const NotificationsPage({super.key, this.onHome});
+  final VoidCallback? onHome;
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<TeacherViewModel>();
     return MobilePage(
       title: 'Thông báo',
-      bottom: bottom,
+      bottom: onHome == null
+          ? null
+          : NavigationBar(
+              selectedIndex: 1,
+              onDestinationSelected: (index) {
+                if (index == 0) onHome!();
+              },
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.calendar_month),
+                  label: 'Lịch & lớp',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.notifications_outlined),
+                  label: 'Thông báo',
+                ),
+              ],
+            ),
       actions: [
         IconButton(
           tooltip: 'Làm mới',
