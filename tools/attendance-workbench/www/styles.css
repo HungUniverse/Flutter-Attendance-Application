@@ -230,3 +230,20 @@ td.row-primary { color: #30453b; font-weight: 650; }
   .empty-actions { flex-direction: column; padding: 0 25px; }
   .modal-content { padding: 18px; }
 }
+
+.audit-options { align-items: end; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; margin: 14px 0; }
+.audit-issue-list { display: grid; gap: 8px; max-height: 350px; overflow: auto; margin-top: 12px; }
+.audit-issue { padding: 12px 14px; border: 1px solid var(--line); border-left: 3px solid #9aa8a0; border-radius: 8px; background: #fff; }
+.audit-warning { border-left-color: #d9a13c; }
+.audit-error { border-left-color: #c85346; }
+.audit-info { border-left-color: #6a91b4; }
+.audit-issue-top { display: flex; align-items: start; gap: 8px; color: var(--ink); font-size: 11px; }
+.audit-severity { flex: 0 0 auto; color: #78867e; font-size: 8px; font-weight: 750; letter-spacing: .06em; }
+.audit-issue p { margin: 7px 0 5px; color: #627168; font-size: 10px; line-height: 1.5; }
+.audit-issue small { color: #89958e; font-size: 8px; }
+
+@media (max-width: 690px) {
+  .audit-options { grid-template-columns: 1fr; }
+  .audit-options .button { width: 100%; }
+  .modal-actions { flex-wrap: wrap; }
+}

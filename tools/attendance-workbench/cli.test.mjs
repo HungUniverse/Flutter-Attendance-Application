@@ -65,6 +65,25 @@ test('runs the full offline import, reporting, update and export workflow', asyn
     assert.equal(JSON.parse(await readFile(schedule, 'utf8')).length, 3);
     assert.deepEqual(JSON.parse(run('schedule-conflicts', schedule)), []);
     assert.match(run('schedule-calendar', schedule, 'example.com', '2026-01-01T00:00:00Z'), /BEGIN:VEVENT/);
+    const auditReport = JSON.parse(run('audit', initial));
+    assert.equal(auditReport.version, 1);
+    assert.ok(auditReport.summary.total > 0);
+    assert.match(run('audit-csv', initial), /"severity","code","subject"/);
+    const auditOptions = join(dir, 'audit-options.json');
+    await writeFile(auditOptions, '{"minimumAttendanceRate":0.5,"minimumRecordedSessions":1}');
+    assert.equal(JSON.parse(run('audit', initial, auditOptions)).options.minimumAttendanceRate, 0.5);
+    const scenarioPath = join(dir, 'scenario.json');
+    const scenarioChanged = join(dir, 'scenario-changed.json');
+    await writeFile(scenarioPath, run('scenario-new', initial, 'Correction review', policy));
+    await writeFile(scenarioChanged, run('scenario-set', scenarioPath, 'A', '2', 'present'));
+    const scenarioResult = JSON.parse(run('scenario-evaluate', scenarioChanged));
+    assert.equal(scenarioResult.ok, true);
+    assert.equal(scenarioResult.delta.present, 1);
+    assert.match(run('scenario-csv', scenarioChanged), /"A","An","2","missing","present"/);
+    const scenarioConflict = JSON.parse(run('scenario-evaluate', scenarioChanged, updated));
+    assert.equal(scenarioConflict.ok, false);
+    assert.equal(scenarioConflict.conflicts.length, 1);
+    assert.equal(JSON.parse(run('scenario-remove', scenarioChanged, 'A', '2')).changes.length, 0);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

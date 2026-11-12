@@ -56,6 +56,22 @@ undetermined outcome when they could change the decision. The report uses only
 the supplied data and rules, so it does not represent an institution's policy
 unless those rules were entered by the caller.
 
+The `scenario-new` command creates a self-contained simulation from a snapshot.
+Use `scenario-set` to propose `present`, `absent`, or `missing` values and
+`scenario-remove` to clear a proposal. `scenario-evaluate` reports before and
+after totals and student policy changes without modifying the baseline. An
+optional current snapshot checks whether a target cell changed since the
+scenario was made; any conflict stops evaluation. `scenario-csv` exports the
+successful impact rows. The browser interface exposes the same preview under
+Phân tích → Thử kịch bản; it creates a simulated snapshot only when explicitly
+downloaded.
+
+`audit` reviews a validated snapshot for missing results, repeated names,
+low-attendance patterns, long absence runs and sessions with no results. Rules
+are advisory and configurable through an optional JSON options file. `audit-csv`
+exports the findings without embedding the full attendance table. Invalid or
+duplicate IDs and duplicate emails are rejected earlier by snapshot validation.
+
 `schedule-generate` accepts a JSON object with `startDate`, `endDate`,
 `startTime`, `durationMinutes`, `weekdays`, `resources`, `idPrefix`, and an
 optional `exceptions` array. Dates and times use UTC, weekdays use Sunday=0

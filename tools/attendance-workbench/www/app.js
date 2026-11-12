@@ -16,6 +16,9 @@ import { evaluatePolicy } from '../policy.mjs';
 import { renderHtmlReport } from '../html-report.mjs';
 import { createBundle, parseBundle, putClass, removeClass, summarizeBundle, summarizeStudentsAcrossClasses } from '../bundle.mjs';
 import { reviseSnapshot } from '../revise.mjs';
+import { createScenario, evaluateScenario, parseScenario, removeScenarioChange, scenarioToCsv,
+  serializeScenario, setScenarioChange } from '../scenario.mjs';
+import { auditAttendanceSnapshot, auditToCsv } from '../audit.mjs';
 
 const labels = {
   overview: ['TỔNG QUAN', 'Tổng quan'],
@@ -39,6 +42,9 @@ const state = {
   bundleCurrentId: null,
   schedule: [],
   policy: { minimumRate: 0.75, maximumAbsences: 2 },
+  scenario: null,
+  auditOptions: {},
+  auditFilter: 'all',
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -83,6 +89,7 @@ function loadSnapshot(value, message = 'Đã mở bản sao điểm danh.') {
   state.savedSnapshotText = serializeAttendanceSnapshot(state.snapshot);
   state.history = [];
   state.future = [];
+  state.scenario = null;
   state.page = 0;
   state.search = '';
   state.statusFilter = 'all';
@@ -214,7 +221,6 @@ function redo() {
 
 function renderOverview() {
   const current = report();
-  const rate = current.recorded ? current.validRate ?? null : null;
   const totalPresent = current.students.reduce((sum, student) => sum + student.present, 0);
   const totalAbsences = current.students.reduce((sum, student) => sum + student.absent, 0);
   const actualRate = totalPresent + totalAbsences ? totalPresent / (totalPresent + totalAbsences) : null;
@@ -225,7 +231,7 @@ function renderOverview() {
     return `<div class="chart-column"><b>${ratePercent(sessionRate)}</b><div class="chart-bar-track"><div class="chart-bar${height < 60 ? ' is-low' : ''}" style="height:${height}%"></div></div><small title="${esc(session.sessionId)}">${esc(sessionName(session.sessionId))}</small></div>`;
   }).join('')}</div>` : emptyInline('Thêm buổi học để xem thống kê.');
   const bottomStudents = [...current.students].sort((a, b) => (a.attendanceRate ?? 0) - (b.attendanceRate ?? 0)).slice(0, 5);
-  const activity = bottomStudents.length ? `<div class="activity-list">${bottomStudents.map((student) => `<div class="activity-item"><span class="activity-avatar">${esc(initials(student.student.name))}</span><span class="activity-name">${esc(student.student.name)}</span><span class="activity-session">${student.absent} vắng · ${student.missing} thiếu</span></div>`).join('')}</div>` : emptyInline('Chưa có sinh viên trong lớp.');
+  const activity = bottomStudents.length ? `<div class="activity-list">${bottomStudents.map((student) => `<div class="activity-item"><span class="activity-avatar">${esc(initials(student.student.name))}</span><span class="activity-name">${esc(student.student.name)}</span><span class="activity-session">${student.absent} vắng · ${student.missingSessionIds.length} thiếu</span></div>`).join('')}</div>` : emptyInline('Chưa có sinh viên trong lớp.');
   return `${metrics}<div class="panel-grid">${panel('Tỷ lệ có mặt theo buổi', `${chart}<div class="matrix-legend"><span class="legend-item">${actualRate === null ? 'Chưa có kết quả' : `Tỷ lệ chung ${ratePercent(actualRate)}`}</span></div>`, { description: 'Tỷ lệ tính trên số kết quả đã ghi nhận.' })}${panel('Cần theo dõi', activity, { description: 'Sinh viên có tỷ lệ thấp nhất.' })}</div>${panel('Thiếu dữ liệu', renderMissingPreview(current.missing))}`;
 }
 
@@ -314,7 +320,7 @@ function renderAnalysis() {
   const policyRows = policyResults.map((item) => `<tr><td>${personCell(item.student, item.student.id)}</td><td>${statusBadge(item.status)}</td><td>${item.reasons.map(esc).join(', ') || '—'}</td><td>${item.minimumRate === null ? '—' : `${ratePercent(item.minimumRate)} – ${ratePercent(item.maximumRate)}`}</td></tr>`).join('');
   const windows = rolling.flatMap((student) => student.windows.map((window) => ({ student: student.student, ...window }))).slice(0, 12);
   const trendRows = windows.map((item) => `<tr><td>${esc(item.student.name)}</td><td>${esc(item.startSessionId)} – ${esc(item.endSessionId)}</td><td>${item.present} / ${item.present + item.absent}</td><td>${ratePercent(item.attendanceRate)}</td></tr>`).join('');
-  const tools = `<div class="toolbar"><button class="button button-secondary" data-edit-policy>⚙ Điều kiện điểm danh</button><button class="button button-secondary" data-analysis-csv>Tải kết quả CSV</button><button class="button button-secondary" data-analysis-html>Tải báo cáo HTML</button></div>`;
+  const tools = `<div class="toolbar"><button class="button button-primary" data-scenario>Thử kịch bản</button><button class="button button-secondary" data-audit>Kiểm tra chất lượng</button><button class="button button-secondary" data-edit-policy>⚙ Điều kiện điểm danh</button><button class="button button-secondary" data-analysis-csv>Tải kết quả CSV</button><button class="button button-secondary" data-analysis-html>Tải báo cáo HTML</button></div>`;
   const summaries = `<div class="metric-grid">${metric('Chuỗi vắng từ 2 buổi', absenceRuns.length, 'chuỗi', '×')}${metric('Điều kiện đạt', policyResults.filter((item) => item.status === 'pass').length, 'sinh viên', '✓')}${metric('Chưa đạt', policyResults.filter((item) => item.status === 'fail').length, 'sinh viên', '！')}${metric('Chưa đủ dữ liệu', policyResults.filter((item) => item.status === 'undetermined').length, 'sinh viên', '…')}</div>`;
   return `${summaries}${tools}<div class="two-col">${panel('Tỷ lệ theo sinh viên', bars || emptyInline('Chưa có sinh viên.'), { description: 'Tính trên kết quả đã ghi nhận.' })}${panel('Điều kiện đang dùng', `<div class="activity-list"><div class="activity-item"><span class="activity-avatar">%</span><span class="activity-name">Tỷ lệ tối thiểu</span><span>${ratePercent(state.policy.minimumRate)}</span></div><div class="activity-item"><span class="activity-avatar">×</span><span class="activity-name">Số buổi vắng tối đa</span><span>${state.policy.maximumAbsences}</span></div><div class="activity-item"><span class="activity-avatar">?</span><span class="activity-name">Cách xử lý dữ liệu thiếu</span><span>Chưa kết luận</span></div></div>`)}</div>${panel('Chuỗi vắng liên tiếp', streakRows ? `<div class="table-wrap"><table><thead><tr><th>SINH VIÊN</th><th>CÁC BUỔI</th><th>SỐ BUỔI</th></tr></thead><tbody>${streakRows}</tbody></table></div>` : emptyInline('Không tìm thấy chuỗi vắng từ 2 buổi liên tiếp.'))}${panel('Xu hướng theo cửa sổ buổi học', trendRows ? `<div class="table-wrap"><table><thead><tr><th>SINH VIÊN</th><th>CỬA SỔ</th><th>CÓ MẶT</th><th>TỶ LỆ</th></tr></thead><tbody>${trendRows}</tbody></table></div>` : emptyInline('Thêm buổi học để xem xu hướng.'))}${panel('Đánh giá theo điều kiện', policyRows ? `<div class="table-wrap"><table><thead><tr><th>SINH VIÊN</th><th>KẾT QUẢ</th><th>LÝ DO</th><th>BIÊN TỶ LỆ</th></tr></thead><tbody>${policyRows}</tbody></table></div>` : emptyInline('Chưa có sinh viên.'))}`;
 }
@@ -349,6 +355,8 @@ function bindViewActions(root) {
     state.schedule = state.schedule.filter((session) => session.id !== button.dataset.removeSchedule); render();
   }));
   $('[data-edit-policy]', root)?.addEventListener('click', policyDialog);
+  $('[data-scenario]', root)?.addEventListener('click', scenarioDialog);
+  $('[data-audit]', root)?.addEventListener('click', auditDialog);
   $('[data-analysis-csv]', root)?.addEventListener('click', exportAnalysisCsv);
   $('[data-analysis-html]', root)?.addEventListener('click', exportHtml);
 }
@@ -502,6 +510,87 @@ function policyDialog() {
       state.policy = { minimumRate: percentage / 100, maximumAbsences };
       closeDialog(); render();
     };
+  });
+}
+
+function scenarioDialog() {
+  if (!state.scenario) state.scenario = createScenario(state.snapshot, {
+    title: 'Mô phỏng chỉnh điểm danh', policy: state.policy,
+  });
+  const scenario = parseScenario(state.scenario);
+  const evaluation = evaluateScenario(scenario, state.snapshot);
+  const students = state.snapshot.roster.map((student) =>
+    `<option value="${esc(student.id)}">${esc(student.name)} · ${esc(student.id)}</option>`).join('');
+  const sessions = state.snapshot.sessionIds.map((id) => `<option value="${esc(id)}">${esc(id)}</option>`).join('');
+  const changes = scenario.changes.map((change) => {
+    const student = state.snapshot.roster.find((item) => item.id === change.studentId);
+    return `<div class="session-row"><div><strong>${esc(student?.name ?? change.studentId)} · ${esc(change.sessionId)}</strong><small>${esc(change.expected ?? 'missing')} → ${esc(change.status)}</small></div><button class="icon-button" type="button" data-scenario-remove-student="${esc(change.studentId)}" data-scenario-remove-session="${esc(change.sessionId)}" aria-label="Bỏ đề xuất">×</button></div>`;
+  }).join('');
+  let impact = '';
+  if (!evaluation.ok) {
+    impact = `<div class="empty-inline">Dữ liệu nền đã thay đổi ở ${evaluation.conflicts.length} ô. Mô phỏng bị chặn để tránh ghi đè kết quả mới.</div>`;
+  } else {
+    const before = evaluation.before;
+    const after = evaluation.after;
+    const impactRows = evaluation.students.map((student) => `<tr><td>${personCell(student.student, student.student.id)}</td><td>${ratePercent(student.rateBefore)} → ${ratePercent(student.rateAfter)}</td><td>${student.policyBefore ? `${esc(student.policyBefore)} → ${esc(student.policyAfter)}` : '—'}</td></tr>`).join('');
+    impact = `<div class="metric-grid">${metric('Ô đề xuất', evaluation.changes.length, 'ô', '✎')}${metric('Tỷ lệ tổng', ratePercent(before.attendanceRate), `→ ${ratePercent(after.attendanceRate)}`, '%')}${metric('Thiếu dữ liệu', before.missing, `→ ${after.missing}`, '…')}${metric('Mới đạt điều kiện', evaluation.delta.newlyPassing, 'sinh viên', '✓')}</div><p class="pagination-info">Đây là mô phỏng trên bản sao hiện tại. Tỷ lệ được tính từ các kết quả đã ghi nhận.</p>${impactRows ? `<div class="table-wrap"><table><thead><tr><th>SINH VIÊN</th><th>TỶ LỆ</th><th>ĐIỀU KIỆN</th></tr></thead><tbody>${impactRows}</tbody></table></div>` : emptyInline('Thêm đề xuất để xem tác động.')}`;
+  }
+  showDialog(`<div class="modal-head"><div><h2>Thử kịch bản</h2><p>Tạo đề xuất để xem tác động trước khi xuất bản sao kết quả. Dữ liệu hiện tại không bị thay đổi.</p></div><button type="button" class="icon-button" data-close>×</button></div><div class="form-grid"><div class="form-field"><label for="scenario-student">Sinh viên</label><select id="scenario-student" class="select-field">${students}</select></div><div class="form-field"><label for="scenario-session">Buổi học</label><select id="scenario-session" class="select-field">${sessions}</select></div><div class="form-field"><label for="scenario-status">Kết quả đề xuất</label><select id="scenario-status" class="select-field"><option value="present">Có mặt</option><option value="absent">Vắng</option><option value="missing">Chưa ghi</option></select></div></div><div class="toolbar"><button type="button" class="button button-primary" data-scenario-add ${students && sessions ? '' : 'disabled'}>Thêm đề xuất</button><button type="button" class="button button-secondary" data-scenario-reset>Lấy dữ liệu hiện tại làm nền</button></div><div class="session-list">${changes || emptyInline('Chưa có đề xuất.')}</div>${impact}<div class="modal-actions"><button type="button" class="button button-secondary" data-close>Đóng</button><button type="button" class="button button-secondary" data-scenario-export>Tải kịch bản</button><button type="button" class="button button-secondary" data-scenario-csv ${evaluation.ok && evaluation.changes.length ? '' : 'disabled'}>Tải CSV tác động</button><button type="button" class="button button-primary" data-scenario-snapshot ${evaluation.ok && evaluation.changes.length ? '' : 'disabled'}>Tải bản sao mô phỏng</button></div>`, () => {
+    bindModalClose();
+    $('[data-scenario-add]').onclick = () => {
+      try {
+        state.scenario = setScenarioChange(state.scenario, $('#scenario-student').value,
+          $('#scenario-session').value, $('#scenario-status').value);
+        scenarioDialog();
+      } catch (error) { showError(error); }
+    };
+    $$('[data-scenario-remove-student]').forEach((button) => button.addEventListener('click', () => {
+      state.scenario = removeScenarioChange(state.scenario,
+        button.dataset.scenarioRemoveStudent, button.dataset.scenarioRemoveSession);
+      scenarioDialog();
+    }));
+    $('[data-scenario-reset]').onclick = () => {
+      state.scenario = createScenario(state.snapshot, { title: scenario.title, policy: state.policy });
+      scenarioDialog();
+      notify('Đã tạo lại kịch bản từ dữ liệu hiện tại.');
+    };
+    $('[data-scenario-export]').onclick = () => download('attendance-scenario.json', serializeScenario(state.scenario));
+    $('[data-scenario-csv]').onclick = () => {
+      const result = evaluateScenario(state.scenario, state.snapshot);
+      if (result.ok) download('attendance-scenario-impact.csv', scenarioToCsv(result), 'text/csv;charset=utf-8');
+    };
+    $('[data-scenario-snapshot]').onclick = () => {
+      const result = evaluateScenario(state.scenario, state.snapshot);
+      if (result.ok) download('attendance-scenario-snapshot.json', `${serializeAttendanceSnapshot(result.snapshot)}\n`);
+    };
+  });
+}
+
+function auditDialog() {
+  const audit = auditAttendanceSnapshot(state.snapshot, state.auditOptions);
+  const visibleIssues = state.auditFilter === 'all' ? audit.issues
+    : audit.issues.filter((item) => item.severity === state.auditFilter);
+  const rows = visibleIssues.map((item) => `<article class="audit-issue audit-${esc(item.severity)}"><div class="audit-issue-top"><span class="audit-severity">${esc(item.severity.toUpperCase())}</span><strong>${esc(item.message)}</strong></div><p>${esc(item.suggestion)}</p><small>${esc(item.code)} · ${esc(item.subject)}</small></article>`).join('');
+  showDialog(`<div class="modal-head"><div><h2>Kiểm tra chất lượng dữ liệu</h2><p>Đây là dấu hiệu cần xem lại; báo cáo không sửa dữ liệu và không tự kết luận thay người phụ trách.</p></div><button type="button" class="icon-button" data-close>×</button></div><div class="metric-grid">${metric('Cần kiểm tra', audit.summary.error, 'lỗi', '!')}${metric('Cảnh báo', audit.summary.warning, 'mục', '⚑')}${metric('Gợi ý', audit.summary.info, 'mục', 'i')}${metric('Bao phủ', ratePercent(audit.context.coverage), `${audit.context.recorded}/${audit.context.expected}`, '%')}</div><div class="form-grid audit-options"><div class="form-field"><label for="audit-rate">Ngưỡng tỷ lệ thấp (%)</label><input id="audit-rate" type="number" min="0" max="100" step="1" value="${audit.options.minimumAttendanceRate * 100}"></div><div class="form-field"><label for="audit-missing">Số kết quả thiếu tối đa mỗi sinh viên</label><input id="audit-missing" type="number" min="0" step="1" value="${audit.options.maximumMissingPerStudent}"></div><div class="form-field"><label for="audit-streak">Độ dài chuỗi vắng cần xem</label><input id="audit-streak" type="number" min="2" step="1" value="${audit.options.absenceStreakLength}"></div><button type="button" class="button button-secondary" data-audit-apply>Áp dụng ngưỡng</button></div><div class="toolbar"><label for="audit-filter">Hiển thị</label><select class="select-field" id="audit-filter"><option value="all" ${state.auditFilter === 'all' ? 'selected' : ''}>Tất cả (${audit.summary.total})</option><option value="error" ${state.auditFilter === 'error' ? 'selected' : ''}>Lỗi (${audit.summary.error})</option><option value="warning" ${state.auditFilter === 'warning' ? 'selected' : ''}>Cảnh báo (${audit.summary.warning})</option><option value="info" ${state.auditFilter === 'info' ? 'selected' : ''}>Gợi ý (${audit.summary.info})</option></select><span class="spacer"></span><button type="button" class="button button-secondary" data-audit-export>Tải báo cáo CSV</button></div><div class="audit-issue-list">${rows || emptyInline('Không có dấu hiệu trong bộ lọc này.')}</div><div class="modal-actions"><button type="button" class="button button-secondary" data-close>Đóng</button></div>`, () => {
+    bindModalClose();
+    $('#audit-filter').addEventListener('change', (event) => {
+      state.auditFilter = event.target.value;
+      auditDialog();
+    });
+    $('[data-audit-apply]').addEventListener('click', () => {
+      const minimumAttendanceRate = Number($('#audit-rate').value) / 100;
+      const maximumMissingPerStudent = Number($('#audit-missing').value);
+      const absenceStreakLength = Number($('#audit-streak').value);
+      if (!Number.isFinite(minimumAttendanceRate) || minimumAttendanceRate < 0 || minimumAttendanceRate > 1 ||
+          !Number.isSafeInteger(maximumMissingPerStudent) || maximumMissingPerStudent < 0 ||
+          !Number.isSafeInteger(absenceStreakLength) || absenceStreakLength < 2) {
+        showError(new Error('Kiểm tra lại các ngưỡng kiểm tra dữ liệu.')); return;
+      }
+      state.auditOptions = { ...state.auditOptions, minimumAttendanceRate, maximumMissingPerStudent, absenceStreakLength };
+      auditDialog();
+    });
+    $('[data-audit-export]').addEventListener('click', () =>
+      download('attendance-data-audit.csv', auditToCsv(audit), 'text/csv;charset=utf-8'));
   });
 }
 

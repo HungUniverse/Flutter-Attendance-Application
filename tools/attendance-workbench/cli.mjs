@@ -22,6 +22,9 @@ import { sessionsToICalendar } from '../../backend/session-icalendar.mjs';
 import { rollingAttendance } from '../../backend/attendance-trends.mjs';
 import { findConsecutiveAbsences } from '../../backend/attendance-streaks.mjs';
 import { evaluatePolicy } from './policy.mjs';
+import { createScenario, evaluateScenario, parseScenario, removeScenarioChange, scenarioToCsv,
+  serializeScenario, setScenarioChange } from './scenario.mjs';
+import { auditAttendanceSnapshot, auditToCsv } from './audit.mjs';
 
 const usage = `Attendance workbench (Node.js 22+)
 
@@ -32,6 +35,13 @@ const usage = `Attendance workbench (Node.js 22+)
   node cli.mjs absence-runs SNAPSHOT.json MINIMUM
   node cli.mjs forecast SNAPSHOT.json REMAINING TARGET
   node cli.mjs policy SNAPSHOT.json POLICY.json
+  node cli.mjs scenario-new SNAPSHOT.json TITLE [POLICY.json]
+  node cli.mjs scenario-set SCENARIO.json STUDENT_ID SESSION_ID present|absent|missing
+  node cli.mjs scenario-remove SCENARIO.json STUDENT_ID SESSION_ID
+  node cli.mjs scenario-evaluate SCENARIO.json [CURRENT_SNAPSHOT.json]
+  node cli.mjs scenario-csv SCENARIO.json [CURRENT_SNAPSHOT.json]
+  node cli.mjs audit SNAPSHOT.json [OPTIONS.json]
+  node cli.mjs audit-csv SNAPSHOT.json [OPTIONS.json]
   node cli.mjs apply SNAPSHOT.json CHANGES.json
   node cli.mjs compare BEFORE.json AFTER.json
   node cli.mjs export-csv SNAPSHOT.json
@@ -117,6 +127,42 @@ export async function runCommand(args) {
       requireArgs(values, 2);
       const [data, policy] = await Promise.all([snapshot(values[0]), readText(values[1])]);
       return json(evaluatePolicy(data, JSON.parse(policy)));
+    }
+    case 'scenario-new': {
+      if (values.length < 2 || values.length > 3) throw new TypeError('expected snapshot, title and optional policy file');
+      const [data, policyText] = await Promise.all([
+        snapshot(values[0]), values[2] ? readText(values[2]) : Promise.resolve(null),
+      ]);
+      return serializeScenario(createScenario(data, { title: values[1], policy: policyText ? JSON.parse(policyText) : null }));
+    }
+    case 'scenario-set': {
+      requireArgs(values, 4);
+      const scenario = parseScenario(await readText(values[0]));
+      return serializeScenario(setScenarioChange(scenario, values[1], values[2], values[3]));
+    }
+    case 'scenario-remove': {
+      requireArgs(values, 3);
+      const scenario = parseScenario(await readText(values[0]));
+      return serializeScenario(removeScenarioChange(scenario, values[1], values[2]));
+    }
+    case 'scenario-evaluate':
+    case 'scenario-csv': {
+      if (values.length < 1 || values.length > 2) throw new TypeError('expected scenario and optional current snapshot');
+      const scenario = parseScenario(await readText(values[0]));
+      const evaluation = values[1]
+        ? evaluateScenario(scenario, await snapshot(values[1]))
+        : evaluateScenario(scenario);
+      if (command === 'scenario-csv') return scenarioToCsv(evaluation);
+      return json(evaluation);
+    }
+    case 'audit':
+    case 'audit-csv': {
+      if (values.length < 1 || values.length > 2) throw new TypeError('expected snapshot and optional audit options file');
+      const [data, optionsText] = await Promise.all([
+        snapshot(values[0]), values[1] ? readText(values[1]) : Promise.resolve(null),
+      ]);
+      const result = auditAttendanceSnapshot(data, optionsText ? JSON.parse(optionsText) : {});
+      return command === 'audit-csv' ? auditToCsv(result) : json(result);
     }
     case 'apply': {
       requireArgs(values, 2);
