@@ -237,7 +237,12 @@ class FirebaseReportUpload implements UploadService {
     final task = ref.putFile(
       file,
       SettableMetadata(
-        contentType: name.endsWith('.json') ? 'application/json' : 'text/csv',
+        contentType: switch (name.split('.').last) {
+          'json' => 'application/json',
+          'csv' => 'text/csv',
+          'pdf' => 'application/pdf',
+          _ => throw const AppProblem('Định dạng sao lưu không hợp lệ.'),
+        },
         customMetadata: destination.metadata,
       ),
     );
