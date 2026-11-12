@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 
 import '../domain/models.dart';
 import '../lab3/services/contracts.dart';
+import 'report_file_writer.dart';
 import 'workspace_store.dart';
 
 abstract class WorkspaceRemote {
@@ -136,10 +137,10 @@ class SharedWorkspaceSync extends ChangeNotifier {
       ? jsonDecode(await file.readAsString()) as Map<String, dynamic>
       : {'revision': 0};
   Future<void> _write(File file, Object value) async {
-    await file.parent.create(recursive: true);
-    final tmp = File('${file.path}.tmp');
-    await tmp.writeAsString(jsonEncode(value), flush: true);
-    await tmp.rename(file.path);
+    await writeReportAtomically(
+      file,
+      Stream.value(utf8.encode(jsonEncode(value))),
+    );
   }
 
   Future<TeacherWorkspace?> _push(

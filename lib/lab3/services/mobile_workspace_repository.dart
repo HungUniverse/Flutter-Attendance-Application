@@ -118,10 +118,10 @@ class FileMobileWorkspaceRepository implements MobileWorkspaceRepository {
     if (session == null) {
       if (await file.exists()) await file.delete();
     } else {
-      final tmp = File('${file.path}.tmp');
-      await tmp.writeAsString(jsonEncode(session.toJson()), flush: true);
-      if (await file.exists()) await file.delete();
-      await tmp.rename(file.path);
+      await writeReportAtomically(
+        file,
+        Stream.value(utf8.encode(jsonEncode(session.toJson()))),
+      );
     }
   }
 }

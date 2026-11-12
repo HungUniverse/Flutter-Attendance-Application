@@ -404,7 +404,6 @@ class WorkspaceStore {
     required int revision,
     required DateTime? finalizedAt,
   }) {
-    final records = courseClass.attendance[meeting.id] ?? const {};
     final rosterCanonical = courseClass.students
         .map((s) => '${s.rollNumber}|${s.normalizedEmail}|${s.fullName}')
         .join('\n');
@@ -424,7 +423,7 @@ class WorkspaceStore {
         'finalizedAt': finalizedAt.toUtc().toIso8601String(),
       'updatedAt': DateTime.now().toUtc().toIso8601String(),
       'attendance': courseClass.students.map((student) {
-        final record = records[student.rollNumber];
+        final record = courseClass.recordFor(meeting.id, student.rollNumber);
         return {
           ...student.toJson(),
           'attendance':
