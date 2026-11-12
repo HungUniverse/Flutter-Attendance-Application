@@ -79,6 +79,14 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(find.textContaining('Drive'), findsNothing);
+        if (page is ExportPage) {
+          final backup = find.widgetWithText(
+            CheckboxListTile,
+            'Sao lưu Firebase Storage',
+          );
+          await tester.scrollUntilVisible(backup, 180);
+          expect(tester.widget<CheckboxListTile>(backup).value, isFalse);
+        }
         expect(
           tester.takeException(),
           isNull,
