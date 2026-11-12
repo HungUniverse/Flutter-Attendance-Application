@@ -130,6 +130,7 @@ class TeacherViewModel extends ChangeNotifier {
     _watchLink();
     linkError = null;
     reportBackedUp = false;
+    uploadProgress = 0;
     exportedFile = null;
     reportDestination = null;
     notices = [];
@@ -1185,16 +1186,21 @@ class TeacherViewModel extends ChangeNotifier {
     if (service == null) {
       throw const AppProblem('Chưa cấu hình Firebase Storage.');
     }
+    final generation = _generation;
     await service.upload(file, destination, (progress) {
+      if (generation != _generation) return;
       uploadProgress = progress;
       _notify();
     });
+    if (generation != _generation) return;
     reportBackedUp = true;
+    uploadProgress = 1;
     await _safe(
       () => telemetry.event('report_uploaded', {
         'format': file.path.endsWith('.csv') ? 'csv' : 'json',
       }),
     );
+    if (generation != _generation) return;
     message = 'Đã sao lưu Firebase Storage. File local được giữ lại.';
   });
   Future<bool> shareExport() => _run('share_report', () async {
