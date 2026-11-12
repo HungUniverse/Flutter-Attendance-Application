@@ -98,6 +98,11 @@ class _AttendancePageState extends State<AttendancePage> {
             ),
           ],
           if (editable) ...[
+            if (vm.ai != null) OutlinedButton.icon(
+              onPressed: vm.busy ? null : () => reviewWithAi(context, c.id, m.id),
+              icon: const Icon(Icons.auto_awesome_outlined),
+              label: const Text('AI · Gợi ý kiểm tra trước khi chốt'),
+            ),
             SegmentedButton<AttendanceMode>(
               segments: const [
                 ButtonSegment(
@@ -334,6 +339,33 @@ Future<void> closeAttendance(
   if (!confirm || !context.mounted) return;
   final ok = await vm.close(classId, meetingId);
   if (context.mounted) showResult(context, ok);
+}
+
+Future<void> reviewWithAi(BuildContext context, String classId, String meetingId) async {
+  final vm = context.read<TeacherViewModel>();
+  final ok = await vm.requestAiReview(classId, meetingId);
+  if (!context.mounted) return;
+  if (!ok || vm.aiReview == null) { showResult(context, false); return; }
+  final editor = TextEditingController(text: vm.aiReview!.text);
+  final edited = await showDialog<String>(context: context, builder: (context) => AlertDialog(
+    title: const Text('Gợi ý do AI tạo'),
+    content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+      const Text('Kiểm tra, chỉnh sửa và xác nhận nội dung trước khi tiếp tục chốt.'),
+      const SizedBox(height: 16),
+      TextField(controller: editor, minLines: 5, maxLines: 12, decoration: const InputDecoration(labelText: 'Nội dung kiểm tra')),
+    ])),
+    actions: [
+      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Đóng')),
+      FilledButton(onPressed: () { if (editor.text.trim().isNotEmpty) Navigator.pop(context, editor.text.trim()); }, child: const Text('Xác nhận gợi ý')),
+    ],
+  ));
+  // The route may still be animating out while its TextField is mounted.
+  await Future<void>.delayed(const Duration(milliseconds: 300));
+  editor.dispose();
+  if (edited != null && context.mounted) {
+    final accepted = await vm.acceptAiReview(edited);
+    if (context.mounted) showResult(context, accepted);
+  }
 }
 
 class LinkPage extends StatelessWidget {

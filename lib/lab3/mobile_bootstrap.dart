@@ -14,6 +14,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'services/firestore_attendance_links.dart';
 import 'services/firestore_notifications.dart';
+import 'services/ai_attendance_review.dart';
 import 'services/device_service.dart';
 import 'services/firebase_services.dart';
 import '../data/shared_workspace_sync.dart';
@@ -66,6 +67,7 @@ class MobileBootstrapService {
       config: config,
       notifications: FirestoreNotifications(FirebaseMessaging.instance, db),
       device: AndroidDeviceService(),
+      ai: FirebaseAttendanceReview(config, telemetry, Directory('${root.path}/ai-evidence')),
       links: FirestoreAttendanceLinks(db, auth, () => model.workspace?.semester,
         hostingUrl: 'https://${db.app.options.projectId}.web.app'),
     );

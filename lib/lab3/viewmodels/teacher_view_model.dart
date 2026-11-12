@@ -16,6 +16,7 @@ import '../../domain/schedule_service.dart';
 import '../services/contracts.dart';
 import '../services/report_destination.dart';
 import '../services/synced_workspace_repository.dart';
+import '../services/ai_attendance_review.dart';
 
 enum AttendanceMode { link, manual }
 
@@ -30,6 +31,7 @@ class TeacherViewModel extends ChangeNotifier {
     required this.device,
     required this.links,
     this.sync,
+    this.ai,
     DateTime Function()? clock,
   }) : now = clock ?? DateTime.now;
 
@@ -42,6 +44,8 @@ class TeacherViewModel extends ChangeNotifier {
   final UploadService? uploads;
   final DeviceService device;
   final AttendanceLinkService links;
+  final AttendanceReviewService? ai;
+  AiAttendanceReview? aiReview;
   final DateTime Function() now;
   final attendance = AttendanceService();
   TeacherIdentity? user;
@@ -98,6 +102,7 @@ class TeacherViewModel extends ChangeNotifier {
     final generation = ++_generation;
     user = identity;
     workspace = null;
+    aiReview = null;
     link = null;
     _watchLink();
     linkError = null;
@@ -458,6 +463,21 @@ class TeacherViewModel extends ChangeNotifier {
         );
         message = 'Đã chốt. Các ô chưa ghi đã chuyển thành Absent.';
       });
+
+  Future<bool> requestAiReview(String classId, String meetingId) => _run('ai_review', () async {
+    aiReview = null;
+    if (ai == null || !settings.enableAi) throw const AppProblem('Gợi ý AI đang tắt. Bạn có thể tiếp tục chốt.');
+    final owner = uid;
+    final totals = counts(classId, meetingId);
+    final review = await ai!.review(present: totals[AttendanceStatus.present]!, absent: totals[AttendanceStatus.absent]!, unmarked: totals[AttendanceStatus.unmarked]!);
+    if (uid == owner && !disposed) aiReview = review;
+  });
+
+  Future<bool> acceptAiReview(String edited) => _run('ai_accept', () async {
+    if (aiReview == null || ai == null) throw const AppProblem('Hãy lấy gợi ý AI trước.');
+    await ai!.accept(edited);
+    message = 'Đã xác nhận nội dung kiểm tra AI.';
+  });
   Future<bool> createLink(String classId, String meetingId) =>
       _run('create_link', () async {
         if (link != null) {
