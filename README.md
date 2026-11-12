@@ -1,6 +1,29 @@
 # FAP Attendance
 
-Ứng dụng điểm danh cho giảng viên bằng Flutter Android và Windows. Bản Android Lab 3 có hai chế độ Qua link và Thủ công. Hai ứng dụng giữ bản dữ liệu trên thiết bị và đồng bộ danh sách lớp, kết quả điểm danh qua backend HTTPS và Firestore khi đăng nhập cùng tài khoản. Firebase Storage dùng để sao lưu tệp báo cáo khi giảng viên chọn sao lưu.
+Ứng dụng điểm danh cho giảng viên bằng Flutter Android và Windows, kết hợp web check-in cho sinh viên. Bản Final dùng Firebase Authentication, Firestore và Firebase Hosting. Android và Windows đọc/ghi trực tiếp bằng Firebase SDK, giữ hàng đợi ghi trên máy khi mất mạng và phát hiện xung đột giữa thiết bị.
+
+## Firebase Final
+
+- Web check-in tại [FAP Attendance](https://fap-attendance-71655.web.app). Sinh viên mở link `/join/{sessionId}` do giảng viên tạo.
+- Giảng viên dùng Google Sign-In và hồ sơ quyền được chủ project cấp. Sinh viên đăng nhập Google với email đã xác minh trong roster.
+- Có điểm danh thủ công, link/QR, cập nhật lượt gửi, chốt, sửa có lý do, xuất PDF/CSV/JSON trên thiết bị và metadata Firestore.
+- Android duy trì Analytics, Remote Config, Crashlytics, hộp thư Firestore và gợi ý AI có thể sửa/xác nhận.
+- [Cách chạy và deploy Final](docs/FINAL_SETUP.md), [mô hình dữ liệu](docs/data-model.md), [luồng liên vai trò](docs/cross-role-flow.md), [báo cáo kiểm thử](docs/test-report.md).
+- AI Logic hiện trả HTTP 429 do project hết credit trả trước. Chốt điểm danh vẫn hoạt động. Tình trạng thực tế được ghi trong [AI feature](docs/ai-feature.md).
+- Web quản lý giảng viên được hoãn theo phạm vi đã thống nhất. Bản báo cáo/slide PDF và video nộp bài cần bổ sung theo mã số sinh viên và minh chứng thực tế.
+
+```powershell
+flutter pub get
+npm ci --prefix firebase
+npm ci --prefix web
+node firebase/configure-app-check.mjs
+flutter run -d windows --dart-define-from-file=mobile/firebase-debug.json
+flutter run -d <ANDROID_DEVICE_ID> --dart-define-from-file=mobile/firebase-debug.json
+```
+
+Các lệnh setup Firebase cần chủ project đăng nhập Firebase CLI. Trên máy mới, tải `google-services.json` theo hướng dẫn Final trước khi chạy Android. Token App Check demo nằm trong file local bị Git bỏ qua. Windows demo dùng debug attestation.
+
+Các phần Lab 3 dưới đây mô tả mốc trước chuyển đổi tại commit `0b53f31`. Desktop local có thể chạy bằng `--dart-define=LAB3_LEGACY=true`. Công cụ AI dùng trong đợt Final là OpenAI Codex để triển khai, tự rà soát mã và chạy kiểm thử. Video demo và hồ sơ ARTEMIS đang chờ thu.
 
 ## Android Lab 3
 

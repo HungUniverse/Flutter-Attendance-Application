@@ -4,11 +4,15 @@
 
 Android giảng viên dùng Firebase Auth và Firestore trực tiếp. Web sinh viên dùng Google Sign-In, chỉ check-in cho tài khoản có email đã xác minh trong roster. Dữ liệu Lab 3 giữ nguyên để đối chiếu và phục hồi.
 
-## Quyết định cần xác nhận
+## Phạm vi đã xác nhận
 
-- Phạm vi web giảng viên và ý nghĩa hàng chờ duyệt trong bài Final.
-- Email giảng viên demo, Firebase project và tài khoản sinh viên demo.
-- Windows có nằm trong demo Final hay tiếp tục dùng bản Lab 3.
+Người dùng chọn Android và web check-in trước, chuyển cả Windows sang Firebase. Web quản lý giảng viên được hoãn. Project là `fap-attendance-71655`. Email Google do người dùng cung cấp đã được cấp và đọc lại quyền giảng viên để xác minh. Thông tin đăng nhập demo được cung cấp qua kênh riêng.
+
+## Còn cần bổ sung
+
+- Tài khoản Google sinh viên demo có thể đăng nhập thực tế.
+- Quota AI để lấy ba phản hồi thành công. Project hiện trả HTTP 429 do hết credit trả trước.
+- Ba lượt trên Android/web đã triển khai, ảnh trình duyệt và video demo.
 - Mã số nộp bài, đề gốc, video và minh chứng ARTEMIS thực tế.
 
 ## Điều kiện nghiệm thu
