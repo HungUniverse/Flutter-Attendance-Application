@@ -8,6 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
@@ -58,6 +59,7 @@ class MobileBootstrapService {
     final directory = await getApplicationDocumentsDirectory();
     final root = Directory('${directory.path}/FAP Attendance Mobile');
     final db = FirebaseFirestore.instance;
+    final storageBucket = db.app.options.storageBucket;
     final sync = SharedWorkspaceSync(FirestoreWorkspaceRemote(db, auth), root);
     late TeacherViewModel model;
     model = TeacherViewModel(
@@ -68,6 +70,9 @@ class MobileBootstrapService {
         reports: FirestoreReportMetadata(db, root),
       ),
       sync: sync,
+      uploads: storageBucket == null || storageBucket.isEmpty
+          ? null
+          : FirebaseReportUpload(FirebaseStorage.instanceFor(app: db.app)),
       drafts: AttendanceDraftStore(root),
       telemetry: telemetry,
       config: config,
