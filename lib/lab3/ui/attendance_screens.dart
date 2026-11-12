@@ -858,7 +858,7 @@ class ExportPage extends StatefulWidget {
 }
 
 class _ExportPageState extends State<ExportPage> {
-  String _format = 'json';
+  String _format = 'pdf';
   bool _backup = false;
   bool _exported = false;
   @override
@@ -897,6 +897,7 @@ class _ExportPageState extends State<ExportPage> {
                 const SizedBox(height: 12),
                 SegmentedButton<String>(
                   segments: const [
+                    ButtonSegment(value: 'pdf', label: Text('PDF')),
                     ButtonSegment(value: 'json', label: Text('JSON')),
                     ButtonSegment(value: 'csv', label: Text('CSV')),
                   ],
@@ -907,9 +908,11 @@ class _ExportPageState extends State<ExportPage> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  _format == 'json'
-                      ? 'Dùng cho Chrome Extension trên máy tính.'
-                      : 'Dùng trao đổi và đối chiếu dữ liệu bảng tính.',
+                  switch (_format) {
+                    'pdf' => 'Báo cáo PDF có thể mở, lưu và chia sẻ trên thiết bị.',
+                    'json' => 'Dùng cho Chrome Extension trên máy tính.',
+                    _ => 'Dùng trao đổi và đối chiếu dữ liệu bảng tính.',
+                  },
                 ),
                 Text(vm.settings.exportHelp),
               ],
@@ -920,7 +923,7 @@ class _ExportPageState extends State<ExportPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const Text(
-                  'NƠI LƯU & SAO LƯU',
+                  'NƠI LƯU BÁO CÁO',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 12),
@@ -930,7 +933,7 @@ class _ExportPageState extends State<ExportPage> {
                   title: Text('Lưu trên thiết bị'),
                   subtitle: Text('Mặc định · luôn giữ bản local'),
                 ),
-                CheckboxListTile(
+                if (vm.uploads != null) CheckboxListTile(
                   contentPadding: EdgeInsets.zero,
                   value: _backup,
                   onChanged: vm.busy
@@ -985,7 +988,7 @@ class _ExportPageState extends State<ExportPage> {
                     icon: const Icon(Icons.share),
                     label: const Text('Chia sẻ tệp'),
                   ),
-                  if (vm.reportDestination != null) ...[
+                  if (vm.uploads != null && vm.reportDestination != null) ...[
                     const SizedBox(height: 16),
                     const Text(
                       'Thư mục Firebase Storage',
@@ -998,8 +1001,8 @@ class _ExportPageState extends State<ExportPage> {
                     ),
                   ],
                   const SizedBox(height: 8),
-                  LinearProgressIndicator(value: vm.uploadProgress),
-                  Text('Tải lên: ${(vm.uploadProgress * 100).round()}%'),
+                  if (vm.uploads != null) LinearProgressIndicator(value: vm.uploadProgress),
+                  if (vm.uploads != null) Text('Tải lên: ${(vm.uploadProgress * 100).round()}%'),
                   if (vm.cloudUrl != null) ...[
                     const Text(
                       'Đã sao lưu Firebase Storage',
@@ -1007,7 +1010,7 @@ class _ExportPageState extends State<ExportPage> {
                     ),
                     SelectableText(vm.cloudUrl!),
                   ],
-                  if (vm.cloudUrl == null)
+                  if (vm.uploads != null && vm.cloudUrl == null)
                     OutlinedButton(
                       onPressed: vm.busy
                           ? null

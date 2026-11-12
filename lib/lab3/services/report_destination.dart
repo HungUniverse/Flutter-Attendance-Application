@@ -18,7 +18,7 @@ class ReportDestination {
       }
     }
     if (meetingNumber < 1 ||
-        !RegExp(r'^[A-Za-z0-9][A-Za-z0-9_.-]*\.(json|csv)$')
+        !RegExp(r'^[A-Za-z0-9][A-Za-z0-9_.-]*\.(json|csv|pdf)$')
             .hasMatch(fileName)) {
       throw const FormatException('Tên tệp hoặc số buổi học không hợp lệ.');
     }
