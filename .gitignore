@@ -32,7 +32,13 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+
+# Local Lab work and a separate Lab 2 checkout
+/artifacts/
+/prm323-lab2-SE193324/
+
 extension/node_modules/
+extension/dist/*.js.map
 backend/node_modules/
 backend/data/
 backend/.env

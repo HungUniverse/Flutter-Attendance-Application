@@ -14,7 +14,6 @@ await build({
   outdir: outputDir,
   format: 'iife',
   target: 'chrome120',
-  sourcemap: true,
 });
 await Promise.all([
   cp('public/manifest.json', 'dist/manifest.json'),
