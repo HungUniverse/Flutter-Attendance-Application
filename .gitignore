@@ -40,6 +40,12 @@ migrate_working_dir/
 extension/node_modules/
 extension/dist/*.js.map
 backend/node_modules/
+firebase/node_modules/
+web/node_modules/
+web/dist/
+.firebase/
+**/.env.local
+**/*-debug.log
 backend/data/
 backend/.env
 backend/secrets/
