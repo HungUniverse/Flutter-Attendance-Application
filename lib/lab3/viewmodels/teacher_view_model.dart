@@ -923,12 +923,16 @@ class TeacherViewModel extends ChangeNotifier {
   Future<void> _stopLink() async {
     final current = link;
     if (current == null) return;
-    await links.stop(current);
-    await _refreshLink();
-    if (linkError != null) {
-      throw const AppProblem(
-        'Link đã dừng nhưng chưa tải đủ kết quả. Thử lại để lưu kết quả.',
-      );
+    try {
+      await links.stop(current);
+      await _refreshLink();
+      if (linkError != null) {
+        throw const AppProblem(
+          'Link đã dừng nhưng chưa tải đủ kết quả. Thử lại để lưu kết quả.',
+        );
+      }
+    } on AttendanceLinkNotFound {
+      // Firestore confirmed this cached session no longer exists.
     }
     await repository.saveLink(uid, null);
     link = null;
