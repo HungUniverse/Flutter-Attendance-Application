@@ -638,10 +638,9 @@ class TeacherViewModel extends ChangeNotifier {
       .firstWhereOrNull((m) => m.id == session.meetingId);
 
   Future<void> _clearClosedLink(String owner, LinkSession? session) async {
-    if (session == null ||
-        _meetingForLink(session)?.state != MeetingState.closed) {
-      return;
-    }
+    if (session == null) return;
+    final storedMeeting = _meetingForLink(session);
+    if (storedMeeting != null && storedMeeting.state != MeetingState.closed) return;
     if (link?.id == session.id) {
       link = null;
       linkError = null;
@@ -649,7 +648,7 @@ class TeacherViewModel extends ChangeNotifier {
     final generation = _generation;
     try {
       // Keep the saved handle when the relay is unavailable so cleanup can retry.
-      if (session.receiving && session.expiresAt.isAfter(now())) {
+      if (storedMeeting != null && session.receiving && session.expiresAt.isAfter(now())) {
         await links.stop(session);
       }
       if (generation != _generation || disposed || link != null) return;
