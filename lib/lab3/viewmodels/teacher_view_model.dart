@@ -310,13 +310,18 @@ class TeacherViewModel extends ChangeNotifier {
       : value?.classes
             .firstWhereOrNull((c) => c.id == draft.classId)
             ?.meetings
-            .firstWhereOrNull((m) => m.id == draft.meetingId);
+            .firstWhereOrNull(
+              (m) =>
+                  m.id == draft.meetingId &&
+                  m.startAt.isAtSameMomentAs(draft.startAt),
+            );
 
   TeacherWorkspace _applyDrafts(TeacherWorkspace value) => value.copyWith(
     classes: value.classes.map((c) {
       final records = {...c.attendance};
       for (final m in c.meetings) {
-        final draft = _manualDrafts['${value.semester}/${c.id}/${m.id}'];
+        final draft =
+            _manualDrafts['${value.semester}/${c.id}/${m.id}/${m.startAt.toIso8601String()}'];
         if (draft == null ||
             m.state != MeetingState.active ||
             !m.startAt.isAtSameMomentAs(draft.startAt)) {
@@ -340,7 +345,8 @@ class TeacherViewModel extends ChangeNotifier {
         (old) => old.id == c.id,
       );
       for (final m in c.meetings.where((m) => m.state != MeetingState.closed)) {
-        final draft = _manualDrafts['${value.semester}/${c.id}/${m.id}'];
+        final draft =
+            _manualDrafts['${value.semester}/${c.id}/${m.id}/${m.startAt.toIso8601String()}'];
         if (draft == null) continue;
         final clean = {...?records[m.id]};
         for (final roll in draft.records.keys) {
@@ -385,7 +391,13 @@ class TeacherViewModel extends ChangeNotifier {
           (draft) =>
               _draftMeeting(_publishedWorkspace, draft)?.state ==
                   MeetingState.active &&
-              _draftMeeting(updated, draft)?.state == MeetingState.closed,
+              _draftMeeting(updated, draft)?.state == MeetingState.closed &&
+              draft.records.keys.every(
+                (roll) => updated.classes
+                    .firstWhere((c) => c.id == draft.classId)
+                    .students
+                    .any((s) => s.rollNumber == roll),
+              ),
         )
         .map((d) => d.key)
         .toList();
@@ -525,7 +537,8 @@ class TeacherViewModel extends ChangeNotifier {
           !c.students.any((s) => s.rollNumber == roll)) {
         throw const AppProblem('Sinh viên hoặc kết quả không hợp lệ.');
       }
-      final key = '${workspace!.semester}/$classId/$meetingId';
+      final key =
+          '${workspace!.semester}/$classId/$meetingId/${m.startAt.toIso8601String()}';
       final previous = _manualDrafts[key];
       _manualDrafts[key] = MeetingAttendanceDraft(
         semester: workspace!.semester,
@@ -584,7 +597,8 @@ class TeacherViewModel extends ChangeNotifier {
           now: now(),
         ),
       );
-      final draft = _manualDrafts['${workspace!.semester}/$classId/$meetingId'];
+      final draft =
+          _manualDrafts['${workspace!.semester}/$classId/$meetingId/${meeting(classId, meetingId).startAt.toIso8601String()}'];
       if (draft?.records[roll]?.status == status) {
         draft!.records.remove(roll);
         if (draft.records.isEmpty) _manualDrafts.remove(draft.key);
@@ -605,6 +619,23 @@ class TeacherViewModel extends ChangeNotifier {
     }
     return result;
   }
+
+  Future<bool> discardDraft(String key) =>
+      _run('discard_attendance_draft', () async {
+        final previous = _manualDrafts.remove(key);
+        if (previous == null) return;
+        try {
+          await _saveDrafts(ensureSaved: true);
+        } on Object {
+          _manualDrafts[key] = previous;
+          rethrow;
+        }
+        if (_publishedWorkspace != null) {
+          workspace = _applyDrafts(_publishedWorkspace!);
+        }
+        message =
+            'Đã bỏ bản nháp trên thiết bị. Kết quả Firebase được giữ nguyên.';
+      });
 
   Future<bool> close(String classId, String meetingId) => _run(
     'close_attendance',

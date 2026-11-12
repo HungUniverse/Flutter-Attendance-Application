@@ -350,8 +350,29 @@ class AttendanceDraftNotice extends StatelessWidget {
                         ...vm.manualDrafts.map(
                           (draft) => Padding(
                             padding: const EdgeInsets.only(top: 16),
-                            child: Text(
-                              '${draft.classId}\n${DateTime(draft.startAt.year, draft.startAt.month, draft.startAt.day).toIso8601String().split('T').first}\n${draft.records.entries.map((entry) => '${entry.key}: ${attendanceCode(entry.value.status)}').join('\n')}',
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${draft.classId}\n${DateTime(draft.startAt.year, draft.startAt.month, draft.startAt.day).toIso8601String().split('T').first}\n${draft.records.entries.map((entry) => '${entry.key}: ${attendanceCode(entry.value.status)}').join('\n')}',
+                                ),
+                                TextButton(
+                                  onPressed: () async {
+                                    final accepted = await confirmAction(
+                                      context,
+                                      'Bỏ bản nháp này?',
+                                      'Các lựa chọn trong bản nháp của buổi này sẽ bị bỏ. Kết quả trên Firebase không thay đổi.',
+                                      confirm: 'Bỏ bản nháp',
+                                    );
+                                    if (!accepted || !context.mounted) return;
+                                    final ok = await vm.discardDraft(draft.key);
+                                    if (ok && context.mounted) {
+                                      Navigator.pop(context);
+                                    }
+                                  },
+                                  child: const Text('Bỏ bản nháp này'),
+                                ),
+                              ],
                             ),
                           ),
                         ),

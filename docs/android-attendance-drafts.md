@@ -10,7 +10,7 @@ Workspace hiển thị là bản đã đồng bộ cộng bản nháp hợp lệ
 
 Khi **Chốt danh sách**, app dừng link và nhập đủ check-in nếu có, giữ lựa chọn thủ công, điền A cho người chưa ghi, rồi lưu kết quả đã chốt. Sau khi workspace/outbox đã lưu, journal của buổi đó được dọn. Đồng bộ thất bại được báo là chốt trên máy/chưa xác nhận Firebase. Buổi quá ngày vẫn theo quy tắc tự chốt hiện có.
 
-Nếu máy chủ đã chốt buổi, xóa lớp hoặc thay ngày học, bản nháp không tự ghi đè kết quả đã chốt. Journal được giữ để xem qua **Xem bản nháp**; áp dụng lại kết quả qua Lịch sử cần lý do chỉnh sửa. Sau chốt, việc sửa kết quả vẫn gửi theo luồng audit cũ. Giảng viên khác không thấy lựa chọn thủ công đang là bản nháp trên thiết bị này.
+Nếu máy chủ đã chốt buổi, xóa lớp hoặc thay ngày học, bản nháp không tự ghi đè kết quả đã chốt. Khóa journal bao gồm cả thời điểm bắt đầu để không trộn lựa chọn khi ID buổi được tái sử dụng. Journal được giữ để xem qua **Xem bản nháp**; áp dụng lại kết quả qua Lịch sử cần lý do chỉnh sửa. Có thể **Bỏ bản nháp này** sau khi xác nhận, không thay kết quả trên cloud. Sau chốt, việc sửa kết quả vẫn gửi theo luồng audit cũ. Giảng viên khác không thấy lựa chọn thủ công đang là bản nháp trên thiết bị này.
 
 Thay đổi bản nháp áp dụng cho app Android/TeacherViewModel. Bảng điểm danh Windows dùng AttendanceController riêng, chưa chuyển sang thao tác nháp trong đợt này.
 

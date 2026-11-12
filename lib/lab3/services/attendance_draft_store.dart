@@ -18,7 +18,8 @@ class MeetingAttendanceDraft {
   final String meetingId;
   final DateTime startAt;
   final Map<String, AttendanceRecord> records;
-  String get key => '$semester/$classId/$meetingId';
+  String get key =>
+      '$semester/$classId/$meetingId/${startAt.toIso8601String()}';
   Map<String, Object?> toJson() => {
     'semester': semester,
     'classId': classId,
