@@ -13,7 +13,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test(
-    'normal export flow creates and shares a corrected Vietnamese PDF',
+    'normal export flow creates, backs up, and shares a corrected Vietnamese PDF',
     () async {
       final harness = Harness(
         await Directory.systemTemp.createTemp('fap-final-pdf-'),
@@ -32,6 +32,10 @@ void main() {
       final file = harness.vm.exportedFile!;
       expect(file.path, endsWith('.pdf'));
       expect(ascii.decode((await file.readAsBytes()).take(4).toList()), '%PDF');
+      expect(await harness.vm.upload(), true);
+      expect(harness.upload.lastDestination!.objectPath, endsWith('.pdf'));
+      expect(harness.vm.reportBackedUp, isTrue);
+      expect(await file.exists(), isTrue);
       expect(await harness.vm.shareExport(), true);
       final preview = Directory('build/final-previews');
       await preview.create(recursive: true);
