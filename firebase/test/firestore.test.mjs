@@ -478,3 +478,76 @@ test("report metadata is teacher-owned and requires a finalized meeting", async 
     "pdf",
   );
 });
+
+const correctionRequest = () => ({
+  uid:"student", email:"student@example.com", ownerUid:"teacher", classId:"c1", meetingId:"m1", sessionId:"s1",
+  requestedStatus:"P", reason:"Có mặt nhưng chưa được ghi nhận", state:"pending", createdAt:serverTimestamp(),
+});
+async function seedClosedRequest({ pending = true } = {}) {
+  await env.withSecurityRulesDisabled(async context=>{
+    const db=context.firestore();
+    await updateDoc(doc(db,"classes/c1/meetings/m1"),{state:"closed",records:{S1:mark("A")}});
+    if(pending)await setDoc(doc(db,"attendanceRequests/s1_student"),correctionRequest());
+  });
+}
+test("verified student creates one correction request only after close",async()=>{
+  const db=dbFor("student"),ref=doc(db,"attendanceRequests/s1_student");
+  await assertFails(setDoc(ref,correctionRequest()));
+  await seedClosedRequest({pending:false});
+  await assertSucceeds(setDoc(ref,correctionRequest()));
+  await assertFails(setDoc(ref,correctionRequest()));
+  await assertFails(deleteDoc(ref));
+});
+test("requests reject forged owner identity class status and blank reason",async()=>{
+  await seedClosedRequest({pending:false});
+  const base=correctionRequest();
+  for(const change of [{uid:"outsider"},{email:"other@example.com"},{ownerUid:"other"},{classId:"other"},{meetingId:"other"},{requestedStatus:"A"},{requestedStatus:"X"},{reason:" "},{reason:"x".repeat(1001)},{state:"approved"},{createdAt:Timestamp.fromMillis(0)},{extra:"forged"}])
+    await assertFails(setDoc(doc(dbFor("student"),"attendanceRequests/s1_student"),{...base,...change}));
+  await assertFails(setDoc(doc(dbFor("outsider"),"attendanceRequests/s1_outsider"),{...base,uid:"outsider",email:"outsider@example.com"}));
+  await assertFails(setDoc(doc(dbFor("student"),"attendanceRequests/random-id"),base));
+});
+test("request access is scoped to own student and owning teacher queries",async()=>{
+  await seedClosedRequest();
+  await assertSucceeds(getDoc(doc(dbFor("student"),"attendanceRequests/s1_student")));
+  await assertSucceeds(getDoc(doc(dbFor("teacher"),"attendanceRequests/s1_student")));
+  for(const db of [dbFor("outsider"),dbFor("other"),env.unauthenticatedContext().firestore()])
+    await assertFails(getDoc(doc(db,"attendanceRequests/s1_student")));
+  await assertSucceeds(getDocs(query(collection(dbFor("student"),"attendanceRequests"),where("uid","==","student"))));
+  await assertSucceeds(getDocs(query(collection(dbFor("teacher"),"attendanceRequests"),where("ownerUid","==","teacher"))));
+  await assertFails(getDocs(collection(dbFor("student"),"attendanceRequests")));
+});
+test("only owning teacher rejects a pending request, with a reason and server time",async()=>{
+  await seedClosedRequest();
+  const decision={state:"rejected",reviewerUid:"teacher",decisionReason:"Không đủ minh chứng",decidedAt:serverTimestamp()};
+  for(const uid of ["student","other","outsider"])await assertFails(updateDoc(doc(dbFor(uid),"attendanceRequests/s1_student"),decision));
+  await assertFails(updateDoc(doc(dbFor("teacher"),"attendanceRequests/s1_student"),{...decision,decisionReason:" "}));
+  await assertFails(updateDoc(doc(dbFor("teacher"),"attendanceRequests/s1_student"),{...decision,reason:"Teacher overwrote student's reason"}));
+  await assertSucceeds(updateDoc(doc(dbFor("teacher"),"attendanceRequests/s1_student"),decision));
+  await assertFails(updateDoc(doc(dbFor("teacher"),"attendanceRequests/s1_student"),{...decision,state:"approved"}));
+});
+test("approval requires the matching audited result and workspace revision atomically",async()=>{
+  await seedClosedRequest();
+  const db=dbFor("teacher"),ref=doc(db,"attendanceRequests/s1_student");
+  const decision={state:"approved",reviewerUid:"teacher",decisionReason:"Đã đối chiếu minh chứng",decidedAt:serverTimestamp()};
+  await assertFails(updateDoc(ref,decision));
+  const audit={id:"s1_student",createdAt:new Date().toISOString(),action:"attendance_override",reason:decision.decisionReason,rollNumber:"S1",meetingId:"m1",oldValue:"A",newValue:"P"};
+  const edit=async auditId=>{
+    const batch=writeBatch(db);
+    batch.update(doc(db,"workspaces/w1"),{revision:2,updatedAt:serverTimestamp()});
+    batch.update(doc(db,"classes/c1/meetings/m1"),{records:{S1:{...mark("P"),note:decision.decisionReason}},auditEvents:[{...audit,id:auditId}]});
+    batch.update(ref,decision);return batch.commit();
+  };
+  await assertFails(edit("unrelated-audit"));
+  await assertSucceeds(edit("s1_student"));
+  assert.equal((await getDoc(doc(db,"classes/c1/meetings/m1"))).data().records.S1.status,"P");
+});
+test("email-addressed class announcements are private and require a roster recipient",async()=>{
+  const notice={ownerUid:"teacher",recipientUid:"",recipientEmail:"student@example.com",title:"Lịch học",body:"Thông tin cho lớp",at:serverTimestamp(),classId:"c1",meetingId:""};
+  await assertSucceeds(setDoc(doc(dbFor("teacher"),"announcements/email1"),notice));
+  await assertSucceeds(getDoc(doc(dbFor("student"),"announcements/email1")));
+  await assertSucceeds(getDocs(query(collection(dbFor("student"),"announcements"),where("recipientEmail","==","student@example.com"))));
+  await assertFails(getDoc(doc(dbFor("outsider"),"announcements/email1")));
+  await assertFails(setDoc(doc(dbFor("teacher"),"announcements/email2"),{...notice,recipientEmail:"outsider@example.com"}));
+  await assertFails(setDoc(doc(dbFor("other"),"announcements/email2"),{...notice,ownerUid:"other"}));
+  await assertFails(setDoc(doc(dbFor("student"),"announcements/email2"),notice));
+});
