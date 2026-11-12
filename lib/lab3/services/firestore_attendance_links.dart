@@ -20,8 +20,16 @@ abstract interface class ServerTimedAttendanceLinks {
   DateTime get serverNow;
 }
 
+/// Accepted check-ins delivered with their payload, without a follow-up poll.
+abstract interface class RealtimeAttendanceUpdates {
+  Stream<LinkUpdate> watchUpdates(LinkSession session);
+}
+
 class FirestoreAttendanceLinks
-    implements LiveAttendanceLinks, ServerTimedAttendanceLinks {
+    implements
+        LiveAttendanceLinks,
+        ServerTimedAttendanceLinks,
+        RealtimeAttendanceUpdates {
   FirestoreAttendanceLinks(
     this.db,
     this.auth,
@@ -188,6 +196,61 @@ class FirestoreAttendanceLinks
     if (rows.docs.isEmpty) return null;
     return _session(rows.docs.single.id, rows.docs.single.data());
   }
+
+  @override
+  Stream<LinkUpdate> watchUpdates(
+    LinkSession session,
+  ) => Stream<LinkUpdate>.multi((controller) {
+    final ref = db.doc('attendanceSessions/${session.id}');
+    LinkSession? latestSession;
+    List<LinkSubmission>? latestRows;
+    void emit() {
+      if (latestSession != null && latestRows != null) {
+        controller.add(LinkUpdate(latestSession!, latestRows!));
+      }
+    }
+
+    final metadata = ref.snapshots(includeMetadataChanges: true).listen((
+      snapshot,
+    ) {
+      // Server timestamps can be unresolved during a local write.
+      if (snapshot.metadata.hasPendingWrites || snapshot.metadata.isFromCache) {
+        return;
+      }
+      final data = snapshot.data();
+      if (data == null) {
+        controller.addError(
+          const AppProblem('Không tìm thấy phiên điểm danh.'),
+        );
+        return;
+      }
+      latestSession = _session(session.id, data);
+      emit();
+    }, onError: controller.addError);
+    final submissions = ref
+        .collection('checkIns')
+        .snapshots(includeMetadataChanges: true)
+        .listen((snapshot) {
+          // A reset/reimport can reuse meeting IDs. Never resurrect accepted
+          // rows from an old offline cache before server confirmation.
+          if (snapshot.metadata.isFromCache) return;
+          latestRows = [
+            for (final row in snapshot.docs)
+              if (!row.metadata.hasPendingWrites &&
+                  row.data()['email'] is String &&
+                  row.data()['at'] is Timestamp)
+                LinkSubmission(
+                  row.data()['email'] as String,
+                  (row.data()['at'] as Timestamp).toDate().toLocal(),
+                ),
+          ];
+          emit();
+        }, onError: controller.addError);
+    controller.onCancel = () async {
+      await metadata.cancel();
+      await submissions.cancel();
+    };
+  });
 
   @override
   Stream<void> changes(LinkSession session) => Stream<void>.multi((controller) {
