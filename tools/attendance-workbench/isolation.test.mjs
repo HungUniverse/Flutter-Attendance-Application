@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const sourceExtensions = new Set(['.dart', '.html', '.js', '.mjs', '.json', '.yaml', '.yml']);
+const ignoredDirectories = new Set(['node_modules', 'dist', '.git', '.dart_tool', 'build']);
 
 async function listFiles(directory) {
   let entries;
@@ -15,6 +16,7 @@ async function listFiles(directory) {
     throw error;
   }
   const nested = await Promise.all(entries.map(async (entry) => {
+    if (entry.isDirectory() && ignoredDirectories.has(entry.name)) return [];
     const path = join(directory, entry.name);
     if (entry.isDirectory()) return listFiles(path);
     return [path];
