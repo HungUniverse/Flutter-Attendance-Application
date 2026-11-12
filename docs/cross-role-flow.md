@@ -20,4 +20,6 @@ Mỗi lượt kiểm tra ghi thủ công A, gửi check-in cho cùng sinh viên,
 
 Kết quả từng lượt và số đo được sinh tại `build/final-previews/native-web-emulator-results.json`. Thời gian đo bắt đầu trước khi khởi chạy client JavaScript và kết thúc khi native nhận được số đếm mới, bao gồm khởi động tiến trình và đăng nhập emulator.
 
+Lượt kiểm tra cuối ghi 672 ms, 706 ms và 549 ms. Bản lưu nằm trong [bằng chứng Emulator](../evidence/final/cross-role-emulator.json).
+
 Ba lượt trên môi trường triển khai với Google thật, trình duyệt điện thoại và Android vẫn cần thực hiện khi thu video và bằng chứng Final. Số đo Emulator được ghi riêng trong báo cáo kiểm thử.
