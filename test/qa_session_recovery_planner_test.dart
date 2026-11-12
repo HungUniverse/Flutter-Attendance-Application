@@ -218,6 +218,29 @@ void main() {
         ),
         throwsA(isA<ArgumentError>()),
       );
+      final validCandidate = MakeupSlotCandidate(
+        date: DateTime(2026, 11, 6),
+        dailySlot: 1,
+        startAt: DateTime(2026, 11, 6, 7, 0),
+        endAt: DateTime(2026, 11, 6, 9, 15),
+        isPreferredWeekday: false,
+      );
+      expect(
+        () => planner.scheduleMakeupMeeting(
+          courseClass: course,
+          candidate: validCandidate,
+          customMeetingId: '   ',
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+      expect(
+        () => planner.scheduleMakeupMeeting(
+          courseClass: course,
+          candidate: validCandidate,
+          customMeetingId: 'c1-m1', // Existing meeting ID
+        ),
+        throwsA(isA<StateError>()),
+      );
     });
   });
 }

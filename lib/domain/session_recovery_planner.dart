@@ -214,6 +214,14 @@ class SessionRecoveryPlanner {
     required MakeupSlotCandidate candidate,
     String? customMeetingId,
   }) {
+    if (customMeetingId != null && customMeetingId.trim().isEmpty) {
+      throw ArgumentError.value(
+        customMeetingId,
+        'customMeetingId',
+        'Mã buổi học bù không được để trống.',
+      );
+    }
+
     final overlapsExisting = courseClass.meetings.any(
       (m) =>
           candidate.startAt.isBefore(m.endAt) &&
@@ -224,8 +232,11 @@ class SessionRecoveryPlanner {
     }
 
     final newId =
-        customMeetingId ??
+        customMeetingId?.trim() ??
         '${courseClass.id}-makeup-${candidate.startAt.millisecondsSinceEpoch}';
+    if (courseClass.meetings.any((m) => m.id == newId)) {
+      throw StateError('Mã buổi học bù đã tồn tại: $newId.');
+    }
     final addedMeeting = Meeting(
       id: newId,
       number: courseClass.meetings.length + 1,
