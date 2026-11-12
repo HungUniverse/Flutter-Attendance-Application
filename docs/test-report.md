@@ -96,3 +96,9 @@ Không chạy thêm test theo yêu cầu trước đó; số liệu Rules/DOM �
 Bản 1.0.1+2 bổ sung journal P/A thủ công trên thiết bị, tách snapshot đã đồng bộ và lớp phủ bản nháp, gửi các lựa chọn khi chốt. Link dùng giai đoạn chuẩn bị dừng nhận để lấy server timestamp rồi mở trong transaction tiếp theo; Rules giữ giới hạn hai phút và chặn check-in trước khi mở. Xem [phạm vi và giới hạn](android-attendance-drafts.md).
 
 Không chạy lại bộ test cũ; các kỳ vọng lưu ngay sau từng `mark()` của bộ TeacherViewModel trước đây không mô tả luồng nháp mới. Không có thiết bị ADB để xác nhận lỗi tạo link thực tế; mã lỗi Firebase nay được hiển thị để tiếp tục chẩn đoán khi cần. Phân tích mã tĩnh trên các tệp sửa không có lỗi.
+
+## Cập nhật check-in Android 1.0.2+3
+
+Đã pull `8dc8b70`, trong đó bộ kiểm thử upstream đã điều chỉnh kỳ vọng về bản nháp. Lượt tối ưu này không chạy test theo yêu cầu người dùng. `flutter analyze` trên `firestore_attendance_links.dart` và `teacher_view_model.dart` không có lỗi; build APK debug với cấu hình Firebase demo thành công.
+
+Android hiển thị trực tiếp snapshot check-in từ máy chủ, không chờ hàng đợi đồng bộ hoặc ghi workspace. Kết quả trực tiếp được phủ lại khi tải workspace; P/A thủ công vẫn ưu tiên và chốt vẫn lấy kết quả sau khi dừng phiên. Xem [chi tiết và giới hạn](android-background-sync.md). Chưa đo độ trễ trên thiết bị thật; không dùng kết quả build/phân tích mã để khẳng định thời gian cập nhật cụ thể. Không thay đổi Rules/Hosting hay luồng poll Windows trong lượt này.
