@@ -151,20 +151,23 @@ service cloud.firestore {
         return meeting.state == 'active' && request.time >= meeting.dayStart && request.time < meeting.dayEnd;
       }
       function valid(d) {
-        return d.keys().hasOnly(['ownerUid', 'classId', 'localClassId', 'meetingId', 'label', 'receiving', 'expiresAt', 'createdAt', 'updatedAt'])
+        return d.keys().hasOnly(['ownerUid', 'classId', 'localClassId', 'meetingId', 'label', 'receiving', 'expiresAt', 'createdAt', 'updatedAt', 'openingId'])
           && d.ownerUid == request.auth.uid && d.classId is string
           && d.localClassId is string && d.meetingId is string && d.label is string
           && d.receiving is bool && d.expiresAt is timestamp && d.createdAt is timestamp
+          && (!('openingId' in d) || (d.openingId is string && d.openingId.size() > 0 && d.openingId.size() <= 64))
           && d.updatedAt == request.time;
       }
       allow get: if googleUser();
       allow list: if teacher() && resource.data.ownerUid == request.auth.uid;
       allow create: if valid(request.resource.data) && ownsClass(request.resource.data.classId)
         && active(request.resource.data) && request.resource.data.createdAt == request.time
-        && request.resource.data.receiving == true && request.resource.data.expiresAt > request.time
-        && request.resource.data.expiresAt <= request.time + duration.value(2, 'm');
+        && ((request.resource.data.receiving == true && request.resource.data.expiresAt > request.time
+          && request.resource.data.expiresAt <= request.time + duration.value(2, 'm'))
+          || (request.resource.data.receiving == false && request.resource.data.expiresAt == request.time
+            && 'openingId' in request.resource.data));
       allow update: if valid(request.resource.data) && ownsClass(resource.data.classId)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['receiving', 'expiresAt', 'updatedAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['receiving', 'expiresAt', 'updatedAt', 'openingId'])
         && (request.resource.data.receiving == false
           || (active(resource.data) && request.resource.data.expiresAt > request.time
             && request.resource.data.expiresAt <= request.time + duration.value(2, 'm')));

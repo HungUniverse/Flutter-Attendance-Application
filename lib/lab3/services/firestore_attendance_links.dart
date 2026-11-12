@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
+import 'package:uuid/uuid.dart';
 
 import 'dart:convert';
 
@@ -15,7 +16,12 @@ abstract class LiveAttendanceLinks implements AttendanceLinkService {
   Future<LinkSession?> forMeeting(CourseClass course, Meeting meeting);
 }
 
-class FirestoreAttendanceLinks implements LiveAttendanceLinks {
+abstract interface class ServerTimedAttendanceLinks {
+  DateTime get serverNow;
+}
+
+class FirestoreAttendanceLinks
+    implements LiveAttendanceLinks, ServerTimedAttendanceLinks {
   FirestoreAttendanceLinks(
     this.db,
     this.auth,
@@ -26,6 +32,9 @@ class FirestoreAttendanceLinks implements LiveAttendanceLinks {
   final AuthService auth;
   final String? Function() semester;
   final String hostingUrl;
+  Duration _clockOffset = Duration.zero;
+  @override
+  DateTime get serverNow => DateTime.now().add(_clockOffset);
   String get _uid =>
       auth.current?.uid ?? (throw const AppProblem('Vui lòng đăng nhập.'));
   @override
@@ -65,7 +74,11 @@ class FirestoreAttendanceLinks implements LiveAttendanceLinks {
     // check-ins remain immutable across every displayed QR for this meeting.
     final id = _idFor(course, meeting);
     final ref = db.doc('attendanceSessions/$id');
-    final result = await db.runTransaction((tx) async {
+    final openingId = const Uuid().v4();
+    final startedAt = DateTime.now().toUtc();
+    // Stage a stopped session with a server timestamp. Opening it afterwards
+    // derives the two-minute deadline entirely from Firebase, not the phone clock.
+    await db.runTransaction((tx) async {
       final storedMeeting = (await tx.get(
         db.doc('classes/$classId/meetings/${meeting.id}'),
       )).data();
@@ -75,28 +88,59 @@ class FirestoreAttendanceLinks implements LiveAttendanceLinks {
           'Buổi học chưa mở trên Firestore. Hãy đồng bộ trước.',
         );
       }
-      final now = DateTime.now();
-      if (old != null &&
-          old['receiving'] == true &&
-          (old['expiresAt'] as Timestamp).toDate().isAfter(now)) {
-        return _session(id, old);
-      }
-      final dayEnd = (storedMeeting!['dayEnd'] as Timestamp).toDate();
-      var expiry = now.add(const Duration(minutes: 2));
-      if (expiry.isAfter(dayEnd)) expiry = dayEnd;
       final data = <String, dynamic>{
         'ownerUid': uid,
         'classId': classId,
         'localClassId': course.id,
         'meetingId': meeting.id,
         'label': '${course.courseCode} · ${course.classCode}',
-        'receiving': true,
-        'expiresAt': Timestamp.fromDate(expiry),
+        'receiving': false,
+        'expiresAt': FieldValue.serverTimestamp(),
+        'openingId': openingId,
         'createdAt': old?['createdAt'] ?? FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
       tx.set(ref, data);
-      return _session(id, data);
+    });
+    final staged = (await ref.get(const GetOptions(source: Source.server)))
+        .data();
+    if (uid != _uid) throw const AppProblem('Tài khoản đã thay đổi.');
+    if (staged?['openingId'] != openingId) {
+      throw const AppProblem(
+        'Phiên đang được thay đổi trên thiết bị khác. Hãy tạo lại link.',
+      );
+    }
+    final serverAnchor = (staged!['expiresAt'] as Timestamp).toDate();
+    final elapsed = DateTime.now().toUtc().difference(startedAt);
+    _clockOffset = serverAnchor.difference(
+      startedAt.add(Duration(microseconds: elapsed.inMicroseconds ~/ 2)),
+    );
+    final result = await db.runTransaction((tx) async {
+      final current = (await tx.get(ref)).data();
+      final m = (await tx.get(
+        db.doc('classes/$classId/meetings/${meeting.id}'),
+      )).data();
+      if (current?['openingId'] != openingId || m?['state'] != 'active') {
+        throw const AppProblem(
+          'Buổi học hoặc phiên đã thay đổi. Hãy đồng bộ và tạo lại link.',
+        );
+      }
+      if (current!['receiving'] == true) return _session(id, current);
+      if (current['updatedAt'] != staged['updatedAt']) {
+        throw const AppProblem(
+          'Phiên đã bị dừng trên thiết bị khác. Hãy kiểm tra trước khi mở lại.',
+        );
+      }
+      final dayEnd = (m!['dayEnd'] as Timestamp).toDate();
+      var expiry = serverAnchor.add(const Duration(minutes: 2));
+      if (expiry.isAfter(dayEnd)) expiry = dayEnd;
+      final changes = {
+        'receiving': true,
+        'expiresAt': Timestamp.fromDate(expiry),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      tx.update(ref, changes);
+      return _session(id, {...current, ...changes});
     });
     if (uid != _uid) throw const AppProblem('Tài khoản đã thay đổi.');
     return result;
