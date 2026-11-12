@@ -194,10 +194,45 @@ class AttendanceReconciliationService {
       }
     }
 
-    final mergedAttendance = <String, Map<String, AttendanceRecord>>{
-      for (final entry in base.attendance.entries)
-        entry.key: Map<String, AttendanceRecord>.of(entry.value),
+    final canonicalRollByUpper = <String, String>{
+      for (final s in mergedStudents)
+        s.rollNumber.trim().toUpperCase(): s.rollNumber,
+      for (final s in incoming.students)
+        s.rollNumber.trim().toUpperCase(): s.rollNumber,
     };
+
+    final meetingsById = <String, Meeting>{
+      for (final m in base.meetings) m.id: m,
+    };
+    for (final incomingMeeting in incoming.meetings) {
+      final existing = meetingsById[incomingMeeting.id];
+      if (existing == null) {
+        meetingsById[incomingMeeting.id] = incomingMeeting;
+      } else if (_meetingStateRank(incomingMeeting.state) >
+          _meetingStateRank(existing.state)) {
+        meetingsById[incomingMeeting.id] = existing.copyWith(
+          state: incomingMeeting.state,
+        );
+      }
+    }
+    final mergedMeetings = meetingsById.values.toList()
+      ..sort((a, b) {
+        final numCmp = a.number.compareTo(b.number);
+        if (numCmp != 0) return numCmp;
+        return a.startAt.compareTo(b.startAt);
+      });
+
+    final mergedAttendance = <String, Map<String, AttendanceRecord>>{};
+    for (final entry in base.attendance.entries) {
+      final normalizedMap = <String, AttendanceRecord>{};
+      for (final recEntry in entry.value.entries) {
+        final canonicalKey =
+            canonicalRollByUpper[recEntry.key.trim().toUpperCase()] ??
+            recEntry.key;
+        normalizedMap[canonicalKey] = recEntry.value;
+      }
+      mergedAttendance[entry.key] = normalizedMap;
+    }
 
     final mergedAudit = <AuditEvent>[...base.auditEvents];
     var appliedChanges = 0;
@@ -219,8 +254,11 @@ class AttendanceReconciliationService {
       }
 
       if (baseRec == null || baseRec.status == AttendanceStatus.unmarked) {
-        mergedAttendance.putIfAbsent(cell.meetingId, () => {})[cell.rollNumber] =
-            incomingRec;
+        _setRecordCaseInsensitive(
+          mergedAttendance.putIfAbsent(cell.meetingId, () => {}),
+          cell.rollNumber,
+          incomingRec,
+        );
         appliedChanges++;
         continue;
       }
@@ -228,10 +266,11 @@ class AttendanceReconciliationService {
       if (!cell.isConflict) {
         if ((incomingRec.note ?? '').isNotEmpty &&
             (baseRec.note ?? '') != incomingRec.note) {
-          mergedAttendance.putIfAbsent(
-            cell.meetingId,
-            () => {},
-          )[cell.rollNumber] = incomingRec;
+          _setRecordCaseInsensitive(
+            mergedAttendance.putIfAbsent(cell.meetingId, () => {}),
+            cell.rollNumber,
+            incomingRec,
+          );
           appliedChanges++;
         }
         continue;
@@ -245,10 +284,11 @@ class AttendanceReconciliationService {
       );
 
       if (chooseIncoming) {
-        mergedAttendance.putIfAbsent(
-          cell.meetingId,
-          () => {},
-        )[cell.rollNumber] = incomingRec;
+        _setRecordCaseInsensitive(
+          mergedAttendance.putIfAbsent(cell.meetingId, () => {}),
+          cell.rollNumber,
+          incomingRec,
+        );
         appliedChanges++;
         mergedAudit.add(
           AuditEvent(
@@ -270,6 +310,7 @@ class AttendanceReconciliationService {
     return ReconciliationMergeOutcome(
       mergedClass: base.copyWith(
         students: mergedStudents,
+        meetings: mergedMeetings,
         attendance: mergedAttendance,
         auditEvents: mergedAudit,
       ),
@@ -303,6 +344,22 @@ class AttendanceReconciliationService {
         if (incomingIsManual && !baseIsManual) return true;
         return incomingRec.recordedAt.isAfter(baseRec.recordedAt);
     }
+  }
+
+  static int _meetingStateRank(MeetingState state) => switch (state) {
+    MeetingState.upcoming => 0,
+    MeetingState.active => 1,
+    MeetingState.closed => 2,
+  };
+
+  void _setRecordCaseInsensitive(
+    Map<String, AttendanceRecord> records,
+    String canonicalRoll,
+    AttendanceRecord record,
+  ) {
+    final target = canonicalRoll.trim().toUpperCase();
+    records.removeWhere((key, _) => key.trim().toUpperCase() == target);
+    records[canonicalRoll] = record;
   }
 
   AttendanceRecord? _lookupCaseInsensitive(

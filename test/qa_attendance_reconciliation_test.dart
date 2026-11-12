@@ -262,5 +262,67 @@ void main() {
         equals(AttendanceStatus.absent),
       );
     });
+
+    test('should merge incoming meetings and normalize case-variant attendance keys without duplicates', () {
+      // Arrange
+      final start = DateTime(2026, 11, 2, 7, 0);
+      final base = _sampleClass(
+        students: [student1],
+        attendance: {
+          'm1': {
+            'se194673': AttendanceRecord(
+              status: AttendanceStatus.absent,
+              source: AttendanceSource.finalize,
+              recordedAt: t0,
+            ),
+          },
+        },
+      );
+      final incoming = base.copyWith(
+        meetings: [
+          ...base.meetings,
+          Meeting(
+            id: 'm3',
+            number: 3,
+            startAt: start.add(const Duration(days: 7)),
+            endAt: start.add(const Duration(days: 7, hours: 2)),
+            state: MeetingState.active,
+          ),
+        ],
+        attendance: {
+          'm1': {
+            'SE194673': AttendanceRecord(
+              status: AttendanceStatus.present,
+              source: AttendanceSource.manual,
+              recordedAt: t1,
+              note: 'Bổ sung điểm danh',
+            ),
+          },
+          'm3': {
+            'SE194673': AttendanceRecord(
+              status: AttendanceStatus.present,
+              source: AttendanceSource.scan,
+              recordedAt: t1,
+            ),
+          },
+        },
+      );
+
+      // Act
+      final outcome = service.reconcile(
+        base: base,
+        incoming: incoming,
+        strategy: ConflictResolutionStrategy.preferIncoming,
+        now: t1,
+      );
+
+      // Assert
+      expect(outcome.mergedClass.meetings.map((m) => m.id), contains('m3'));
+      expect(outcome.mergedClass.attendance['m1']!.keys.toList(), equals(['SE194673']));
+      expect(
+        outcome.mergedClass.recordFor('m3', 'SE194673')?.status,
+        equals(AttendanceStatus.present),
+      );
+    });
   });
 }
