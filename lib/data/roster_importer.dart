@@ -35,7 +35,11 @@ class RosterImporter {
     int weeks = 10,
     int meetingsPerWeek = 2,
   }) {
-    final extension = fileName.toLowerCase().split('.').last;
+    final normalizedName = fileName.trim().toLowerCase();
+    final dotIndex = normalizedName.lastIndexOf('.');
+    final extension = dotIndex <= 0
+        ? ''
+        : normalizedName.substring(dotIndex + 1);
     final sheets = switch (extension) {
       'ods' => _readOds(bytes),
       'xlsx' => _readXlsx(bytes),
@@ -200,24 +204,53 @@ class RosterImporter {
   }
 
   Map<String, List<List<String>>> _readXlsx(Uint8List bytes) {
-    final workbook = Excel.decodeBytes(bytes);
-    return workbook.tables.map((name, sheet) {
-      final rows = sheet.rows
-          .map(
-            (row) => row.map((cell) => cell?.value?.toString() ?? '').toList(),
-          )
-          .toList();
-      return MapEntry(name, rows);
-    });
+    if (bytes.isEmpty) {
+      throw const RosterImportException('File XLSX rỗng hoặc bị hỏng.');
+    }
+    try {
+      final workbook = Excel.decodeBytes(bytes);
+      return workbook.tables.map((name, sheet) {
+        final rows = sheet.rows
+            .map(
+              (row) =>
+                  row.map((cell) => cell?.value?.toString() ?? '').toList(),
+            )
+            .toList();
+        return MapEntry(name, rows);
+      });
+    } on RosterImportException {
+      rethrow;
+    } on Object {
+      throw const RosterImportException(
+        'File XLSX bị hỏng hoặc không đọc được.',
+      );
+    }
   }
 
   Map<String, List<List<String>>> _readOds(Uint8List bytes) {
-    final archive = ZipDecoder().decodeBytes(bytes, verify: true);
+    if (bytes.isEmpty) {
+      throw const RosterImportException('File ODS rỗng hoặc bị hỏng.');
+    }
+    final Archive archive;
+    try {
+      archive = ZipDecoder().decodeBytes(bytes, verify: true);
+    } on Object {
+      throw const RosterImportException(
+        'File ODS bị hỏng hoặc không đọc được.',
+      );
+    }
     final content = archive.findFile('content.xml');
     if (content == null) {
       throw const RosterImportException('File ODS không có content.xml.');
     }
-    final xml = XmlDocument.parse(utf8.decode(content.content as List<int>));
+    final XmlDocument xml;
+    try {
+      xml = XmlDocument.parse(utf8.decode(content.content as List<int>));
+    } on Object {
+      throw const RosterImportException(
+        'Nội dung XML trong file ODS không hợp lệ.',
+      );
+    }
     final result = <String, List<List<String>>>{};
     for (final table in xml.descendants.whereType<XmlElement>().where(
       (node) => node.name.local == 'table' && node.name.prefix == 'table',
