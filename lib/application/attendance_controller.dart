@@ -7,6 +7,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../data/attendance_csv_exporter.dart';
+import '../data/attendance_pdf_exporter.dart';
+import '../data/firestore_report_metadata.dart';
 import '../data/desktop_teacher_auth.dart';
 import '../data/firestore_workspace_remote.dart';
 import '../lab3/services/firestore_attendance_links.dart';
@@ -464,18 +466,23 @@ class AttendanceController extends ChangeNotifier {
     await save();
   }
 
-  Future<File> exportMeeting(String classId, String meetingId) async {
+  Future<File> exportMeeting(String classId, String meetingId, {String format = 'csv'}) async {
     if (_store == null) throw StateError('Storage chưa khởi tạo.');
     final courseClass = classById(classId);
     final meeting = meetingById(classId, meetingId);
     final directory = await _store!.exportDirectory(workspace!, courseClass);
-    final file = await _csvExporter.export(
+    final file = format == 'pdf' ? await AttendancePdfExporter().export(directory, workspace!, courseClass, meeting) : await _csvExporter.export(
       directory,
       workspace!,
       courseClass,
       meeting,
     );
     lastMessage = 'Đã xuất ${file.path}';
+    if (finalFirebase && sync != null) {
+      final reports = FirestoreReportMetadata(FirebaseFirestore.instance, sync!.root);
+      await reports.record(desktopAuth.current!.uid, workspace!, courseClass, meeting, file, format);
+      lastMessage = reports.warning ?? lastMessage;
+    }
     notifyListeners();
     return file;
   }
