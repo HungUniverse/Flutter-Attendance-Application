@@ -6,6 +6,37 @@ import 'package:fap_attendance/domain/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('recovers a workspace when only its backup survives', () async {
+    final root = await Directory.systemTemp.createTemp('fap-workspace-test-');
+    addTearDown(() => root.delete(recursive: true));
+    final store = WorkspaceStore(root);
+    final workspace = TeacherWorkspace(
+      id: 'workspace-1',
+      semester: 'FA26',
+      semesterStart: DateTime(2026, 9, 7),
+      classes: const [],
+    );
+    final primary = await store.saveWorkspace(workspace);
+    await store.saveWorkspace(
+      workspace.copyWith(teacherEmail: 'teacher@example.com'),
+    );
+
+    await primary.writeAsString('{incomplete');
+    expect((await store.loadWorkspace('FA26'))?.toJson(), workspace.toJson());
+
+    await primary.delete();
+    expect((await store.loadWorkspace('FA26'))?.toJson(), workspace.toJson());
+    expect(
+      (await store.loadMostRecentWorkspace())?.toJson(),
+      workspace.toJson(),
+    );
+    expect(await store.loadWorkspace('missing'), isNull);
+
+    final updated = workspace.copyWith(teacherEmail: 'new@example.com');
+    await store.saveWorkspace(updated);
+    expect((await store.loadMostRecentWorkspace())?.toJson(), updated.toJson());
+  });
+
   test(
     'one stable session file evolves from working to final and correction',
     () async {

@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
 import '../domain/models.dart';
+import 'report_file_writer.dart';
 
 class WorkspaceStore {
   WorkspaceStore(this.rootDirectory);
@@ -83,11 +84,15 @@ class WorkspaceStore {
 
   Future<TeacherWorkspace?> loadWorkspace(String semester) async {
     final file = File(p.join(rootDirectory.path, semester, 'workspace.json'));
-    if (!await file.exists()) return null;
+    final backup = File('${file.path}.bak');
+    if (!await file.exists()) {
+      return await backup.exists()
+          ? TeacherWorkspace.decode(await backup.readAsString())
+          : null;
+    }
     try {
       return TeacherWorkspace.decode(await file.readAsString());
     } on Object {
-      final backup = File('${file.path}.bak');
       if (!await backup.exists()) rethrow;
       return TeacherWorkspace.decode(await backup.readAsString());
     }
@@ -99,7 +104,12 @@ class WorkspaceStore {
     await for (final entity in rootDirectory.list()) {
       if (entity is! Directory) continue;
       final file = File(p.join(entity.path, 'workspace.json'));
-      if (await file.exists()) candidates.add(file);
+      if (await file.exists()) {
+        candidates.add(file);
+      } else {
+        final backup = File('${file.path}.bak');
+        if (await backup.exists()) candidates.add(backup);
+      }
     }
     if (candidates.isEmpty) return null;
     candidates.sort(
@@ -432,14 +442,11 @@ class WorkspaceStore {
 
   static Future<void> _writeAtomic(File target, String content) async {
     await target.parent.create(recursive: true);
-    final temporary = File('${target.path}.tmp');
     final backup = File('${target.path}.bak');
-    await temporary.writeAsString(content, flush: true);
     if (await target.exists()) {
-      await target.copy(backup.path);
-      await target.delete();
+      await writeReportAtomically(backup, target.openRead());
     }
-    await temporary.rename(target.path);
+    await writeReportAtomically(target, Stream.value(utf8.encode(content)));
   }
 }
 

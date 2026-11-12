@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'models.dart';
+import 'spreadsheet_text.dart';
 
 enum AttendanceRiskLevel { eligible, warning, barred }
 
@@ -143,7 +144,9 @@ class AttendanceAnalyticsService {
     this.maxAbsenceRatio = 0.20,
     this.warningAbsenceRatio = 0.15,
   }) : assert(maxAbsenceRatio > 0 && maxAbsenceRatio <= 1.0),
-       assert(warningAbsenceRatio > 0 && warningAbsenceRatio <= maxAbsenceRatio);
+       assert(
+         warningAbsenceRatio > 0 && warningAbsenceRatio <= maxAbsenceRatio,
+       );
 
   final double maxAbsenceRatio;
   final double warningAbsenceRatio;
@@ -164,13 +167,21 @@ class AttendanceAnalyticsService {
       );
     }
 
-    final sortedMeetings = [...courseClass.meetings]
-      ..sort((a, b) => a.number.compareTo(b.number));
-    final totalMeetings = sortedMeetings.length;
-    final closedMeetings = sortedMeetings
-        .where((m) => m.state == MeetingState.closed)
-        .length;
+    return _analyzeStudent(
+      courseClass,
+      student,
+      _sortedMeetings(courseClass),
+      _closedMeetingCount(courseClass),
+    );
+  }
 
+  StudentAttendanceAnalytics _analyzeStudent(
+    CourseClass courseClass,
+    Student student,
+    List<Meeting> sortedMeetings,
+    int closedMeetings,
+  ) {
+    final totalMeetings = sortedMeetings.length;
     var presentCount = 0;
     var absentCount = 0;
     var unmarkedCount = 0;
@@ -236,12 +247,23 @@ class AttendanceAnalyticsService {
   }
 
   ClassAttendanceSummary summarizeClass(CourseClass courseClass) {
-    final sortedMeetings = [...courseClass.meetings]
-      ..sort((a, b) => a.number.compareTo(b.number));
+    final sortedMeetings = _sortedMeetings(courseClass);
+    final closedMeetings = _closedMeetingCount(courseClass);
 
-    final studentReports = courseClass.students
-        .map((student) => analyzeStudent(courseClass, student.rollNumber))
-        .toList();
+    // Keep the first roster match for legacy data with duplicate roll numbers.
+    final reportsByRoll = <String, StudentAttendanceAnalytics>{};
+    final studentReports = [
+      for (final student in courseClass.students)
+        reportsByRoll.putIfAbsent(
+          student.rollNumber.trim().toUpperCase(),
+          () => _analyzeStudent(
+            courseClass,
+            student,
+            sortedMeetings,
+            closedMeetings,
+          ),
+        ),
+    ];
 
     var eligibleCount = 0;
     var warningCount = 0;
@@ -312,9 +334,7 @@ class AttendanceAnalyticsService {
       classCode: courseClass.classCode,
       totalStudents: courseClass.students.length,
       totalMeetings: sortedMeetings.length,
-      closedMeetings: sortedMeetings
-          .where((m) => m.state == MeetingState.closed)
-          .length,
+      closedMeetings: closedMeetings,
       eligibleCount: eligibleCount,
       warningCount: warningCount,
       barredCount: barredCount,
@@ -323,6 +343,12 @@ class AttendanceAnalyticsService {
       meetingMetrics: meetingMetrics,
     );
   }
+
+  static List<Meeting> _sortedMeetings(CourseClass courseClass) =>
+      [...courseClass.meetings]..sort((a, b) => a.number.compareTo(b.number));
+
+  static int _closedMeetingCount(CourseClass courseClass) =>
+      courseClass.meetings.where((m) => m.state == MeetingState.closed).length;
 
   List<StudentAttendanceAnalytics> findAtRiskStudents(CourseClass courseClass) {
     final summary = summarizeClass(courseClass);
@@ -403,20 +429,7 @@ class AttendanceAnalyticsService {
   }
 
   static String _escapeCsv(String value) {
-    final trimmedLeft = value.trimLeft();
-    final sanitized =
-        value.startsWith('=') ||
-            value.startsWith('+') ||
-            value.startsWith('-') ||
-            value.startsWith('@') ||
-            value.startsWith('\t') ||
-            value.startsWith('\r') ||
-            trimmedLeft.startsWith('=') ||
-            trimmedLeft.startsWith('+') ||
-            trimmedLeft.startsWith('-') ||
-            trimmedLeft.startsWith('@')
-        ? "'$value"
-        : value;
+    final sanitized = spreadsheetText(value);
     if (sanitized.contains(',') ||
         sanitized.contains('"') ||
         sanitized.contains('\n') ||
