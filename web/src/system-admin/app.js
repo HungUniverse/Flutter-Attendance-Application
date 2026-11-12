@@ -29,8 +29,11 @@ const actionLabel = {
   activate: "Mở lại quyền",
   delete: "Xóa giảng viên",
 };
+let notice = "", noticeError = false;
 const activeTab = () => (location.hash === "#audit" ? "audit" : "teachers");
 function feedback(text, failure = false) {
+  notice = text;
+  noticeError = failure;
   const node = document.getElementById("system-feedback");
   if (node) {
     node.hidden = false;
@@ -75,6 +78,7 @@ function render() {
     e.preventDefault();
     document.getElementById("content").focus();
   };
+  if (notice) feedback(notice, noticeError);
 }
 function directoryView() {
   return `<section class="panel"><div class="panel-heading"><div><h2>Danh mục giảng viên</h2><p>Thêm bằng email Google; không cần tạo mật khẩu hay biết UID trước.</p></div><div class="system-filters"><label class="search-field"><span class="sr-only">Tìm giảng viên</span><input id="teacher-search" type="search" value="${h(search)}" placeholder="Tên, email, mã hoặc bộ môn…"></label><label><span class="sr-only">Lọc quyền giảng viên</span><select id="teacher-filter"><option value="all">Tất cả trạng thái</option><option value="active" ${filter === "active" ? "selected" : ""}>Đang hoạt động</option><option value="suspended" ${filter === "suspended" ? "selected" : ""}>Tạm khóa</option></select></label></div></div><div id="teacher-results">${teacherTable()}</div></section><p class="help-note">Giảng viên đăng nhập Google trên Android, Windows hoặc /teacher bằng email đã được cấp quyền. Xóa hồ sơ thu hồi quyền giảng viên và giữ dữ liệu lớp; không xóa tài khoản Google hay tài khoản Firebase Authentication.</p>`;
@@ -185,6 +189,8 @@ onAuthStateChanged(auth, async (account) => {
   stops = [];
   document.querySelectorAll("dialog").forEach((d) => d.close());
   user = account;
+  notice = "";
+  noticeError = false;
   repo = undefined;
   teachers = [];
   audit = [];
