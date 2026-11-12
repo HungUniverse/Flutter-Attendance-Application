@@ -286,8 +286,19 @@ class CourseClass {
     auditEvents: auditEvents ?? this.auditEvents,
   );
 
-  AttendanceRecord? recordFor(String meetingId, String rollNumber) =>
-      attendance[meetingId]?[rollNumber];
+  AttendanceRecord? recordFor(String meetingId, String rollNumber) {
+    final records = attendance[meetingId];
+    if (records == null) return null;
+    final direct = records[rollNumber];
+    if (direct != null) return direct;
+    final normalized = rollNumber.trim().toUpperCase();
+    for (final entry in records.entries) {
+      if (entry.key.trim().toUpperCase() == normalized) {
+        return entry.value;
+      }
+    }
+    return null;
+  }
 
   Map<String, Object?> toJson() => {
     'id': id,
