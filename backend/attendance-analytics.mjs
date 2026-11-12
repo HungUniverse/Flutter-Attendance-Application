@@ -37,32 +37,41 @@ export function normalizeRecords(records) {
 /** Summarize counts and rate; a dataset with no records has a null rate. */
 export function summarizeAttendance(records) {
   const normalized = normalizeRecords(records);
-  const present = normalized.filter((record) => record.status === 'present').length;
-  return { total: normalized.length, present, absent: normalized.length - present,
-    attendanceRate: normalized.length ? present / normalized.length : null };
+  let present = 0;
+  for (const record of normalized) {
+    if (record.status === 'present') present++;
+  }
+  return summarizeCounts(normalized.length, present);
 }
 
-function group(records, key) {
+function summarizeCounts(total, present) {
+  return { total, present, absent: total - present, attendanceRate: total ? present / total : null };
+}
+
+function summarizeGroups(records, key) {
   const groups = new Map();
   for (const record of normalizeRecords(records)) {
-    if (!groups.has(record[key])) groups.set(record[key], []);
-    groups.get(record[key]).push(record);
+    const id = record[key];
+    let counts = groups.get(id);
+    if (!counts) {
+      counts = { total: 0, present: 0 };
+      groups.set(id, counts);
+    }
+    counts.total++;
+    if (record.status === 'present') counts.present++;
   }
-  return groups;
+  return Array.from(groups, ([id, { total, present }]) => ({ [key]: id, ...summarizeCounts(total, present) }))
+    .sort((a, b) => a[key].localeCompare(b[key]));
 }
 
 /** Produce one summary per student, sorted by student ID. */
 export function summarizeStudents(records) {
-  return [...group(records, 'studentId')].map(([studentId, items]) =>
-    ({ studentId, ...summarizeAttendance(items) }))
-    .sort((a, b) => a.studentId.localeCompare(b.studentId));
+  return summarizeGroups(records, 'studentId');
 }
 
 /** Produce one summary per session, sorted by session ID. */
 export function summarizeSessions(records) {
-  return [...group(records, 'sessionId')].map(([sessionId, items]) =>
-    ({ sessionId, ...summarizeAttendance(items) }))
-    .sort((a, b) => a.sessionId.localeCompare(b.sessionId));
+  return summarizeGroups(records, 'sessionId');
 }
 
 /** Find students whose recorded attendance rate is strictly below a threshold. */
@@ -113,15 +122,26 @@ export function currentAbsenceStreak(records, studentId, chronologicalSessionIds
   return count;
 }
 
-/** Calculate the minimum remaining sessions needed to reach a target rate. */
+/** Calculate the minimum remaining sessions, or null if no safe total reaches the target. */
 export function sessionsNeededForRate(present, total, target) {
-  if (!Number.isInteger(present) || !Number.isInteger(total) || present < 0 || total < present) {
-    throw new RangeError('counts must be non-negative integers and present cannot exceed total');
+  if (!Number.isSafeInteger(present) || !Number.isSafeInteger(total) || present < 0 || total < present) {
+    throw new RangeError('counts must be non-negative safe integers and present cannot exceed total');
   }
   if (!Number.isFinite(target) || target < 0 || target > 1) throw new RangeError('invalid target');
-  if (total > 0 && present / total >= target) return 0;
-  if (target === 1) return total === present ? (total === 0 ? 1 : 0) : null;
-  return Math.max(total === 0 ? 1 : 0, Math.ceil((target * total - present) / (1 - target)));
+  if (total === 0) return 1;
+  if (present / total >= target) return 0;
+
+  // Compare rates directly so floating-point rounding in a closed-form
+  // estimate cannot add an extra session at an exact threshold.
+  let low = 1;
+  let high = Number.MAX_SAFE_INTEGER - total;
+  if ((present + high) / (total + high) < target) return null;
+  while (low < high) {
+    const middle = low + Math.floor((high - low) / 2);
+    if ((present + middle) / (total + middle) >= target) high = middle;
+    else low = middle + 1;
+  }
+  return low;
 }
 
 /** Export records as RFC 4180-style CSV, with spreadsheet formula injection escaped. */

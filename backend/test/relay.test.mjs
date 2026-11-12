@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, rmdir, stat, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { once } from 'node:events';
+import { Readable } from 'node:stream';
 import { createRelay, SessionStore } from '../relay.mjs';
 import { randomUUID } from 'node:crypto';
 
@@ -18,21 +19,43 @@ async function fixture(t) {
   const server = createRelay({ store: new SessionStore(directory), publicOrigin: 'https://attendance.example',
     teachers: ['teacher@example.com', 'other@example.com'], studentHtml: '<html>student</html>', clock: () => now,
     verifyIdentity: async token => { if (!people[token]) throw Error('Invalid token'); return people[token]; } });
-  server.listen(0, '127.0.0.1'); await once(server, 'listening');
-  t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); await rm(directory, { recursive: true, force: true }); });
-  const base = `http://127.0.0.1:${server.address().port}`;
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const inProcess = process.env.RELAY_TEST_TRANSPORT === 'in-process';
+  if (!inProcess) {
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    t.after(async () => {
+      server.closeAllConnections();
+      await new Promise(resolve => server.close(resolve));
+    });
+  }
+  const handle = server.listeners('request')[0];
   async function request(path, { method = 'GET', user, data, headers = {} } = {}) {
     const hasBody = data !== undefined;
-    const response = await fetch(`${base}${path}`, { method,
-      headers: { ...(hasBody ? { 'content-type': 'application/json' } : {}),
-        ...(user ? { authorization: `Bearer ${user}` } : {}), ...headers },
+    const requestHeaders = {
+      ...(hasBody ? { 'content-type': 'application/json' } : {}),
+      ...(user ? { authorization: `Bearer ${user}` } : {}),
+      ...headers,
+    };
+    if (inProcess) {
+      const req = Readable.from(hasBody ? [Buffer.from(JSON.stringify(data))] : []);
+      Object.assign(req, { url: path, method, headers: requestHeaders, socket: { remoteAddress: '127.0.0.1' } });
+      const res = {
+        writeHead(status) { this.status = status; this.headersSent = true; },
+        end(content) { this.content = content; },
+      };
+      await handle(req, res);
+      return { status: res.status, data: JSON.parse(res.content) };
+    }
+    const response = await fetch(`http://127.0.0.1:${server.address().port}${path}`, { method,
+      headers: requestHeaders,
       ...(hasBody ? { body: JSON.stringify(data) } : {}) });
     return { status: response.status, data: await response.json() };
   }
   const create = async (user = 'teacher', overrides = {}) => request('/api/sessions', {
     method: 'POST', user, data: { classId: 'c1', meetingId: 'm1', label: 'PRM · Class', number: 1,
       meetingDate: '2026-11-03', students: [{ email: 'sv@example.com' }], ...overrides } });
-  return { request, create, advance: ms => { now += ms; } };
+  return { request, create, directory, advance: ms => { now += ms; } };
 }
 
 test('requires verified teacher; rejects student, missing and invalid credentials', async t => {
@@ -58,6 +81,64 @@ test('opening/challenge is not attendance; duplicate valid submissions count onc
   }
   const final = await f.request(`/api/sessions/${session.id}`, { user: 'teacher' });
   assert.equal(final.data.submissions.length, 1); assert.equal(final.data.submissions[0].email, 'sv@example.com');
+});
+
+test('polling and issuing a challenge leave the session file untouched', async t => {
+  const f = await fixture(t);
+  const { data: session } = await f.create();
+  const file = join(f.directory, 'sessions.json');
+  const previous = new Date('2020-01-01T00:00:00Z');
+  await utimes(file, previous, previous);
+  const token = session.url.split('/').pop();
+
+  for (const result of [
+    await f.request('/api/sessions/current', { user: 'teacher' }),
+    await f.request(`/api/sessions/${session.id}`, { user: 'teacher' }),
+    await f.request('/api/workspaces', { user: 'teacher' }),
+    await f.request(`/api/join/${token}/challenge`, { method: 'POST', data: {} }),
+  ]) {
+    assert.equal(result.status, 200);
+  }
+  assert.equal((await stat(file)).mtimeMs, previous.getTime());
+});
+
+test('workspace writes reject non-string semesters and revisions without room to increment', async t => {
+  const f = await fixture(t);
+  const write = (semester, revision) => f.request('/api/workspaces', {
+    method: 'PUT', user: 'teacher',
+    data: { workspace: { id: 'workspace', semester, classes: [] }, revision, mutationId: randomUUID() },
+  });
+  for (const semester of [null, 2026, ['FA26'], undefined]) {
+    assert.equal((await write(semester, 0)).status, 400);
+  }
+  assert.equal((await write('FA26', Number.MAX_SAFE_INTEGER)).status, 400);
+  assert.deepEqual((await f.request('/api/workspaces', { user: 'teacher' })).data, { data: null });
+  const saved = await write('fa26', 0);
+  assert.equal(saved.status, 200);
+  assert.equal(saved.data.data.workspace.semester, 'FA26');
+  assert.equal(saved.data.data.revision, 1);
+});
+
+test('a failed check-in write preserves the challenge for a retry', async t => {
+  const f = await fixture(t);
+  const { data: session } = await f.create();
+  const token = session.url.split('/').pop();
+  const { data: challenge } = await f.request(`/api/join/${token}/challenge`, { method: 'POST', data: {} });
+  const submit = () => f.request(`/api/join/${token}/submit`, {
+    method: 'POST', user: 'student', data: { challengeId: challenge.challengeId },
+  });
+  const file = join(f.directory, 'sessions.json');
+  const temporary = `${file}.tmp`;
+  const original = await readFile(file, 'utf8');
+  await mkdir(temporary);
+  assert.equal((await submit()).status, 500);
+  assert.equal(await readFile(file, 'utf8'), original);
+  await rmdir(temporary);
+
+  const results = await Promise.all([submit(), submit()]);
+  assert.deepEqual(results.map(result => result.status).sort(), [200, 410]);
+  const final = await f.request(`/api/sessions/${session.id}`, { user: 'teacher' });
+  assert.equal(final.data.submissions.length, 1);
 });
 test('roster membership, email verification, challenge expiry and token binding are enforced', async t => {
   const f = await fixture(t); const { data: s } = await f.create(); const token = s.url.split('/').pop();
