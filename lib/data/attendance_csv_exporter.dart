@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 
 import '../domain/models.dart';
+import '../domain/spreadsheet_text.dart';
 import 'report_file_writer.dart';
 
 class AttendanceCsvExporter {
@@ -52,19 +53,19 @@ class AttendanceCsvExporter {
       final record = records[student.rollNumber]!;
       rows.add([
         1,
-        workspace.semester,
-        courseClass.courseCode,
-        courseClass.classCode,
-        courseClass.scheduleCode,
-        meeting.id,
+        spreadsheetText(workspace.semester),
+        spreadsheetText(courseClass.courseCode),
+        spreadsheetText(courseClass.classCode),
+        spreadsheetText(courseClass.scheduleCode),
+        spreadsheetText(meeting.id),
         meeting.number,
         date.format(meeting.startAt),
         time.format(meeting.startAt),
         time.format(meeting.endAt),
-        student.rollNumber,
-        student.memberCode,
-        student.email,
-        student.fullName,
+        spreadsheetText(student.rollNumber),
+        spreadsheetText(student.memberCode),
+        spreadsheetText(student.email),
+        spreadsheetText(student.fullName),
         attendanceCode(record.status),
         record.recordedAt.toUtc().toIso8601String(),
         record.source.name,

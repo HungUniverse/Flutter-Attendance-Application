@@ -1,3 +1,4 @@
+import 'package:csv/csv.dart';
 import 'package:fap_attendance/data/attendance_csv_exporter.dart';
 import 'package:fap_attendance/domain/attendance_service.dart';
 import 'package:fap_attendance/domain/models.dart';
@@ -252,6 +253,52 @@ void main() {
     );
     expect(csv.startsWith('\uFEFF'), isTrue);
     expect(csv, contains('Nguyễn Văn A,A,'));
+  });
+
+  test('attendance CSV keeps formula-like roster values as text', () {
+    const rosterEntry = Student(
+      rollNumber: 'SE000001',
+      memberCode: '+123',
+      email: 'student@example.com',
+      fullName: '  =HYPERLINK("example","name")',
+    );
+    final start = DateTime(2026, 9, 7, 7);
+    final meeting = Meeting(
+      id: 'm1',
+      number: 1,
+      startAt: start,
+      endAt: start.add(const Duration(hours: 2)),
+      state: MeetingState.active,
+    );
+    final course = AttendanceService().closeMeeting(
+      CourseClass(
+        id: 'class-1',
+        courseCode: 'PRM393',
+        classCode: 'SE1917',
+        scheduleCode: '11',
+        students: const [rosterEntry],
+        scheduleRule: ScheduleRule(scheduleCode: '11', semesterStart: start),
+        meetings: [meeting],
+      ),
+      meeting.id,
+    );
+    final workspace = TeacherWorkspace(
+      id: 'w1',
+      semester: 'FA26',
+      semesterStart: start,
+      classes: [course],
+    );
+    final csv = AttendanceCsvExporter().encode(
+      workspace,
+      course,
+      course.meetings.single,
+    );
+    final rows = const CsvToListConverter().convert(csv.substring(1));
+    expect(rows.last[10], rosterEntry.rollNumber);
+    expect(rows.last[11], "'${rosterEntry.memberCode}");
+    expect(rows.last[12], rosterEntry.email);
+    expect(rows.last[13], "'${rosterEntry.fullName}");
+    expect(rows.last[14], 'A');
   });
 
   test('rolling QR expires and challenge is one-time/device-bound', () {

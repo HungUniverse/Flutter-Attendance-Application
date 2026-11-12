@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'models.dart';
+import 'spreadsheet_text.dart';
 
 enum AttendanceRiskLevel { eligible, warning, barred }
 
@@ -428,20 +429,7 @@ class AttendanceAnalyticsService {
   }
 
   static String _escapeCsv(String value) {
-    final trimmedLeft = value.trimLeft();
-    final sanitized =
-        value.startsWith('=') ||
-            value.startsWith('+') ||
-            value.startsWith('-') ||
-            value.startsWith('@') ||
-            value.startsWith('\t') ||
-            value.startsWith('\r') ||
-            trimmedLeft.startsWith('=') ||
-            trimmedLeft.startsWith('+') ||
-            trimmedLeft.startsWith('-') ||
-            trimmedLeft.startsWith('@')
-        ? "'$value"
-        : value;
+    final sanitized = spreadsheetText(value);
     if (sanitized.contains(',') ||
         sanitized.contains('"') ||
         sanitized.contains('\n') ||
