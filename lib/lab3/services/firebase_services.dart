@@ -161,6 +161,9 @@ class FirebaseFeatureConfig implements ConfigService {
     await config.setDefaults({
       'enable_link_attendance': true,
       'export_help_message': const FeatureSettings().exportHelp,
+      'enable_attendance_ai': const FeatureSettings().enableAi,
+      'attendance_ai_model': const FeatureSettings().aiModel,
+      'attendance_ai_prompt': const FeatureSettings().aiPrompt,
     });
     await config.setConfigSettings(
       RemoteConfigSettings(
@@ -176,6 +179,9 @@ class FirebaseFeatureConfig implements ConfigService {
   void _read() => _current = FeatureSettings(
     enableLink: config.getBool('enable_link_attendance'),
     exportHelp: config.getString('export_help_message'),
+    enableAi: config.getBool('enable_attendance_ai'),
+    aiModel: config.getString('attendance_ai_model'),
+    aiPrompt: config.getString('attendance_ai_prompt'),
   );
   @override
   Future<void> refresh() async {

@@ -30,9 +30,15 @@ class FeatureSettings {
   const FeatureSettings({
     this.enableLink = true,
     this.exportHelp = 'Lưu PDF, JSON hoặc CSV trên thiết bị và chia sẻ tệp.',
+    this.enableAi = true,
+    this.aiModel = 'gemini-3.1-flash-lite',
+    this.aiPrompt = 'Dựa trên số lượng tổng hợp, viết gợi ý ngắn bằng tiếng Việt để giảng viên kiểm tra trước khi chốt. Không suy đoán danh tính hoặc tự thay đổi kết quả. Trả JSON gồm summary và checks.',
   });
   final bool enableLink;
   final String exportHelp;
+  final bool enableAi;
+  final String aiModel;
+  final String aiPrompt;
 }
 
 abstract class ConfigService {
