@@ -46,20 +46,57 @@ class QrPayload {
   );
 
   factory QrPayload.decode(String source) {
-    final normalized = base64Url.normalize(source.trim());
-    final json = (jsonDecode(utf8.decode(base64Url.decode(normalized))) as Map)
-        .cast<String, Object?>();
-    return QrPayload(
-      version: (json['v'] as num).toInt(),
-      endpoint: json['endpoint']! as String,
-      classId: json['classId']! as String,
-      meetingId: json['meetingId']! as String,
-      token: json['token']! as String,
-      issuedAt: DateTime.parse(json['issuedAt']! as String),
-      expiresAt: DateTime.parse(json['expiresAt']! as String),
-      certificateFingerprint: json['certificateFingerprint']! as String,
-      mode: QrMode.values.byName(json['mode']! as String),
-    );
+    final trimmed = source.trim();
+    if (trimmed.isEmpty) {
+      throw const FormatException('QR payload rỗng.');
+    }
+    try {
+      final normalized = base64Url.normalize(trimmed);
+      final decoded = jsonDecode(utf8.decode(base64Url.decode(normalized)));
+      if (decoded is! Map) {
+        throw const FormatException('QR payload không đúng cấu trúc JSON.');
+      }
+      final json = decoded.cast<String, Object?>();
+      final version = (json['v'] as num?)?.toInt();
+      final endpoint = json['endpoint'] as String?;
+      final classId = json['classId'] as String?;
+      final meetingId = json['meetingId'] as String?;
+      final token = json['token'] as String?;
+      final issuedAt = json['issuedAt'] as String?;
+      final expiresAt = json['expiresAt'] as String?;
+      final fingerprint = json['certificateFingerprint'] as String?;
+      final modeName = json['mode'] as String?;
+      if (version == null ||
+          endpoint == null ||
+          endpoint.trim().isEmpty ||
+          classId == null ||
+          classId.trim().isEmpty ||
+          meetingId == null ||
+          meetingId.trim().isEmpty ||
+          token == null ||
+          token.trim().isEmpty ||
+          issuedAt == null ||
+          expiresAt == null ||
+          fingerprint == null ||
+          modeName == null) {
+        throw const FormatException('QR payload thiếu trường bắt buộc.');
+      }
+      return QrPayload(
+        version: version,
+        endpoint: endpoint,
+        classId: classId,
+        meetingId: meetingId,
+        token: token,
+        issuedAt: DateTime.parse(issuedAt),
+        expiresAt: DateTime.parse(expiresAt),
+        certificateFingerprint: fingerprint,
+        mode: QrMode.values.byName(modeName),
+      );
+    } on FormatException {
+      rethrow;
+    } on Object {
+      throw const FormatException('QR payload không hợp lệ.');
+    }
   }
 }
 
