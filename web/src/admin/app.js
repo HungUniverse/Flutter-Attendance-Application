@@ -8,7 +8,7 @@ import { parseRoster, attendanceSummary, semesterCode } from "./model.js";
 import { escapeHtml as h, dateText, messageFor, showDialog } from "../ui.js";
 import { startWebTelemetry, track, webSettings } from "../telemetry.js";
 
-document.title = "Quản lý giảng viên · FAP Attendance";
+document.title = "Không gian giảng viên · FAP Attendance";
 document.body.className = "admin-body";
 document.body.innerHTML = '<div id="admin-root" class="admin-root"></div>';
 const root = document.getElementById("admin-root");
@@ -84,7 +84,7 @@ function gate(
   };
 }
 function shell() {
-  root.innerHTML = `<a href="#content" class="skip-link">Đến nội dung</a><aside class="sidebar"><a class="wordmark" href="/admin">F<span>FAP Attendance<small>KHÔNG GIAN GIẢNG VIÊN</small></span></a><p class="nav-label">QUẢN LÝ</p><nav aria-label="Điều hướng chính">${Object.entries(
+  root.innerHTML = `<a href="#content" class="skip-link">Đến nội dung</a><aside class="sidebar"><a class="wordmark" href="/teacher">F<span>FAP Attendance<small>KHÔNG GIAN GIẢNG VIÊN</small></span></a><p class="nav-label">QUẢN LÝ</p><nav aria-label="Điều hướng chính">${Object.entries(
     tabs,
   )
     .map(
