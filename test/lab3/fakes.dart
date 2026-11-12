@@ -303,14 +303,19 @@ class Harness {
 class MemoryRepository extends FailingRepository {
   MemoryRepository(super.root);
   final values = <String, TeacherWorkspace>{};
+  final semesters = <String, Map<String, TeacherWorkspace>>{};
   final sessions = <String, LinkSession?>{};
   @override
+  Future<List<String>> listSemesters(String uid) async =>
+      semesters[uid]?.keys.toList() ?? [];
+  @override
   Future<TeacherWorkspace?> load(String uid, {String? semester}) async =>
-      values[uid];
+      semester == null ? values[uid] : semesters[uid]?[semester];
   @override
   Future<void> save(String uid, TeacherWorkspace workspace) async {
     if (failSave) throw const FileSystemException('disk full');
     values[uid] = workspace;
+    (semesters[uid] ??= {})[workspace.semester] = workspace;
   }
 
   @override

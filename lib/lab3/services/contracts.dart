@@ -158,6 +158,7 @@ abstract class AttendanceLinkService {
 }
 
 abstract class MobileWorkspaceRepository {
+  Future<List<String>> listSemesters(String uid);
   Future<TeacherWorkspace?> load(String uid, {String? semester});
   Future<void> save(String uid, TeacherWorkspace workspace);
   Future<void> saveSource(

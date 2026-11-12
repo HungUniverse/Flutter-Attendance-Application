@@ -25,6 +25,9 @@ class FileMobileWorkspaceRepository implements MobileWorkspaceRepository {
   }
 
   @override
+  Future<List<String>> listSemesters(String uid) => _store(uid).listSemesters();
+
+  @override
   Future<TeacherWorkspace?> load(String uid, {String? semester}) =>
       semester == null
       ? _store(uid).loadMostRecentWorkspace()

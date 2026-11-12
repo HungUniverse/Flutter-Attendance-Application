@@ -98,8 +98,8 @@ class WorkspaceStore {
     }
   }
 
-  Future<TeacherWorkspace?> loadMostRecentWorkspace() async {
-    if (!await rootDirectory.exists()) return null;
+  Future<List<String>> listSemesters() async {
+    if (!await rootDirectory.exists()) return [];
     final candidates = <File>[];
     await for (final entity in rootDirectory.list()) {
       if (entity is! Directory) continue;
@@ -111,11 +111,17 @@ class WorkspaceStore {
         if (await backup.exists()) candidates.add(backup);
       }
     }
-    if (candidates.isEmpty) return null;
     candidates.sort(
       (a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()),
     );
-    return loadWorkspace(p.basename(candidates.first.parent.path));
+    return [
+      for (final file in candidates) p.basename(file.parent.path),
+    ];
+  }
+
+  Future<TeacherWorkspace?> loadMostRecentWorkspace() async {
+    final semesters = await listSemesters();
+    return semesters.isEmpty ? null : loadWorkspace(semesters.first);
   }
 
   Future<File> saveWorkingSession(
