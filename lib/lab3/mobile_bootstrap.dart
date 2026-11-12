@@ -61,15 +61,41 @@ class MobileBootstrapService {
     late TeacherViewModel model;
     model = TeacherViewModel(
       auth: auth,
-      repository: SyncedMobileWorkspaceRepository(root, sync, reports: FirestoreReportMetadata(db, root)),
+      repository: SyncedMobileWorkspaceRepository(
+        root,
+        sync,
+        reports: FirestoreReportMetadata(db, root),
+      ),
       sync: sync,
       telemetry: telemetry,
       config: config,
-      notifications: FirestoreNotifications(FirebaseMessaging.instance, db),
+      notifications: FirestoreNotifications(
+        FirebaseMessaging.instance,
+        db,
+        localClassId: (remoteId) {
+          final workspace = model.workspace;
+          final owner = auth.current?.uid;
+          if (workspace == null || owner == null) return null;
+          for (final course in workspace.classes) {
+            if (firestoreClassId(owner, workspace.semester, course.id) ==
+                remoteId)
+              return course.id;
+          }
+          return null;
+        },
+      ),
       device: AndroidDeviceService(),
-      ai: FirebaseAttendanceReview(config, telemetry, Directory('${root.path}/ai-evidence')),
-      links: FirestoreAttendanceLinks(db, auth, () => model.workspace?.semester,
-        hostingUrl: 'https://${db.app.options.projectId}.web.app'),
+      ai: FirebaseAttendanceReview(
+        config,
+        telemetry,
+        Directory('${root.path}/ai-evidence'),
+      ),
+      links: FirestoreAttendanceLinks(
+        db,
+        auth,
+        () => model.workspace?.semester,
+        hostingUrl: 'https://${db.app.options.projectId}.web.app',
+      ),
     );
     await model.initialize();
     return model;
