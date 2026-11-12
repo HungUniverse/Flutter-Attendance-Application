@@ -38,12 +38,12 @@ onAuthStateChanged(auth,user=>{
   document.querySelectorAll("dialog").forEach(d=>d.close());
   requests=[];notices=new Map();labels=new Map();error="";loading=Boolean(user);render();
   if(!user)return;
-  let received=0;
+  const received=new Set();
   const fail=e=>{if(current===generation){error=messageFor(e);loading=false;render();}};
-  const ready=()=>{received++;if(received>=3)loading=false;render();};
+  const ready=key=>{received.add(key);if(received.size===3)loading=false;render();};
   stops.push(onSnapshot(query(collection(db,"attendanceRequests"),where("uid","==",user.uid)),snapshot=>{
     if(current!==generation)return;
-    requests=snapshot.docs.map(d=>({...d.data(),id:d.id}));ready();
+    requests=snapshot.docs.map(d=>({...d.data(),id:d.id}));ready("requests");
     for(const id of new Set(requests.map(r=>r.sessionId)))if(!labels.has(id)){
       labels.set(id,"Buổi học");getDocFromServer(doc(db,"attendanceSessions",id)).then(s=>{if(current===generation){labels.set(id,s.data()?.label||"Buổi học");render();}}).catch(()=>{});
     }
@@ -54,7 +54,7 @@ onAuthStateChanged(auth,user=>{
     stops.push(onSnapshot(query(collection(db,"announcements"),filter),snapshot=>{
       if(current!==generation)return;
       sources[index]=new Map(snapshot.docs.map(d=>[d.id,{...d.data(),id:d.id}]));
-      notices=new Map([...sources[0],...sources[1]]);ready();
+      notices=new Map([...sources[0],...sources[1]]);ready(index);
     },fail));
   });
 });

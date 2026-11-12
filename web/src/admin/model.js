@@ -1,5 +1,5 @@
 export class AdminError extends Error {
-  constructor(message, code = "validation") { super(message); this.code = code; }
+  constructor(message, code = "validation") { super(message); this.name = "AdminError"; this.code = code; }
 }
 export function required(value, label, max = 160) {
   const text = String(value ?? "").trim();

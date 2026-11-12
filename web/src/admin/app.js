@@ -4,7 +4,7 @@ import { auth, db, googleProvider } from "../firebase-client.js";
 import { AdminRepository } from "./repository.js";
 import { parseRoster, rosterText, attendanceSummary, semesterCode } from "./model.js";
 import { escapeHtml as h, dateText, messageFor, showDialog } from "../ui.js";
-import { startWebTelemetry, track } from "../telemetry.js";
+import { startWebTelemetry, track, webSettings } from "../telemetry.js";
 
 document.title = "Quản lý giảng viên · FAP Attendance";
 document.body.className = "admin-body";
@@ -22,7 +22,7 @@ let user, repo, stops = [], generation = 0, loadGeneration = 0;
 let workspaces = [], selected = "", workspace, classes = [], requests = [], announcements = [];
 let counts, loadError = "", loading = false, tab = route(), search = "", requestFilter = "pending";
 let dataRevision = "";
-function route() { const key=location.hash.slice(1); return key in tabs ? key : "dashboard"; }
+function route() { const key=location.hash.slice(1); return Object.hasOwn(tabs,key) ? key : "dashboard"; }
 const sorted = values => [...values].sort((a,b)=>(b.createdAt?.toMillis?.() || b.at?.toMillis?.() || 0)-(a.createdAt?.toMillis?.() || a.at?.toMillis?.() || 0));
 function feedback(text, error=false) {
   const node=document.getElementById("feedback");
@@ -40,6 +40,7 @@ function gate(message = "Đăng nhập bằng tài khoản giảng viên để q
 function shell() {
   root.innerHTML=`<a href="#content" class="skip-link">Đến nội dung</a><aside class="sidebar"><a class="wordmark" href="/admin">F<span>FAP Attendance<small>KHÔNG GIAN GIẢNG VIÊN</small></span></a><p class="nav-label">QUẢN LÝ</p><nav aria-label="Điều hướng chính">${Object.entries(tabs).map(([key,[label]])=>`<a href="#${key}" data-tab="${key}">${icon(key)}<span>${label}</span>${key==="requests" ? '<b id="queue-badge" hidden>0</b>' : ""}</a>`).join("")}</nav><div class="sidebar-bottom"><p>Một nguồn dữ liệu.<br>Liền mạch giữa các thiết bị.</p><a href="/student">Trang sinh viên ↗</a><div class="sidebar-account"><span class="account-initial">${h((user.displayName||user.email||"G")[0])}</span><div><strong>${h(user.displayName||"Giảng viên")}</strong><small>${h(user.email)}</small></div></div><button id="logout" class="text-button">Đăng xuất</button></div></aside><div class="admin-main"><header class="topbar"><div><span class="live-dot"></span> Không gian giảng viên <span class="topbar-divider">/</span> <strong id="topbar-tab"></strong></div><div class="topbar-tools"><label for="semester">Học kỳ</label><select id="semester" aria-label="Học kỳ"></select><button id="refresh" class="secondary small">↻ Tải lại</button></div></header><main id="content" tabindex="-1"><div class="page-heading"><div><p class="overline">FAP ATTENDANCE / GIẢNG VIÊN</p><h1 id="page-title"></h1><p id="page-subtitle" class="muted"></p></div><div id="page-actions"></div></div><p id="feedback" class="feedback" role="status" aria-live="polite" hidden></p><div id="page-body"></div></main><footer class="admin-footer">FAP Attendance <span>Dữ liệu riêng theo tài khoản · ${new Date().getFullYear()}</span></footer></div>`;
   document.getElementById("logout").onclick=async()=>{try {await signOut(auth);} catch(e){feedback(messageFor(e),true);}};
+  document.getElementById("mobile-logout").onclick=document.getElementById("logout").onclick;
   document.getElementById("refresh").onclick=()=>refresh();
   document.getElementById("semester").onchange=e=>{selected=e.target.value;dataRevision="";refresh();};
   renderSemester(); render();
@@ -129,13 +130,19 @@ function classDetail(id) {
 async function review(id) {
   const r=requests.find(r=>r.id===id);if(!r)return;
   let course,meeting;
-  try {const all=await repo.archivedClasses();course=classes.find(c=>c.id===r.classId)||all.find(c=>c.id===r.classId);}
-  catch { /* Request is still reviewable without optional class label. */ }
+  const current=generation;
+  try {({course,meeting}=await repo.requestContext(r));}
+  catch(e) {if(current===generation)feedback(messageFor(e),true);return;}
+  if(current!==generation)return;
   const content=`<dl class="request-details"><dt>Sinh viên</dt><dd>${h(r.email)}</dd><dt>Lớp học</dt><dd>${h(course ? `${course.data.courseCode} · ${course.data.classCode}` : r.classId)}</dd><dt>Buổi học</dt><dd>${h(r.meetingId)}</dd><dt>Đề nghị</dt><dd>${r.requestedStatus==="P"?"Có mặt (P)":"Vắng (A)"}</dd><dt>Lý do sinh viên</dt><dd class="preserve-lines">${h(r.reason)}</dd><dt>Gửi lúc</dt><dd>${dateText(r.createdAt)}</dd></dl>`;
-  if(r.state!=="pending"){showDialog("Chi tiết yêu cầu",content+`<div class="soft-note"><strong>${stateLabels[r.state]}</strong><p>${h(r.decisionReason)}</p><small>${dateText(r.decidedAt)}</small></div>`,async()=>{},{label:"Đóng"});return;}
+  const roll=course?.roster?.[r.email];
+  const currentStatus=meeting?.records?.[roll]?.status;
+  const currentInfo=`<div class="soft-note">Kết quả hiện tại: <strong>${h(currentStatus||"Chưa có")}</strong> · ${course?.archived?"Lớp đã lưu trữ":"Buổi "+h(meeting?.number||"")}<br>Đề nghị của sinh viên: <strong>${h(r.requestedStatus)}</strong></div>`;
+  if(r.state!=="pending"){showDialog("Chi tiết yêu cầu",content+currentInfo+`<div class="soft-note"><strong>${stateLabels[r.state]}</strong><p>${h(r.decisionReason)}</p><small>${dateText(r.decidedAt)}</small></div>`,async()=>{},{label:"Đóng"});return;}
   showDialog("Xem xét yêu cầu sửa điểm danh",content+`<label>Quyết định<select name="decision"><option value="approved">Duyệt và sửa kết quả</option><option value="rejected">Từ chối yêu cầu</option></select></label><label>Lý do xử lý<textarea name="reason" required maxlength="1000" rows="3" placeholder="Ghi kết quả đối chiếu minh chứng…"></textarea></label><p class="help-note">Khi duyệt, kết quả hiện tại và lịch sử sẽ được đọc lại trong transaction để tránh xử lý trùng.</p>`,async input=>{await repo.decide(id,input.decision,input.reason);track("admin_request_decided",{decision:input.decision});await refresh();feedback("Đã xử lý yêu cầu và gửi kết quả vào hộp thư sinh viên.");},{label:"Xác nhận xử lý"});
 }
 function compose() {
+  if(!webSettings.announcementEnabled){feedback("Tính năng gửi thông báo đang tạm tắt theo cấu hình hệ thống.",true);return;}
   if(!classes.length){feedback("Thêm hoặc chọn học kỳ có lớp trước khi gửi thông báo.",true);return;}
   const d=showDialog("Soạn thông báo",`<label>Lớp học<select name="classId">${classes.map(c=>`<option value="${h(c.id)}">${h(c.data.courseCode)} · ${h(c.data.classCode)}</option>`).join("")}</select></label><label>Người nhận<select name="audience"><option value="class">Tất cả sinh viên trong danh sách lớp</option><option value="self">Hộp thư giảng viên trên Android</option></select></label><label>Buổi liên quan<select name="meetingId"><option value="">Toàn lớp</option></select></label><label>Tiêu đề<input name="title" required maxlength="160" placeholder="Thông tin buổi học sắp tới"></label><label>Nội dung<textarea name="body" required maxlength="3000" rows="5"></textarea></label><p class="help-note">Gửi vào hộp thư trong hệ thống. Sinh viên đăng nhập /student bằng email có trong danh sách để đọc.</p>`,async input=>{const c=classes.find(c=>c.id===input.classId);const count=await repo.sendAnnouncement(c,input);track("admin_announcement_sent",{audience:input.audience,recipients:count});feedback(`Đã gửi thông báo đến ${count} người nhận.`);},{label:"Gửi thông báo"});
   const select=d.querySelector('[name="classId"]'),meetings=d.querySelector('[name="meetingId"]');
@@ -172,7 +179,10 @@ onAuthStateChanged(auth,async account=>{
     },failure));
     stops.push(repo.watch("attendanceRequests",rows=>{if(current===generation){requests=rows;render();repo.counts().then(v=>{if(current===generation){counts=v;render();}}).catch(failure);}},failure));
     stops.push(repo.watch("announcements",rows=>{if(current===generation){announcements=rows;render();}},failure));
-    await startWebTelemetry();if(current===generation)track("admin_view",{screen:tab});
+    await startWebTelemetry();if(current===generation){
+      document.querySelector(".admin-footer span").textContent=webSettings.helpText;
+      track("admin_view",{screen:tab});
+    }
   } catch(e){if(current===generation)gate(messageFor(e),true);}
 });
 window.addEventListener("pagehide",()=>stops.forEach(stop=>stop()));

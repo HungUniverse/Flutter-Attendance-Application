@@ -138,6 +138,13 @@ export class AdminRepository {
       });
     });
   }
+  async requestContext(request) {
+    const [course,meeting]=await Promise.all([
+      getDocFromServer(this.ref(`classes/${request.classId}`)),
+      getDocFromServer(this.ref(`classes/${request.classId}/meetings/${request.meetingId}`)),
+    ]);
+    return { course: course.exists() ? { ...course.data(), id:course.id } : undefined, meeting:meeting.data() };
+  }
   async sendAnnouncement(course, input) {
     const title = required(input.title,"Tiêu đề",160), body = required(input.body,"Nội dung",3000);
     const meetingId = input.meetingId || "";
