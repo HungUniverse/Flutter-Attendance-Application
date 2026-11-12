@@ -85,6 +85,19 @@ points through the library API. `archive-compare` shows semantic changes,
 `archive-csv` exports a compact index without attendance rows. The archive is
 written only when the caller saves command output to a file.
 
+`demo-generate` builds a repeatable synthetic snapshot; `demo-manifest` reports
+the generator settings, dimensions, attendance mix and cohort summaries without
+including student names. Set `seed` to an integer or string to recreate the
+same dataset. Options include student/session counts, profile weights, group
+count, absence and missing rates, missing-data pattern, and ID prefixes. The
+generator uses only `Demo Student` names and `example.invalid` email addresses,
+and refuses datasets larger than 250,000 student-session cells. `demo-profiles`
+describes the available attendance patterns, and `demo-summary` reports the
+shape and coverage of any validated snapshot. None of these commands sends
+data to a service or writes files on its own. The browser workbench has a
+separate generator form for the same synthetic data; its output is an in-memory
+copy until explicitly downloaded.
+
 `schedule-generate` accepts a JSON object with `startDate`, `endDate`,
 `startTime`, `durationMinutes`, `weekdays`, `resources`, `idPrefix`, and an
 optional `exceptions` array. Dates and times use UTC, weekdays use Sunday=0

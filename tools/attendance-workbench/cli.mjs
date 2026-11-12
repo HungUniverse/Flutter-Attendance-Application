@@ -29,6 +29,7 @@ import { previewAttendanceImport } from './import-preview.mjs';
 import { planSchedule } from './schedule-planner.mjs';
 import { appendArchiveRevision, archiveToCsv, compareArchiveRevisions, createArchive, listArchiveRevisions,
   parseArchive, restoreArchiveRevision, serializeArchive } from './archive.mjs';
+import { generateSyntheticDataset, listSyntheticProfiles, summarizeDatasetSnapshot } from './dataset-lab.mjs';
 
 const usage = `Attendance workbench (Node.js 22+)
 
@@ -54,6 +55,10 @@ const usage = `Attendance workbench (Node.js 22+)
   node cli.mjs archive-compare ARCHIVE.json BEFORE_ID AFTER_ID
   node cli.mjs archive-restore ARCHIVE.json REVISION_ID MESSAGE [AUTHOR]
   node cli.mjs archive-csv ARCHIVE.json
+  node cli.mjs demo-generate [OPTIONS.json]
+  node cli.mjs demo-manifest [OPTIONS.json]
+  node cli.mjs demo-profiles
+  node cli.mjs demo-summary SNAPSHOT.json
   node cli.mjs apply SNAPSHOT.json CHANGES.json
   node cli.mjs compare BEFORE.json AFTER.json
   node cli.mjs export-csv SNAPSHOT.json
@@ -281,6 +286,21 @@ export async function runCommand(args) {
     case 'archive-csv': {
       requireArgs(values, 1);
       return archiveToCsv(parseArchive(await readText(values[0])));
+    }
+    case 'demo-generate':
+    case 'demo-manifest': {
+      if (values.length > 1) throw new TypeError('expected optional synthetic dataset options file');
+      const options = values[0] ? JSON.parse(await readText(values[0])) : {};
+      const dataset = generateSyntheticDataset(options);
+      return command === 'demo-manifest' ? json(dataset.manifest) : `${serializeAttendanceSnapshot(dataset.snapshot)}\n`;
+    }
+    case 'demo-profiles': {
+      requireArgs(values, 0);
+      return json(listSyntheticProfiles());
+    }
+    case 'demo-summary': {
+      requireArgs(values, 1);
+      return json(summarizeDatasetSnapshot(await snapshot(values[0])));
     }
     default:
       throw new TypeError(`unknown command: ${command}; use --help`);

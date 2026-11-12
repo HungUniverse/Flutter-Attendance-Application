@@ -23,6 +23,7 @@ import { previewAttendanceImport } from '../import-preview.mjs';
 import { planSchedule } from '../schedule-planner.mjs';
 import { appendArchiveRevision, archiveToCsv, compareArchiveRevisions, createArchive, getArchiveSnapshot,
   listArchiveRevisions, parseArchive, serializeArchive } from '../archive.mjs';
+import { generateSyntheticDataset, listSyntheticProfiles } from '../dataset-lab.mjs';
 
 const labels = {
   overview: ['TỔNG QUAN', 'Tổng quan'],
@@ -766,6 +767,31 @@ function demoSnapshot() {
   loadSnapshot(createAttendanceSnapshot(roster, sessionIds, records), 'Đã mở dữ liệu mẫu.');
 }
 
+function syntheticDatasetDialog() {
+  const profiles = listSyntheticProfiles().map((profile) => `<option value="${esc(profile.id)}">${esc(profile.label)}</option>`).join('');
+  showDialog(`<div class="modal-head"><div><h2>Tạo dữ liệu giả lập</h2><p>Tạo bản sao mới với mã và email giả để thử giao diện hoặc khối lượng dữ liệu.</p></div><button type="button" class="icon-button" data-close>×</button></div><div class="form-grid"><div class="form-field"><label for="demo-students">Số sinh viên</label><input id="demo-students" type="number" min="1" max="10000" value="120"></div><div class="form-field"><label for="demo-sessions">Số buổi</label><input id="demo-sessions" type="number" min="1" max="500" value="24"></div><div class="form-field"><label for="demo-groups">Số nhóm</label><input id="demo-groups" type="number" min="1" max="120" value="4"></div><div class="form-field"><label for="demo-seed">Seed để tạo lại cùng dữ liệu</label><input id="demo-seed" maxlength="120" value="attendance-demo-2026"></div><div class="form-field"><label for="demo-profile">Kiểu điểm danh</label><select id="demo-profile"><option value="balanced">Pha trộn các kiểu</option>${profiles}</select></div><div class="form-field"><label for="demo-missing">Cách thiếu dữ liệu</label><select id="demo-missing"><option value="random">Rải rác</option><option value="early">Các buổi đầu</option><option value="recent">Các buổi gần đây</option><option value="blocks">Theo từng đoạn</option></select></div><div class="form-field"><label for="demo-missing-rate">Tỷ lệ thiếu (0–0,6)</label><input id="demo-missing-rate" type="number" min="0" max="0.6" step="0.01" value="0.04"></div><div class="form-field"><label for="demo-absence-rate">Tỷ lệ vắng mục tiêu (0–1)</label><input id="demo-absence-rate" type="number" min="0" max="1" step="0.01" value="0.22"></div></div><p class="pagination-info">Giới hạn an toàn: tối đa 250.000 ô điểm danh. Dữ liệu chỉ tồn tại trong trang cho đến khi bạn chủ động tải bản sao.</p><div class="modal-actions"><button type="button" class="button button-secondary" data-close>Hủy</button><button type="button" class="button button-primary" id="generate-synthetic">Tạo dữ liệu</button></div>`, () => {
+    bindModalClose();
+    $('#generate-synthetic').addEventListener('click', () => {
+      const profile = $('#demo-profile').value;
+      const profileMix = profile === 'balanced' ? undefined : { [profile]: 1 };
+      try {
+        const dataset = generateSyntheticDataset({
+          students: Number($('#demo-students').value),
+          sessions: Number($('#demo-sessions').value),
+          groupCount: Number($('#demo-groups').value),
+          seed: $('#demo-seed').value,
+          missingPattern: $('#demo-missing').value,
+          missingRate: Number($('#demo-missing-rate').value),
+          absenceRate: Number($('#demo-absence-rate').value),
+          profileMix,
+        });
+        closeDialog();
+        loadSnapshot(dataset.snapshot, `Đã tạo dữ liệu giả lập (${dataset.manifest.dimensions.students} sinh viên, ${dataset.manifest.dimensions.sessions} buổi, ${dataset.manifest.dimensions.missing} ô trống).`);
+      } catch (error) { showError(error); }
+    });
+  });
+}
+
 function setBundle(bundle) {
   state.bundle = bundle;
   state.bundleCurrentId = null;
@@ -960,6 +986,7 @@ function loadEventBindings() {
   });
   $('#empty-open').addEventListener('keydown', () => {});
   $('#create-demo').addEventListener('click', demoSnapshot);
+  $('#create-synthetic').addEventListener('click', syntheticDatasetDialog);
   $('#review-import').addEventListener('click', importReviewDialog);
   $('#download-snapshot').addEventListener('click', exportSnapshot);
   $('#manage-bundle').addEventListener('click', showBundleManager);

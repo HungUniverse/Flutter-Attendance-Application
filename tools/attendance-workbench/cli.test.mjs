@@ -123,3 +123,29 @@ test('returns errors without emitting a partial snapshot', async () => {
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('generates repeatable synthetic snapshots, profile docs and compact manifests', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'attendance-workbench-demo-'));
+  try {
+    const options = join(dir, 'options.json');
+    const data = join(dir, 'synthetic.json');
+    await writeFile(options, JSON.stringify({ students: 15, sessions: 8, seed: 'cli-fixture', missingRate: 0.15,
+      missingPattern: 'recent', groupCount: 3 }));
+    const run = (...args) => execFileSync(process.execPath, [cli, ...args], { encoding: 'utf8' });
+    await writeFile(data, run('demo-generate', options));
+    const snapshot = JSON.parse(await readFile(data, 'utf8'));
+    const again = JSON.parse(run('demo-generate', options));
+    assert.deepEqual(snapshot, again);
+    assert.equal(snapshot.roster.length, 15);
+    assert.equal(snapshot.sessionIds.length, 8);
+    const manifest = JSON.parse(run('demo-manifest', options));
+    assert.equal(manifest.synthetic, true);
+    assert.equal(manifest.dimensions.students, 15);
+    assert.equal(manifest.dimensions.missing, 30);
+    assert.equal(JSON.parse(run('demo-profiles')).length, 8);
+    assert.equal(JSON.parse(run('demo-summary', data)).coverage, 0.75);
+    assert.equal(JSON.parse(run('report', data)).missing, 30);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
