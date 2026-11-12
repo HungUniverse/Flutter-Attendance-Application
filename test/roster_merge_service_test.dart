@@ -157,4 +157,74 @@ void main() {
     );
     expect(result.classes.single.recordFor('m1', 'SE000001'), isNull);
   });
+
+  test(
+    'roster update normalizes case-variant roll keys without overwriting closed meeting presence and deduplicates incoming students',
+    () {
+      final meeting = Meeting(
+        id: 'm1',
+        number: 1,
+        startAt: DateTime(2026, 9, 7, 7),
+        endAt: DateTime(2026, 9, 7, 9, 15),
+        state: MeetingState.closed,
+      );
+      final existing = CourseClass(
+        id: 'FA26_PRM393_SE1917',
+        courseCode: 'PRM393',
+        classCode: 'SE1917',
+        scheduleCode: '11',
+        students: const [
+          Student(
+            rollNumber: 'se000001',
+            email: 'one@example.com',
+            fullName: 'Student One',
+          ),
+        ],
+        scheduleRule: ScheduleRule(
+          scheduleCode: '11',
+          semesterStart: DateTime(2026, 9, 7),
+        ),
+        meetings: [meeting],
+        attendance: {
+          'm1': {
+            'se000001': AttendanceRecord(
+              status: AttendanceStatus.present,
+              source: AttendanceSource.scan,
+              recordedAt: DateTime(2026, 9, 7, 7, 30),
+            ),
+          },
+        },
+      );
+      final imported = existing.copyWith(
+        students: const [
+          Student(
+            rollNumber: 'SE000001',
+            email: 'one@example.com',
+            fullName: 'Student One Updated',
+          ),
+          Student(
+            rollNumber: 'se000001',
+            email: 'one@example.com',
+            fullName: 'Duplicate Row',
+          ),
+        ],
+        attendance: const {},
+      );
+
+      final result = RosterMergeService().merge(
+        existing: [existing],
+        imported: [imported],
+        now: DateTime(2026, 9, 17),
+      );
+      final merged = result.classes.single;
+
+      expect(merged.students, hasLength(1));
+      expect(merged.students.single.rollNumber, 'SE000001');
+      expect(merged.attendance['m1']?.keys, ['SE000001']);
+      expect(
+        merged.recordFor('m1', 'SE000001')?.status,
+        AttendanceStatus.present,
+      );
+    },
+  );
 }

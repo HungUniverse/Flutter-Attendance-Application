@@ -70,48 +70,77 @@ class RosterMergeService {
   ) {
     final oldByRoll = {
       for (final student in previous.students)
-        student.rollNumber.toUpperCase(): student,
+        student.rollNumber.trim().toUpperCase(): student,
     };
     final oldByEmail = {
       for (final student in previous.students) student.normalizedEmail: student,
     };
     final consumedOldRolls = <String>{};
+    final seenIncomingRolls = <String>{};
     final mergedStudents = <Student>[];
     final rollRenames = <String, String>{};
     var addedStudents = 0;
 
     for (final student in incoming.students) {
+      final incomingRollUpper = student.rollNumber.trim().toUpperCase();
+      if (!seenIncomingRolls.add(incomingRollUpper)) continue;
       final matched =
-          oldByRoll[student.rollNumber.toUpperCase()] ??
+          oldByRoll[incomingRollUpper] ??
           oldByEmail[student.normalizedEmail];
       if (matched == null) {
         mergedStudents.add(student);
         addedStudents++;
         continue;
       }
-      consumedOldRolls.add(matched.rollNumber.toUpperCase());
+      consumedOldRolls.add(matched.rollNumber.trim().toUpperCase());
       mergedStudents.add(student);
-      if (matched.rollNumber.toUpperCase() !=
-          student.rollNumber.toUpperCase()) {
+      if (matched.rollNumber != student.rollNumber) {
         rollRenames[matched.rollNumber] = student.rollNumber;
       }
     }
 
     final retained = previous.students
         .where(
-          (student) =>
-              !consumedOldRolls.contains(student.rollNumber.toUpperCase()),
+          (student) => !consumedOldRolls.contains(
+            student.rollNumber.trim().toUpperCase(),
+          ),
         )
         .toList();
     mergedStudents.addAll(retained);
 
+    final canonicalRollByUpper = {
+      for (final student in mergedStudents)
+        student.rollNumber.trim().toUpperCase(): student.rollNumber,
+    };
     final attendance = previous.attendance.map(
       (meetingId, records) => MapEntry(meetingId, Map.of(records)),
     );
     for (final records in attendance.values) {
       for (final rename in rollRenames.entries) {
-        final record = records.remove(rename.key);
-        if (record != null) records.putIfAbsent(rename.value, () => record);
+        final renameUpper = rename.key.trim().toUpperCase();
+        AttendanceRecord? migratedRecord = records.remove(rename.key);
+        final variantKeys = records.keys
+            .where((k) => k.trim().toUpperCase() == renameUpper)
+            .toList();
+        for (final key in variantKeys) {
+          migratedRecord ??= records.remove(key);
+        }
+        if (migratedRecord != null) {
+          records.putIfAbsent(rename.value, () => migratedRecord!);
+        }
+      }
+      final caseVariants = records.keys
+          .where((k) {
+            final canonical = canonicalRollByUpper[k.trim().toUpperCase()];
+            return canonical != null && canonical != k;
+          })
+          .toList();
+      for (final key in caseVariants) {
+        final canonical = canonicalRollByUpper[key.trim().toUpperCase()]!;
+        final record = records.remove(key);
+        if (record != null) {
+          records.putIfAbsent(canonical, () => record);
+        }
       }
     }
 

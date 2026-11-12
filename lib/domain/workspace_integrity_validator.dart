@@ -116,7 +116,7 @@ class WorkspaceIntegrityValidator {
     final issues = <IntegrityIssue>[];
     final classId = courseClass.id;
 
-    if (!RegExp(r'^[1-3][1-4]$').hasMatch(courseClass.scheduleCode)) {
+    if (!RegExp(r'^[1-3][1-4]$').hasMatch(courseClass.scheduleCode.trim())) {
       issues.add(
         IntegrityIssue(
           code: 'INVALID_SCHEDULE_CODE',

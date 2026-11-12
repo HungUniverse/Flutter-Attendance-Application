@@ -91,6 +91,12 @@ void main() {
       expect(report.issues, isEmpty);
       expect(report.toJson()['isValid'], isTrue);
     });
+
+    test('should accept whitespace-padded valid scheduleCode consistent with ScheduleRule', () {
+      final course = _validCourse().copyWith(scheduleCode: ' 11 ');
+      final issues = validator.validateClass(course);
+      expect(issues, isEmpty);
+    });
   });
 
   group('WorkspaceIntegrityValidator - Anomaly Detection', () {
