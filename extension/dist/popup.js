@@ -437,11 +437,11 @@
     "status"
   ];
   function stripFormulaPrefix(value) {
-    const trimmed = value.trim();
-    if (trimmed.startsWith("'") && /^'[\t\r\n ]*[=+\-@]/.test(trimmed)) {
-      return trimmed.slice(1).trim();
+    const candidate = value.startsWith("'") ? value : value.trim();
+    if (candidate.startsWith("'") && /^'(?:[\t\r]|[\t\r\n ]*[=+\-@])/.test(candidate)) {
+      return candidate.slice(1).trim();
     }
-    return trimmed;
+    return candidate.trim();
   }
   function parseAttendanceCsv(source) {
     const result = import_papaparse.default.parse(source.replace(/^\uFEFF/, ""), {
@@ -540,12 +540,12 @@
     }
     const base = {
       schema_version: String(session.schemaVersion ?? ""),
-      semester: normalizeId(requiredString(session.semester, "semester")),
-      course_code: normalizeId(requiredString(session.courseCode, "courseCode")),
-      class_code: normalizeId(requiredString(session.classCode, "classCode")),
-      schedule_code: normalizeId(requiredString(session.scheduleCode, "scheduleCode")),
-      meeting_id: requiredString(slot.id ?? session.sessionId, "meeting.id"),
-      meeting_number: String(slot.number ?? ""),
+      semester: normalizeId(stripFormulaPrefix(requiredString(session.semester, "semester"))),
+      course_code: normalizeId(stripFormulaPrefix(requiredString(session.courseCode, "courseCode"))),
+      class_code: normalizeId(stripFormulaPrefix(requiredString(session.classCode, "classCode"))),
+      schedule_code: normalizeId(stripFormulaPrefix(requiredString(session.scheduleCode, "scheduleCode"))),
+      meeting_id: stripFormulaPrefix(requiredString(slot.id ?? session.sessionId, "meeting.id")),
+      meeting_number: stripFormulaPrefix(String(slot.number ?? "")),
       meeting_date: startAt.slice(0, 10),
       start_time: startAt.slice(11, 16),
       end_time: endAt.slice(11, 16)
@@ -556,7 +556,7 @@
         throw new Error(`D\xF2ng sinh vi\xEAn ${index + 1} kh\xF4ng h\u1EE3p l\u1EC7.`);
       }
       const student = value;
-      const roll = normalizeId(requiredString(student.rollNumber, `MSSV d\xF2ng ${index + 1}`));
+      const roll = normalizeId(stripFormulaPrefix(requiredString(student.rollNumber, `MSSV d\xF2ng ${index + 1}`)));
       if (seen.has(roll)) throw new Error(`JSON tr\xF9ng MSSV ${roll}.`);
       seen.add(roll);
       const rawStatus = student.attendance?.status;

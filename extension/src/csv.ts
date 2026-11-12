@@ -7,11 +7,14 @@ const required = [
 ] as const;
 
 export function stripFormulaPrefix(value: string): string {
-  const trimmed = value.trim();
-  if (trimmed.startsWith("'") && /^'[\t\r\n ]*[=+\-@]/.test(trimmed)) {
-    return trimmed.slice(1).trim();
+  const candidate = value.startsWith("'") ? value : value.trim();
+  if (
+    candidate.startsWith("'") &&
+    /^'(?:[\t\r]|[\t\r\n ]*[=+\-@])/.test(candidate)
+  ) {
+    return candidate.slice(1).trim();
   }
-  return trimmed;
+  return candidate.trim();
 }
 
 export function parseAttendanceCsv(source: string): AttendanceCsvRow[] {

@@ -126,4 +126,18 @@ test("buildCourseAttendanceAnalytics and exportClassAttendanceCsv summarize and 
   assert.match(lines[0], /"course_code","class_code","roll_number"/);
   assert.match(lines[2], /"'=Trần Thị Bình"/);
   assert.match(lines[3], /"critical","0"/);
+
+  // Deduplicates legacy case-variant student roll entries and escapes leading tab cells
+  const legacyCourse = sampleCourse();
+  legacyCourse.data.students.push({
+    rollNumber: "se001",
+    memberCode: "\tM001",
+    fullName: "Duplicate Entry",
+    email: "an@fpt.edu.vn",
+  });
+  legacyCourse.data.students[0].memberCode = "\tM001";
+  const deduped = buildCourseAttendanceAnalytics(legacyCourse);
+  assert.equal(deduped.totalStudents, 3);
+  const legacyCsv = exportClassAttendanceCsv(legacyCourse);
+  assert.match(legacyCsv, /"'\tM001"/);
 });

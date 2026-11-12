@@ -30,4 +30,13 @@ describe('session JSON import', () => {
     duplicate.attendance[1].rollNumber = duplicate.attendance[0].rollNumber;
     expect(() => parseAttendanceJson(JSON.stringify(duplicate))).toThrow(/trùng MSSV/);
   });
+
+  it('strips spreadsheet formula prefixes including leading tab/CR in JSON fields', () => {
+    const formulaJson = JSON.parse(sample);
+    formulaJson.attendance[0].rollNumber = "'\tSE000001";
+    formulaJson.attendance[0].fullName = "'=Nguyễn Văn A";
+    const rows = parseAttendanceJson(JSON.stringify(formulaJson));
+    expect(rows[0].roll_number).toBe('SE000001');
+    expect(rows[0].full_name).toBe('=Nguyễn Văn A');
+  });
 });

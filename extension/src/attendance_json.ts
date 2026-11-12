@@ -68,12 +68,12 @@ export function parseAttendanceJson(source: string): AttendanceCsvRow[] {
   }
   const base = {
     schema_version: String(session.schemaVersion ?? ''),
-    semester: normalizeId(requiredString(session.semester, 'semester')),
-    course_code: normalizeId(requiredString(session.courseCode, 'courseCode')),
-    class_code: normalizeId(requiredString(session.classCode, 'classCode')),
-    schedule_code: normalizeId(requiredString(session.scheduleCode, 'scheduleCode')),
-    meeting_id: requiredString(slot.id ?? session.sessionId, 'meeting.id'),
-    meeting_number: String(slot.number ?? ''),
+    semester: normalizeId(stripFormulaPrefix(requiredString(session.semester, 'semester'))),
+    course_code: normalizeId(stripFormulaPrefix(requiredString(session.courseCode, 'courseCode'))),
+    class_code: normalizeId(stripFormulaPrefix(requiredString(session.classCode, 'classCode'))),
+    schedule_code: normalizeId(stripFormulaPrefix(requiredString(session.scheduleCode, 'scheduleCode'))),
+    meeting_id: stripFormulaPrefix(requiredString(slot.id ?? session.sessionId, 'meeting.id')),
+    meeting_number: stripFormulaPrefix(String(slot.number ?? '')),
     meeting_date: startAt.slice(0, 10),
     start_time: startAt.slice(11, 16),
     end_time: endAt.slice(11, 16),
@@ -84,7 +84,7 @@ export function parseAttendanceJson(source: string): AttendanceCsvRow[] {
       throw new Error(`Dòng sinh viên ${index + 1} không hợp lệ.`);
     }
     const student = value as SessionStudent;
-    const roll = normalizeId(requiredString(student.rollNumber, `MSSV dòng ${index + 1}`));
+    const roll = normalizeId(stripFormulaPrefix(requiredString(student.rollNumber, `MSSV dòng ${index + 1}`)));
     if (seen.has(roll)) throw new Error(`JSON trùng MSSV ${roll}.`);
     seen.add(roll);
     const rawStatus = student.attendance?.status;
