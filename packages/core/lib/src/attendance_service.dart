@@ -56,8 +56,14 @@ class AttendanceService {
       return courseClass;
     }
     final attendance = _deepCopy(courseClass.attendance);
-    attendance.putIfAbsent(meetingId, () => {});
-    attendance[meetingId]![student.rollNumber] = AttendanceRecord(
+    final records = attendance.putIfAbsent(meetingId, () => {});
+    final canonicalRoll = student.rollNumber;
+    final normalizedRoll = canonicalRoll.trim().toUpperCase();
+    records.removeWhere(
+      (key, _) =>
+          key != canonicalRoll && key.trim().toUpperCase() == normalizedRoll,
+    );
+    records[canonicalRoll] = AttendanceRecord(
       status: AttendanceStatus.present,
       source: source,
       recordedAt: recordedAt,
@@ -70,13 +76,21 @@ class AttendanceService {
     String meetingId, {
     DateTime? now,
   }) {
+    courseClass.meetings.singleWhere((m) => m.id == meetingId);
     final attendance = _deepCopy(courseClass.attendance);
     final records = attendance.putIfAbsent(meetingId, () => {});
     final recordedAt = now ?? DateTime.now();
     for (final student in courseClass.students) {
-      if (records[student.rollNumber] == null ||
-          records[student.rollNumber]!.status == AttendanceStatus.unmarked) {
-        records[student.rollNumber] = AttendanceRecord(
+      final canonicalRoll = student.rollNumber;
+      final normalizedRoll = canonicalRoll.trim().toUpperCase();
+      final existing = courseClass.recordFor(meetingId, canonicalRoll);
+      if (existing == null || existing.status == AttendanceStatus.unmarked) {
+        records.removeWhere(
+          (key, _) =>
+              key != canonicalRoll &&
+              key.trim().toUpperCase() == normalizedRoll,
+        );
+        records[canonicalRoll] = AttendanceRecord(
           status: AttendanceStatus.absent,
           source: AttendanceSource.finalize,
           recordedAt: recordedAt,
@@ -106,16 +120,25 @@ class AttendanceService {
     if (meeting.state != MeetingState.active || !meeting.isOnDate(at)) {
       throw StateError('Chỉ điểm danh trực tiếp buổi đang mở hôm nay.');
     }
-    if (status == AttendanceStatus.unmarked ||
-        !courseClass.students.any((s) => s.rollNumber == rollNumber)) {
+    final normalizedRoll = rollNumber.trim().toUpperCase();
+    final student = courseClass.students
+        .where((s) => s.rollNumber.trim().toUpperCase() == normalizedRoll)
+        .firstOrNull;
+    if (status == AttendanceStatus.unmarked || student == null) {
       throw ArgumentError('Sinh viên hoặc kết quả không hợp lệ.');
     }
-    final previous = courseClass.recordFor(meetingId, rollNumber);
+    final canonicalRoll = student.rollNumber;
+    final previous = courseClass.recordFor(meetingId, canonicalRoll);
     if (previous != null && previous.status != AttendanceStatus.unmarked) {
       throw StateError('Kết quả đã ghi. Hãy sửa với lý do.');
     }
     final attendance = _deepCopy(courseClass.attendance);
-    attendance.putIfAbsent(meetingId, () => {})[rollNumber] = AttendanceRecord(
+    final records = attendance.putIfAbsent(meetingId, () => {});
+    records.removeWhere(
+      (key, _) =>
+          key != canonicalRoll && key.trim().toUpperCase() == normalizedRoll,
+    );
+    records[canonicalRoll] = AttendanceRecord(
       status: status,
       source: AttendanceSource.manual,
       recordedAt: at,
@@ -148,10 +171,14 @@ class AttendanceService {
     DateTime? now,
   }) {
     if (reason.trim().isEmpty) throw ArgumentError('Cần nhập lý do chỉnh sửa.');
-    if (status == AttendanceStatus.unmarked ||
-        !courseClass.students.any((s) => s.rollNumber == rollNumber)) {
+    final normalizedRoll = rollNumber.trim().toUpperCase();
+    final student = courseClass.students
+        .where((s) => s.rollNumber.trim().toUpperCase() == normalizedRoll)
+        .firstOrNull;
+    if (status == AttendanceStatus.unmarked || student == null) {
       throw ArgumentError('Sinh viên hoặc kết quả không hợp lệ.');
     }
+    final canonicalRoll = student.rollNumber;
     final meeting = courseClass.meetings.singleWhere((m) => m.id == meetingId);
     if (meeting.state == MeetingState.upcoming) {
       throw StateError('Không thể sửa slot chưa bắt đầu hoặc đã quá hạn.');
@@ -159,8 +186,12 @@ class AttendanceService {
     final at = now ?? DateTime.now();
     final attendance = _deepCopy(courseClass.attendance);
     final records = attendance.putIfAbsent(meetingId, () => {});
-    final old = records[rollNumber];
-    records[rollNumber] = AttendanceRecord(
+    final old = courseClass.recordFor(meetingId, canonicalRoll);
+    records.removeWhere(
+      (key, _) =>
+          key != canonicalRoll && key.trim().toUpperCase() == normalizedRoll,
+    );
+    records[canonicalRoll] = AttendanceRecord(
       status: status,
       source: AttendanceSource.manual,
       recordedAt: at,
@@ -173,7 +204,7 @@ class AttendanceService {
         createdAt: at,
         action: 'attendance_override',
         reason: reason.trim(),
-        rollNumber: rollNumber,
+        rollNumber: canonicalRoll,
         meetingId: meetingId,
         oldValue: old == null ? '' : attendanceCode(old.status),
         newValue: attendanceCode(status),

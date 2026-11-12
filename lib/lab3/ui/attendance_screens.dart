@@ -59,6 +59,8 @@ class _AttendancePageState extends State<AttendancePage> {
       ],
       child: ContentList(
         children: [
+          if (m.state == MeetingState.active || vm.draftCount > 0)
+            const AttendanceDraftNotice(),
           SectionCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -269,23 +271,14 @@ class _AttendancePageState extends State<AttendancePage> {
                                   values.first == record?.status) {
                                 return;
                               }
-                              if (record != null &&
-                                  record.status != AttendanceStatus.unmarked) {
-                                await editAttendance(
-                                  context,
-                                  c.id,
-                                  m.id,
-                                  s.rollNumber,
-                                  initial: values.first,
-                                );
-                              } else {
-                                final ok = await vm.mark(
-                                  c.id,
-                                  m.id,
-                                  s.rollNumber,
-                                  values.first,
-                                );
-                                if (context.mounted) showResult(context, ok);
+                              final ok = await vm.mark(
+                                c.id,
+                                m.id,
+                                s.rollNumber,
+                                values.first,
+                              );
+                              if (!ok && context.mounted) {
+                                showResult(context, false);
                               }
                             },
                     )
@@ -317,6 +310,86 @@ class _AttendancePageState extends State<AttendancePage> {
               icon: const Icon(Icons.file_download_outlined),
               label: const Text('Xuất kết quả'),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class AttendanceDraftNotice extends StatelessWidget {
+  const AttendanceDraftNotice({super.key});
+  @override
+  Widget build(BuildContext context) {
+    final vm = context.watch<TeacherViewModel>();
+    return SectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${vm.draftCount} lựa chọn trong bản nháp trên máy',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Chọn và đổi P/A thoải mái. Bấm Chốt danh sách để gửi một lần. Bản nháp không bị ghi đè khi tự đồng bộ.',
+          ),
+          TextButton(
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('Bản nháp điểm danh trên máy'),
+                content: SizedBox(
+                  width: 500,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Buổi đã chốt hoặc lớp đã đổi trên máy chủ sẽ không bị bản nháp ghi đè. Nếu cần áp dụng lại, sửa kết quả trong Lịch sử kèm lý do.',
+                        ),
+                        ...vm.manualDrafts.map(
+                          (draft) => Padding(
+                            padding: const EdgeInsets.only(top: 16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${draft.classId}\n${DateTime(draft.startAt.year, draft.startAt.month, draft.startAt.day).toIso8601String().split('T').first}\n${draft.records.entries.map((entry) => '${entry.key}: ${attendanceCode(entry.value.status)}').join('\n')}',
+                                ),
+                                TextButton(
+                                  onPressed: () async {
+                                    final accepted = await confirmAction(
+                                      context,
+                                      'Bỏ bản nháp này?',
+                                      'Các lựa chọn trong bản nháp của buổi này sẽ bị bỏ. Kết quả trên Firebase không thay đổi.',
+                                      confirm: 'Bỏ bản nháp',
+                                    );
+                                    if (!accepted || !context.mounted) return;
+                                    final ok = await vm.discardDraft(draft.key);
+                                    if (ok && context.mounted) {
+                                      Navigator.pop(context);
+                                    }
+                                  },
+                                  child: const Text('Bỏ bản nháp này'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Đóng'),
+                  ),
+                ],
+              ),
+            ),
+            child: const Text('Xem bản nháp'),
+          ),
         ],
       ),
     );
@@ -439,7 +512,7 @@ class LinkPage extends StatelessWidget {
         same &&
         vm.linkError == null &&
         session!.receiving &&
-        session.expiresAt.isAfter(vm.now());
+        session.expiresAt.isAfter(vm.linkNow);
     return MobilePage(
       title: 'Link điểm danh',
       child: ContentList(

@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../../domain/models.dart';
 import '../../domain/schedule_service.dart';
+import '../../data/roster_importer.dart';
 import '../../ui/theme.dart';
 import '../viewmodels/teacher_view_model.dart';
 import 'components.dart';
@@ -88,14 +89,13 @@ class _ImportPageState extends State<ImportPage> {
   Uint8List? _bytes;
   String? _filename;
   String? _localError;
+  RosterImportResult? _preview;
   bool _picking = false;
   @override
   void initState() {
     super.initState();
     final vm = context.read<TeacherViewModel>();
-    _start =
-        vm.workspace?.semesterStart ??
-        DateTime(vm.now().year, vm.now().month, vm.now().day);
+    _start = vm.workspace?.semesterStart ?? DateTime(2026, 9, 7);
     _semester.text = vm.workspace?.semester ?? '';
   }
 
@@ -127,15 +127,35 @@ class _ImportPageState extends State<ImportPage> {
           picked.bytes ??
           (picked.path == null ? null : await File(picked.path!).readAsBytes());
       if (bytes == null) throw const FileSystemException('Không đọc được tệp.');
+      if (!mounted) return;
+      final inferred = RosterImporter.semesterFromFileName(picked.name);
+      final start = inferred == 'FA26' ? DateTime(2026, 9, 7) : _start;
+      final preview = context.read<TeacherViewModel>().previewImport(
+        bytes,
+        picked.name,
+        inferred ?? (_semester.text.isEmpty ? 'FA26' : _semester.text),
+        start,
+        int.tryParse(_weeks.text) ?? 10,
+        _perWeek,
+      );
       if (mounted) {
         setState(() {
           _bytes = bytes;
           _filename = picked.name;
+          _preview = preview;
+          _start = start;
+          if (inferred != null) _semester.text = inferred;
         });
       }
-    } on Object {
+    } on Object catch (e) {
       if (mounted) {
-        setState(() => _localError = 'Không đọc được tệp. Hãy chọn lại.');
+        setState(() {
+          _bytes = null;
+          _preview = null;
+          _localError = e is RosterImportException
+              ? e.message
+              : 'Không đọc được tệp. Hãy chọn lại.';
+        });
       }
     } finally {
       if (mounted) setState(() => _picking = false);
@@ -216,7 +236,14 @@ class _ImportPageState extends State<ImportPage> {
                     color: AppColors.success,
                   ),
                   const SizedBox(height: 8),
-                  Text(_filename ?? 'Chọn tệp danh sách lớp ODS hoặc XLSX'),
+                  Text(
+                    _filename ??
+                        'Chọn Markbook của giảng viên (.ods hoặc .xlsx)',
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Cột nguồn: Class, RollNumber, Email, MemberCode, FullName. Các cột điểm và ghi chú thi được bỏ qua.',
+                  ),
                   const SizedBox(height: 12),
                   OutlinedButton(
                     onPressed: vm.busy || _picking ? null : _pick,
@@ -231,6 +258,36 @@ class _ImportPageState extends State<ImportPage> {
                 ],
               ),
             ),
+            if (_preview != null)
+              SectionCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${_preview!.classes.length} lớp · ${_preview!.classes.fold<int>(0, (n, c) => n + c.students.length)} lượt ghi danh',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Nhận mã lịch, môn và lớp từ tên sheet. Ví dụ 11_PRN232_SE1917: Thứ 2 + Thứ 5, slot 1 (07:30–09:15).',
+                    ),
+                    const SizedBox(height: 8),
+                    ..._preview!.classes.map(
+                      (c) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Text(
+                          '${c.scheduleCode} · ${c.courseCode} · ${c.classCode}: ${c.students.length} sinh viên',
+                        ),
+                      ),
+                    ),
+                    if (_preview!.warnings.isNotEmpty)
+                      Text(
+                        _preview!.warnings.join('\n'),
+                        style: const TextStyle(color: AppColors.danger),
+                      ),
+                  ],
+                ),
+              ),
             SectionCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -242,7 +299,11 @@ class _ImportPageState extends State<ImportPage> {
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _semester,
-                    decoration: const InputDecoration(labelText: 'Học kỳ'),
+                    decoration: const InputDecoration(
+                      labelText: 'Học kỳ',
+                      helperText:
+                          'Tự nhận từ tên file, ví dụ FA26_Markbook.ods',
+                    ),
                     validator: (v) =>
                         RegExp(r'^[A-Za-z0-9_-]{1,32}$')
                             .hasMatch(v?.trim() ?? '')
@@ -376,6 +437,7 @@ class _DashboardPageState extends State<DashboardPage> {
         },
         child: ContentList(
           children: [
+            if (vm.draftCount > 0) const AttendanceDraftNotice(),
             if (vm.sync != null)
               SectionCard(
                 child: Column(

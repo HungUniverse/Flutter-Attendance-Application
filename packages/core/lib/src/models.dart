@@ -14,11 +14,12 @@ String attendanceCode(AttendanceStatus status) => switch (status) {
   AttendanceStatus.unmarked => '',
 };
 
-AttendanceStatus attendanceStatusFromCode(String value) => switch (value) {
-  'P' => AttendanceStatus.present,
-  'A' => AttendanceStatus.absent,
-  _ => AttendanceStatus.unmarked,
-};
+AttendanceStatus attendanceStatusFromCode(String value) =>
+    switch (value.trim().toUpperCase()) {
+      'P' => AttendanceStatus.present,
+      'A' => AttendanceStatus.absent,
+      _ => AttendanceStatus.unmarked,
+    };
 
 class Student {
   const Student({
@@ -69,8 +70,15 @@ class ScheduleRule {
   final List<DateTime> excludedDates;
   final List<DateTime> additionalStarts;
 
-  int get dayGroup => int.tryParse(scheduleCode.substring(0, 1)) ?? 0;
-  int get dailySlot => int.tryParse(scheduleCode.substring(1, 2)) ?? 0;
+  int get dayGroup {
+    final code = scheduleCode.trim();
+    return code.isEmpty ? 0 : (int.tryParse(code.substring(0, 1)) ?? 0);
+  }
+
+  int get dailySlot {
+    final code = scheduleCode.trim();
+    return code.length < 2 ? 0 : (int.tryParse(code.substring(1, 2)) ?? 0);
+  }
 
   Map<String, Object?> toJson() => {
     'scheduleCode': scheduleCode,
@@ -281,8 +289,19 @@ class CourseClass {
     auditEvents: auditEvents ?? this.auditEvents,
   );
 
-  AttendanceRecord? recordFor(String meetingId, String rollNumber) =>
-      attendance[meetingId]?[rollNumber];
+  AttendanceRecord? recordFor(String meetingId, String rollNumber) {
+    final records = attendance[meetingId];
+    if (records == null) return null;
+    final direct = records[rollNumber];
+    if (direct != null) return direct;
+    final normalized = rollNumber.trim().toUpperCase();
+    for (final entry in records.entries) {
+      if (entry.key.trim().toUpperCase() == normalized) {
+        return entry.value;
+      }
+    }
+    return null;
+  }
 
   Map<String, Object?> toJson() => {
     'id': id,
@@ -355,11 +374,12 @@ class TeacherWorkspace {
     List<CourseClass>? classes,
     String? teacherEmail,
     DateTime? updatedAt,
+    DateTime? semesterStart,
   }) => TeacherWorkspace(
     schemaVersion: schemaVersion,
     id: id,
     semester: semester,
-    semesterStart: semesterStart,
+    semesterStart: semesterStart ?? this.semesterStart,
     teacherEmail: teacherEmail ?? this.teacherEmail,
     classes: classes ?? this.classes,
     updatedAt: updatedAt ?? this.updatedAt,

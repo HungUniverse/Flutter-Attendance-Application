@@ -22,10 +22,11 @@ async function fixture(t) {
   t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); await rm(directory, { recursive: true, force: true }); });
   const base = `http://127.0.0.1:${server.address().port}`;
   async function request(path, { method = 'GET', user, data, headers = {} } = {}) {
+    const hasBody = data !== undefined;
     const response = await fetch(`${base}${path}`, { method,
-      headers: { ...(data ? { 'content-type': 'application/json' } : {}),
+      headers: { ...(hasBody ? { 'content-type': 'application/json' } : {}),
         ...(user ? { authorization: `Bearer ${user}` } : {}), ...headers },
-      ...(data ? { body: JSON.stringify(data) } : {}) });
+      ...(hasBody ? { body: JSON.stringify(data) } : {}) });
     return { status: response.status, data: await response.json() };
   }
   const create = async (user = 'teacher', overrides = {}) => request('/api/sessions', {
@@ -128,4 +129,26 @@ test('expired desktop authorization cannot be claimed',async t=>{
   const f=await fixture(t);const data=(await f.request('/api/desktop-login',{method:'POST',data:{}})).data;
   f.advance(120001);
   assert.equal((await f.request('/api/desktop-login/complete',{method:'POST',user:'teacher',data})).status,410);
+});
+test('rejects null student entries with 400 and normalizes case-variant student emails',async t=>{
+  const f=await fixture(t);
+  assert.equal((await f.create('teacher',{students:[null]})).status,400);
+  const created=await f.create('teacher',{students:[{email:' SV@EXAMPLE.COM '},{email:'sv@example.com'}]});
+  assert.equal(created.status,200);
+  const blankClass={workspace:{id:'w1',semester:'FA26',classes:[{id:'   ',students:[],meetings:[]}]},revision:0,mutationId:randomUUID()};
+  assert.equal((await f.request('/api/workspaces',{method:'PUT',user:'teacher',data:blankClass})).status,400);
+});
+test('rejects non-object JSON payloads with 400 and matches workspace semester case-insensitively',async t=>{
+  const f=await fixture(t);
+  for (const invalidPayload of [null, [], 'raw-string', 42, true]) {
+    assert.equal((await f.request('/api/sessions',{method:'POST',user:'teacher',data:invalidPayload})).status,400);
+    assert.equal((await f.request('/api/desktop-login/poll',{method:'POST',data:invalidPayload})).status,400);
+    assert.equal((await f.request('/api/desktop-login/complete',{method:'POST',user:'teacher',data:invalidPayload})).status,400);
+  }
+  const data={workspace:{id:'w1',semester:'fa26',classes:[]},revision:0,mutationId:randomUUID()};
+  assert.equal((await f.request('/api/workspaces',{method:'PUT',user:'teacher',data})).status,200);
+  const readLower=await f.request('/api/workspaces?semester=fa26',{user:'teacher'});
+  const readUpper=await f.request('/api/workspaces?semester=FA26',{user:'teacher'});
+  assert.equal(readLower.data.data.workspace.semester,'FA26');
+  assert.equal(readUpper.data.data.workspace.id,'w1');
 });

@@ -59,7 +59,7 @@ class _TeacherMobileAppState extends State<TeacherMobileApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) widget.model.refresh();
+    widget.model.setForeground(state == AppLifecycleState.resumed);
   }
 
   @override

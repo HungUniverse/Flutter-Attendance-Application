@@ -6,8 +6,13 @@ service cloud.firestore {
       return signedIn() && request.auth.token.email_verified == true
         && request.auth.token.firebase.sign_in_provider == 'google.com';
     }
+    function admin() {
+      return googleUser() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'admin';
+    }
     function teacher() {
-      return googleUser() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher';
+      return googleUser() && ((exists(/databases/$(database)/documents/teacherDirectory/$(request.auth.token.email.lower()))
+        && get(/databases/$(database)/documents/teacherDirectory/$(request.auth.token.email.lower())).data.status == 'active') || admin());
     }
     function ownsClass(classId) {
       return teacher() && get(/databases/$(database)/documents/classes/$(classId)).data.ownerUid == request.auth.uid;
@@ -56,6 +61,39 @@ service cloud.firestore {
       allow get: if signedIn() && request.auth.uid == uid;
       // Privileged profiles are provisioned using Admin SDK by the project owner.
       allow list, create, update, delete: if false;
+    }
+    match /teacherDirectory/{email} {
+      function valid(d) {
+        return d.keys().hasOnly(['email', 'displayName', 'staffCode', 'department', 'status', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy'])
+          && d.email == email && d.email is string && d.email.size() <= 254
+          && d.email.matches('[a-z0-9._%+-]+@[a-z0-9.-]+[.][a-z]{2,}')
+          && d.displayName is string && d.displayName.size() > 0 && d.displayName.size() <= 160
+          && d.staffCode is string && d.staffCode.size() <= 40
+          && d.department is string && d.department.size() <= 160
+          && d.status in ['active', 'suspended']
+          && d.createdAt is timestamp && d.updatedAt == request.time
+          && d.createdBy is string && d.updatedBy == request.auth.uid;
+      }
+      allow get: if admin() || (googleUser() && email == request.auth.token.email.lower());
+      allow list: if admin();
+      allow create: if admin() && valid(request.resource.data)
+        && request.resource.data.createdAt == request.time && request.resource.data.createdBy == request.auth.uid;
+      allow update: if admin() && valid(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.email == resource.data.email;
+      allow delete: if admin();
+    }
+    match /teacherAudit/{id} {
+      allow read: if admin();
+      allow create: if admin()
+        && request.resource.data.keys().hasOnly(['actorUid', 'email', 'action', 'before', 'after', 'at'])
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.email is string
+        && request.resource.data.action in ['create', 'update', 'suspend', 'activate', 'delete']
+        && request.resource.data.before is map && request.resource.data.after is map
+        && request.resource.data.at == request.time;
+      allow update, delete: if false;
     }
     match /workspaces/{id} {
       allow get: if teacher() && (!exists(/databases/$(database)/documents/workspaces/$(id)) || resource.data.ownerUid == request.auth.uid);
@@ -113,20 +151,23 @@ service cloud.firestore {
         return meeting.state == 'active' && request.time >= meeting.dayStart && request.time < meeting.dayEnd;
       }
       function valid(d) {
-        return d.keys().hasOnly(['ownerUid', 'classId', 'localClassId', 'meetingId', 'label', 'receiving', 'expiresAt', 'createdAt', 'updatedAt'])
+        return d.keys().hasOnly(['ownerUid', 'classId', 'localClassId', 'meetingId', 'label', 'receiving', 'expiresAt', 'createdAt', 'updatedAt', 'openingId'])
           && d.ownerUid == request.auth.uid && d.classId is string
           && d.localClassId is string && d.meetingId is string && d.label is string
           && d.receiving is bool && d.expiresAt is timestamp && d.createdAt is timestamp
+          && (!('openingId' in d) || (d.openingId is string && d.openingId.size() > 0 && d.openingId.size() <= 64))
           && d.updatedAt == request.time;
       }
       allow get: if googleUser();
       allow list: if teacher() && resource.data.ownerUid == request.auth.uid;
       allow create: if valid(request.resource.data) && ownsClass(request.resource.data.classId)
         && active(request.resource.data) && request.resource.data.createdAt == request.time
-        && request.resource.data.receiving == true && request.resource.data.expiresAt > request.time
-        && request.resource.data.expiresAt <= request.time + duration.value(2, 'm');
+        && ((request.resource.data.receiving == true && request.resource.data.expiresAt > request.time
+          && request.resource.data.expiresAt <= request.time + duration.value(2, 'm'))
+          || (request.resource.data.receiving == false && request.resource.data.expiresAt == request.time
+            && 'openingId' in request.resource.data));
       allow update: if valid(request.resource.data) && ownsClass(resource.data.classId)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['receiving', 'expiresAt', 'updatedAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['receiving', 'expiresAt', 'updatedAt', 'openingId'])
         && (request.resource.data.receiving == false
           || (active(resource.data) && request.resource.data.expiresAt > request.time
             && request.resource.data.expiresAt <= request.time + duration.value(2, 'm')));

@@ -23,6 +23,7 @@ import {
   protectHistory,
   correction,
 } from "./model.js";
+import { requireTeacherAccess } from "../access.js";
 
 const rows = (snapshot) =>
   snapshot.docs.map((d) => ({ ...d.data(), id: d.id }));
@@ -43,12 +44,7 @@ export class AdminRepository {
     );
   }
   async requireTeacher() {
-    const profile = await getDocFromServer(this.ref(`users/${this.uid}`));
-    if (profile.data()?.role !== "teacher")
-      throw new AdminError(
-        "Tài khoản chưa được cấp quyền giảng viên.",
-        "teacher-required",
-      );
+    return requireTeacherAccess(this.db, { uid:this.uid, email:this.email });
   }
   watch(name, next, error) {
     return onSnapshot(this.ownQuery(name), (s) => next(rows(s)), error);
@@ -90,6 +86,11 @@ export class AdminRepository {
       return { workspace, classes };
     });
   }
+  async workspaceForSemester(value) {
+    const id = await hashId(`${this.uid}/${semesterCode(value)}`);
+    const snapshot = await getDocFromServer(this.ref(`workspaces/${id}`));
+    return snapshot.exists() ? this.loadWorkspace(id) : undefined;
+  }
   advance(tx, workspace, changes = {}) {
     tx.set(this.ref(`workspaces/${workspace.id}`), {
       ownerUid: this.uid,
@@ -119,7 +120,7 @@ export class AdminRepository {
       throw new AdminError(
         "Mã môn và mã lớp chỉ gồm chữ, số, gạch ngang hoặc gạch dưới.",
       );
-    const localId = `${semester}_${input.scheduleCode}_${courseCode}_${classCode}`;
+    const localId = `${semester}_${courseCode}_${classCode}`;
     const workspaceId = await hashId(`${this.uid}/${semester}`);
     const classId = await hashId(`${this.uid}/${semester}/${localId}`);
     const weeks = Number(input.weeks),
@@ -158,6 +159,11 @@ export class AdminRepository {
               updatedAt: null,
             },
           };
+      if (!Object.keys(workspace.layout).length)
+        workspace.data = {
+          ...workspace.data,
+          semesterStart: `${start}T00:00:00.000`,
+        };
       this.advance(tx, workspace, {
         layout: { ...workspace.layout, [classId]: meetings.map((m) => m.id) },
       });
@@ -189,7 +195,7 @@ export class AdminRepository {
           dayStart: Timestamp.fromDate(m.dayStart),
           dayEnd: Timestamp.fromDate(m.dayEnd),
         });
-      return { workspaceId, classId };
+      return { workspaceId, classId, revision: workspace.revision + 1 };
     });
   }
   async editClass(course, students, input, expectedRevision) {

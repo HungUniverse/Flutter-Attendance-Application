@@ -19,18 +19,26 @@ String firestoreClassId(String uid, String semester, String localId) =>
 class FirestoreWorkspaceRemote implements WorkspaceRemote {
   FirestoreWorkspaceRemote(this.db, this.auth);
   final FirebaseFirestore db;
+  String? _cachedOwner;
+  String? _cachedWorkspaceId;
+  Map<String, dynamic>? _cachedWorkspace;
   @override
   final AuthService auth;
   String get owner =>
       auth.current?.uid ?? (throw const AppProblem('Vui lòng đăng nhập.'));
 
   Future<void> requireTeacher() async {
+    final email = auth.current?.email.trim().toLowerCase();
+    if (email == null || email.isEmpty) throw const WorkspaceAccessDenied();
+    final directory = await db
+        .doc('teacherDirectory/$email')
+        .get(const GetOptions(source: Source.server));
+    if (directory.data()?['status'] == 'active') return;
     final profile = await db
         .doc('users/$owner')
         .get(const GetOptions(source: Source.server));
-    if (profile.data()?['role'] != 'teacher') {
-      throw const WorkspaceAccessDenied();
-    }
+    if (profile.data()?['role'] == 'admin') return;
+    throw const WorkspaceAccessDenied();
   }
 
   @override
@@ -50,10 +58,17 @@ class FirestoreWorkspaceRemote implements WorkspaceRemote {
     } else {
       ref = db.doc('workspaces/${firestoreWorkspaceId(uid, semester)}');
     }
-    return db.runTransaction((tx) async {
+    final result = await db.runTransaction<Map<String, dynamic>>((tx) async {
       final snapshot = await tx.get(ref);
       final manifest = snapshot.data();
       if (manifest == null) return {'data': null};
+      // Every class/meeting mutation advances this manifest in the same commit.
+      // Keep validating the role and server revision, but reuse an unchanged graph.
+      if (_cachedOwner == uid &&
+          _cachedWorkspaceId == ref.id &&
+          _cachedWorkspace?['revision'] == manifest['revision']) {
+        return {'data': _cachedWorkspace};
+      }
       final layout = Map<String, dynamic>.from(manifest['layout'] as Map);
       final classes = <Map<String, dynamic>>[];
       for (final entry in layout.entries) {
@@ -90,6 +105,15 @@ class FirestoreWorkspaceRemote implements WorkspaceRemote {
         },
       };
     });
+    if (uid != owner) throw const AppProblem('Tài khoản đã thay đổi.');
+    _remember(uid, ref.id, result['data'] as Map<String, dynamic>?);
+    return result;
+  }
+
+  void _remember(String uid, String id, Map<String, dynamic>? value) {
+    _cachedOwner = uid;
+    _cachedWorkspaceId = id;
+    _cachedWorkspace = value;
   }
 
   @override
@@ -151,7 +175,7 @@ class FirestoreWorkspaceRemote implements WorkspaceRemote {
         };
       }
     }
-    return db.runTransaction((tx) async {
+    final result = await db.runTransaction<Map<String, dynamic>>((tx) async {
       final previous = (await tx.get(ref)).data();
       if (previous?['mutationId'] == pending['mutationId']) {
         return {
@@ -203,5 +227,8 @@ class FirestoreWorkspaceRemote implements WorkspaceRemote {
         'data': {'revision': revision, 'workspace': workspace.toJson()},
       };
     });
+    if (uid != owner) throw const AppProblem('Tài khoản đã thay đổi.');
+    _remember(uid, ref.id, result['data'] as Map<String, dynamic>?);
+    return result;
   }
 }

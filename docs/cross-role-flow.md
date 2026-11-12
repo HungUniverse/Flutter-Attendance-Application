@@ -14,7 +14,7 @@ Rules tương ứng nằm ở `users`, `workspaces`, `classes`, `meetings`, `att
 
 ## Kiểm chứng tự động
 
-Web quản lý bổ sung luồng: sinh viên dùng link của buổi đã chốt → gửi yêu cầu sửa tại `/student` → giảng viên duyệt/từ chối tại `/admin#requests` → sinh viên nhận phản hồi → app tải kết quả đã sửa. Duyệt ghi kết quả, audit, revision và thông báo nguyên tử. Cách thao tác và giới hạn nằm trong [hướng dẫn web quản lý](admin-web.md).
+Web quản lý bổ sung luồng: admin cấp quyền giảng viên tại `/admin` → giảng viên đăng nhập `/teacher` hoặc app bằng email Google được cấp → sinh viên dùng link buổi đã chốt gửi yêu cầu tại `/student` → giảng viên duyệt tại `/teacher#requests` → sinh viên nhận phản hồi và app tải kết quả đã sửa. Duyệt ghi kết quả, audit, revision và thông báo nguyên tử. Admin khóa/xóa giảng viên sẽ chặn quyền đọc/ghi dữ liệu lớp qua Rules. Cách thao tác và giới hạn nằm trong [hướng dẫn web quản lý](admin-web.md).
 
 `integration_test/firestore_flow_test.dart` chạy native Windows thật, gọi ViewModel và repository Final, kết hợp Firebase JavaScript SDK làm client sinh viên. Auth và Firestore nằm trên Emulator với project `demo-fap-final` và tài khoản tổng hợp `example.com`.
 

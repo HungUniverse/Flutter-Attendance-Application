@@ -55,7 +55,7 @@ export function createRelay({ store, verifyIdentity, teachers, publicOrigin,
     let user;
     const desktop = desktopTokens.get(match[1]);
     try { user = desktop && desktop.expiresAt > clock() ? desktop.user : await verifyIdentity(match[1]); } catch { fail(401, 'Phiên đăng nhập không hợp lệ.'); }
-    if (!user.uid || !user.email || user.email_verified !== true) fail(403, 'Cần tài khoản có email đã xác minh.');
+    if (!user?.uid || !user.email || user.email_verified !== true) fail(403, 'Cần tài khoản có email đã xác minh.');
     return { ...user, email: user.email.toLowerCase() };
   }
   async function body(req) {
@@ -66,8 +66,11 @@ export function createRelay({ store, verifyIdentity, teachers, publicOrigin,
       if (length > 800 * 1024) fail(413, 'Dữ liệu quá lớn.');
       chunks.push(chunk);
     }
-    try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+    let parsed;
+    try { parsed = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
     catch { fail(400, 'Dữ liệu không hợp lệ.'); }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) fail(400, 'Dữ liệu không hợp lệ.');
+    return parsed;
   }
   const open = s => s.receiving && new Date(s.expiresAt).getTime() > clock();
   const secretCode = (s, window = Math.floor(clock()/15000)) => String(createHmac('sha256',s.codeSecret).update(String(window)).digest().readUInt32BE(0)%1000000).padStart(6,'0');
@@ -184,8 +187,8 @@ export function createRelay({ store, verifyIdentity, teachers, publicOrigin,
           || typeof input.label !== 'string' || input.label.length > 200
           || !Number.isSafeInteger(input.number) || input.number < 1 || input.number > 1000
           || !Array.isArray(input.students) || input.students.length < 1 || input.students.length > 1000) fail(400, 'Lớp hoặc buổi học không hợp lệ. Chỉ mở buổi học hôm nay.');
-        const emails = [...new Set(input.students.map(s => s.email))];
-        if (emails.some(e => typeof e !== 'string' || e.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))) fail(400, 'Email không hợp lệ.');
+        const emails = [...new Set(input.students.map(s => typeof s?.email === 'string' ? s.email.trim().toLowerCase() : ''))];
+        if (emails.some(e => !e || e.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))) fail(400, 'Email không hợp lệ.');
         const value = await store.transaction(state => {
           const existing = state.sessions.find(s => s.owner === user.uid && open(s));
           if (existing) {
@@ -194,7 +197,7 @@ export function createRelay({ store, verifyIdentity, teachers, publicOrigin,
           }
           const s = { id: randomUUID(), owner: user.uid, token: randomBytes(32).toString('hex'),
             classId: input.classId, meetingId: input.meetingId, label: input.label,
-            number: input.number, meetingDate: input.meetingDate, emails: emails.map(e => e.toLowerCase()),
+            number: input.number, meetingDate: input.meetingDate, emails,
             receiving: true, codeSecret:input.mode==='otp' ? randomBytes(32).toString('hex') : null,
             expiresAt: new Date(`${input.meetingDate}T23:59:59.999+07:00`).toISOString(), submissions: {} };
           state.sessions.push(s);

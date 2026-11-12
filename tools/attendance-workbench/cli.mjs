@@ -64,6 +64,7 @@ import { casebookServiceLevelsToCsv, evaluateCasebookServiceLevels } from './cas
 import { decideSnapshotRelease, planSnapshotRelease, snapshotReleaseToCsv,
   verifySnapshotReleaseReceipt, compareSnapshotReleaseReceipts, snapshotReleaseDiffToCsv } from './snapshot-release-gate.mjs';
 import { planReviewBoard, reviewBoardToCsv } from './review-board.mjs';
+import { anomaliesToCsv, detectAttendanceAnomalies } from './anomaly-detector.mjs';
 
 const usage = `Attendance workbench (Node.js 22+)
 
@@ -130,6 +131,8 @@ const usage = `Attendance workbench (Node.js 22+)
   node cli.mjs scenario-csv SCENARIO.json [CURRENT_SNAPSHOT.json]
   node cli.mjs audit SNAPSHOT.json [OPTIONS.json]
   node cli.mjs audit-csv SNAPSHOT.json [OPTIONS.json]
+  node cli.mjs anomaly-scan SNAPSHOT.json [OPTIONS.json]
+  node cli.mjs anomaly-scan-csv SNAPSHOT.json [OPTIONS.json]
   node cli.mjs preview-import ROSTER.csv SESSIONS.json ATTENDANCE.csv
   node cli.mjs schedule-plan PLAN.json
   node cli.mjs archive-new SNAPSHOT.json TITLE
@@ -304,6 +307,15 @@ export async function runCommand(args) {
       ]);
       const result = auditAttendanceSnapshot(data, optionsText ? JSON.parse(optionsText) : {});
       return command === 'audit-csv' ? auditToCsv(result) : json(result);
+    }
+    case 'anomaly-scan':
+    case 'anomaly-scan-csv': {
+      if (values.length < 1 || values.length > 2) throw new TypeError('expected snapshot and optional anomaly options file');
+      const [data, optionsText] = await Promise.all([
+        snapshot(values[0]), values[1] ? readText(values[1]) : Promise.resolve(null),
+      ]);
+      const result = detectAttendanceAnomalies(data, optionsText ? JSON.parse(optionsText) : {});
+      return command === 'anomaly-scan-csv' ? anomaliesToCsv(result) : json(result);
     }
     case 'preview-import': {
       requireArgs(values, 3);

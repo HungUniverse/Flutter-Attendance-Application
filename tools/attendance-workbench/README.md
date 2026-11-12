@@ -238,6 +238,13 @@ are advisory and configurable through an optional JSON options file. `audit-csv`
 exports the findings without embedding the full attendance table. Invalid or
 duplicate IDs and duplicate emails are rejected earlier by snapshot validation.
 
+`anomaly-scan` analyzes a validated snapshot for statistical and behavioral
+attendance anomalies, including zero-attendance sessions, sudden session-to-session
+attendance drops (`sessionDropThreshold`, default 0.35), late-semester student
+drift (`lateDriftThreshold`, default 0.4), and alternating present/absent
+oscillations (`minAlternatingLength`, default 6). `anomaly-scan-csv` exports the
+anomaly list with spreadsheet-safe CSV escaping.
+
 `archive-new` starts a versioned snapshot history. `archive-add` appends a
 revision with its parent, author and note; revisions can branch from older
 points through the library API. `archive-compare` shows semantic changes,

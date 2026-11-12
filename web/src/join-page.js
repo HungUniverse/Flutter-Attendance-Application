@@ -12,6 +12,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { auth, db, googleProvider } from "./firebase-client.js";
+import { requireTeacherAccess } from "./access.js";
 import { sessionState, errorMessage, desktopCallback } from "./check-in.js";
 let desktopCredential;
 
@@ -163,10 +164,7 @@ async function connectDesktop() {
       idToken: GoogleAuthProvider.credentialFromResult(result)?.idToken,
     };
   }
-  const profile = await getDocFromServer(
-    doc(db, "users", auth.currentUser.uid),
-  );
-  if (profile.data()?.role !== "teacher") throw { code: "teacher-required" };
+  await requireTeacherAccess(db, auth.currentUser);
   // Keep the Google credential in memory only until the local handoff.
   const token = desktopCredential.idToken;
   if (!token) throw new Error("Missing Google credential");

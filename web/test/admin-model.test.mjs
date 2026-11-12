@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   AdminError,
   parseRoster,
+  rosterMap,
   generateMeetings,
   protectHistory,
   correction,
@@ -11,7 +12,7 @@ import {
   validDate,
 } from "../src/admin/model.js";
 import { parseSessionId } from "../src/student/repository.js";
-import { escapeHtml, messageFor } from "../src/ui.js";
+import { dateText, escapeHtml, messageFor } from "../src/ui.js";
 
 test("roster accepts Excel columns, normalizes identity and retains member codes", () => {
   const students = parseRoster(
@@ -114,10 +115,10 @@ test("chart excludes future sessions and counts unmarked enrolled students", () 
       },
       meetings: [
         { state: "upcoming", records: {} },
-        { state: "active", records: { S1: { status: "P" } } },
+        { state: "active", records: { s1: { status: "P" } } },
         {
           state: "closed",
-          records: { S1: { status: "A" }, S2: { status: "P" } },
+          records: { S1: { status: "A" }, s2: { status: "P" } },
         },
       ],
     },
@@ -130,6 +131,10 @@ test("chart excludes future sessions and counts unmarked enrolled students", () 
     unmarked: 1,
     closed: 1,
   });
+  assert.deepEqual(
+    rosterMap([{ email: "  SV1@FPT.EDU.VN ", rollNumber: " se190001 " }]),
+    { "sv1@fpt.edu.vn": "SE190001" },
+  );
 });
 test("IDs match native SHA-256 and session links reject invalid paths", async () => {
   assert.equal(
@@ -149,4 +154,8 @@ test("rendering escapes stored HTML and validation messages remain actionable", 
     "&lt;img src=&quot;x&quot; onerror=alert(1)&gt;",
   );
   assert.equal(messageFor(new AdminError("Email bị trùng")), "Email bị trùng");
+  assert.equal(dateText(null), "—");
+  assert.equal(dateText(undefined), "—");
+  assert.equal(dateText(""), "—");
+  assert.equal(dateText(false), "—");
 });

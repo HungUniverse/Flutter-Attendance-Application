@@ -5,13 +5,14 @@
 ## Firebase Final
 
 - Web check-in tại [FAP Attendance](https://fap-attendance-71655.web.app). Sinh viên mở link `/join/{sessionId}` do giảng viên tạo.
-- [Web quản lý giảng viên](https://fap-attendance-71655.web.app/admin): lớp học, dashboard, duyệt yêu cầu sửa điểm danh và soạn thông báo. [Trang sinh viên](https://fap-attendance-71655.web.app/student) có hộp thư và theo dõi yêu cầu.
+- [Admin hệ thống](https://fap-attendance-71655.web.app/admin): thêm, sửa, khóa/mở lại và xóa hồ sơ giảng viên. [Không gian giảng viên](https://fap-attendance-71655.web.app/teacher): lớp học, dashboard, duyệt yêu cầu sửa điểm danh và soạn thông báo. [Trang sinh viên](https://fap-attendance-71655.web.app/student) có hộp thư và theo dõi yêu cầu.
 - Giảng viên dùng Google Sign-In và hồ sơ quyền được chủ project cấp. Sinh viên đăng nhập Google với email đã xác minh trong roster.
 - Có điểm danh thủ công, link/QR, cập nhật lượt gửi, chốt, sửa có lý do, xuất PDF/CSV/JSON trên thiết bị và metadata Firestore.
 - Android duy trì Analytics, Remote Config, Crashlytics, hộp thư Firestore và gợi ý AI có thể sửa/xác nhận.
 - [Cách chạy và deploy Final](docs/FINAL_SETUP.md), [mô hình dữ liệu](docs/data-model.md), [luồng liên vai trò](docs/cross-role-flow.md), [báo cáo kiểm thử](docs/test-report.md).
 - AI Logic hiện trả HTTP 429 do project hết credit trả trước. Chốt điểm danh vẫn hoạt động. Tình trạng thực tế được ghi trong [AI feature](docs/ai-feature.md).
 - [Hướng dẫn web quản lý](docs/admin-web.md). Bản báo cáo/slide PDF và video nộp bài cần bổ sung theo mã số sinh viên và minh chứng thực tế.
+- [Định dạng Markbook và lịch giảng viên](docs/markbook-format.md): nạp ODS/XLSX, giữ năm cột danh tính và nhận lịch theo tên sheet. FA26 bắt đầu 07/09/2026, slot 1 lúc 07:30.
 
 ```powershell
 flutter pub get

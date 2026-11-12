@@ -16,7 +16,7 @@ class SlotTime {
 
 class ScheduleService {
   static const slotTimes = <int, SlotTime>{
-    1: SlotTime(7, 0, 9, 15),
+    1: SlotTime(7, 30, 9, 15),
     2: SlotTime(9, 30, 11, 45),
     3: SlotTime(12, 30, 14, 45),
     4: SlotTime(15, 0, 17, 15),
@@ -29,7 +29,7 @@ class ScheduleService {
   };
 
   List<Meeting> generate(ScheduleRule rule, String classId) {
-    if (!RegExp(r'^[1-3][1-4]$').hasMatch(rule.scheduleCode)) {
+    if (!RegExp(r'^[1-3][1-4]$').hasMatch(rule.scheduleCode.trim())) {
       throw const FormatException('Mã lịch phải nằm trong khoảng 11–34.');
     }
     if (rule.weeks < 1 ||

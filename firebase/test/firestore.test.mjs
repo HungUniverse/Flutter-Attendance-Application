@@ -79,8 +79,31 @@ beforeEach(async () => {
   await env.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
     await Promise.all([
+      setDoc(doc(db, "users/admin"), { role: "admin" }),
       setDoc(doc(db, "users/teacher"), { role: "teacher" }),
       setDoc(doc(db, "users/other"), { role: "teacher" }),
+      setDoc(doc(db, "teacherDirectory/teacher@example.com"), {
+        email: "teacher@example.com",
+        displayName: "Giảng viên",
+        staffCode: "GV01",
+        department: "SE",
+        status: "active",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        createdBy: "admin",
+        updatedBy: "admin",
+      }),
+      setDoc(doc(db, "teacherDirectory/other@example.com"), {
+        email: "other@example.com",
+        displayName: "Giảng viên 2",
+        staffCode: "GV02",
+        department: "SE",
+        status: "active",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        createdBy: "admin",
+        updatedBy: "admin",
+      }),
       setDoc(doc(db, "workspaces/w1"), {
         ownerUid: "teacher",
         revision: 1,
@@ -569,4 +592,61 @@ test("web repositories complete class request approval notification and archive 
     });
   });
   assert.equal(Object.values(result).every(Boolean),true);
+});
+
+test("teacherDirectory and teacherAudit enforce admin-only provisioning, self-lookup, and append-only audit",async()=>{
+  const adminDb=dbFor("admin","admin@example.com");
+  const teacherDb=dbFor("teacher","teacher@example.com");
+  const studentDb=dbFor("student","student@example.com");
+
+  await assertSucceeds(getDoc(doc(teacherDb,"teacherDirectory/teacher@example.com")));
+  await assertFails(getDoc(doc(teacherDb,"teacherDirectory/other@example.com")));
+  await assertFails(getDocs(collection(teacherDb,"teacherDirectory")));
+  await assertSucceeds(getDocs(collection(adminDb,"teacherDirectory")));
+
+  const newEntry={
+    email:"lecturer2@fpt.edu.vn",
+    displayName:"Lê Giảng Viên",
+    staffCode:"GV02",
+    department:"SE",
+    status:"active",
+    createdAt:serverTimestamp(),
+    updatedAt:serverTimestamp(),
+    createdBy:"admin",
+    updatedBy:"admin",
+  };
+  await assertFails(setDoc(doc(teacherDb,"teacherDirectory/lecturer2@fpt.edu.vn"),{...newEntry,createdBy:"teacher",updatedBy:"teacher"}));
+  await assertSucceeds(setDoc(doc(adminDb,"teacherDirectory/lecturer2@fpt.edu.vn"),newEntry));
+
+  const auditEntry={
+    actorUid:"admin",
+    email:"lecturer2@fpt.edu.vn",
+    action:"create",
+    before:{},
+    after:{email:"lecturer2@fpt.edu.vn",status:"active"},
+    at:serverTimestamp(),
+  };
+  await assertFails(setDoc(doc(teacherDb,"teacherAudit/a1"),{...auditEntry,actorUid:"teacher"}));
+  await assertSucceeds(setDoc(doc(adminDb,"teacherAudit/a1"),auditEntry));
+  await assertSucceeds(getDoc(doc(adminDb,"teacherAudit/a1")));
+  await assertFails(getDoc(doc(teacherDb,"teacherAudit/a1")));
+  await assertFails(getDoc(doc(studentDb,"teacherAudit/a1")));
+  await assertFails(updateDoc(doc(adminDb,"teacherAudit/a1"),{action:"update"}));
+  await assertFails(deleteDoc(doc(adminDb,"teacherAudit/a1")));
+});
+
+test("suspending teacher in teacherDirectory immediately revokes workspace and class access",async()=>{
+  const adminDb=dbFor("admin","admin@example.com");
+  const teacherDb=dbFor("teacher","teacher@example.com");
+
+  await assertSucceeds(getDoc(doc(teacherDb,"workspaces/w1")));
+  const existing=(await getDoc(doc(adminDb,"teacherDirectory/teacher@example.com"))).data();
+  await assertSucceeds(setDoc(doc(adminDb,"teacherDirectory/teacher@example.com"),{
+    ...existing,
+    status:"suspended",
+    updatedAt:serverTimestamp(),
+    updatedBy:"admin",
+  }));
+  await assertFails(getDoc(doc(teacherDb,"workspaces/w1")));
+  await assertFails(getDoc(doc(teacherDb,"classes/c1")));
 });

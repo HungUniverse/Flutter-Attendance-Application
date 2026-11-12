@@ -27,6 +27,11 @@ class RosterImporter {
 
   final ScheduleService _scheduleService;
 
+  static String? semesterFromFileName(String fileName) => RegExp(
+    r'^(FA|SP|SU)\d{2}(?=[_ .-]|$)',
+    caseSensitive: false,
+  ).firstMatch(fileName.split(RegExp(r'[/\\]')).last)?.group(0)?.toUpperCase();
+
   RosterImportResult importBytes(
     Uint8List bytes, {
     required String fileName,
@@ -35,7 +40,12 @@ class RosterImporter {
     int weeks = 10,
     int meetingsPerWeek = 2,
   }) {
-    final extension = fileName.toLowerCase().split('.').last;
+    final normalizedName = fileName.trim().toLowerCase();
+    final baseName = normalizedName.split(RegExp(r'[\\/]')).last;
+    final dotIndex = baseName.lastIndexOf('.');
+    final extension = dotIndex <= 0 || dotIndex == baseName.length - 1
+        ? ''
+        : baseName.substring(dotIndex + 1);
     final sheets = switch (extension) {
       'ods' => _readOds(bytes),
       'xlsx' => _readXlsx(bytes),
@@ -81,8 +91,9 @@ class RosterImporter {
     required int weeks,
     required int meetingsPerWeek,
   }) {
-    final nameMatch = RegExp(r'^([1-3][1-4])_([A-Za-z0-9]+)(?:_.*)?$')
-        .firstMatch(sheetName.trim());
+    final nameMatch = RegExp(
+      r'^([1-3][1-4])_([A-Za-z0-9]+)(?:_([A-Za-z0-9_-]+))?$',
+    ).firstMatch(sheetName.trim());
     if (nameMatch == null) {
       throw const RosterImportException(
         'Tên sheet phải có dạng 11_PRM393_MaLop.',
@@ -169,6 +180,12 @@ class RosterImporter {
       throw const RosterImportException('Sheet không có sinh viên hợp lệ.');
     }
     final classCode = classCodes.single;
+    final namedClass = nameMatch.group(3)?.toUpperCase();
+    if (namedClass != null && namedClass != classCode) {
+      throw RosterImportException(
+        'Mã lớp trong tên sheet ($namedClass) khác cột Class ($classCode).',
+      );
+    }
     final classId = '${semester}_${courseCode}_$classCode';
     final rule = ScheduleRule(
       scheduleCode: scheduleCode,
@@ -200,24 +217,58 @@ class RosterImporter {
   }
 
   Map<String, List<List<String>>> _readXlsx(Uint8List bytes) {
-    final workbook = Excel.decodeBytes(bytes);
-    return workbook.tables.map((name, sheet) {
-      final rows = sheet.rows
-          .map(
-            (row) => row.map((cell) => cell?.value?.toString() ?? '').toList(),
-          )
-          .toList();
-      return MapEntry(name, rows);
-    });
+    if (bytes.length < 4 || bytes[0] != 0x50 || bytes[1] != 0x4B) {
+      throw const RosterImportException('File XLSX rỗng hoặc bị hỏng.');
+    }
+    try {
+      final workbook = Excel.decodeBytes(bytes);
+      if (workbook.tables.isEmpty) {
+        throw const RosterImportException(
+          'File XLSX bị hỏng hoặc không đọc được.',
+        );
+      }
+      return workbook.tables.map((name, sheet) {
+        final rows = sheet.rows
+            .map(
+              (row) =>
+                  row.map((cell) => cell?.value?.toString() ?? '').toList(),
+            )
+            .toList();
+        return MapEntry(name, rows);
+      });
+    } on RosterImportException {
+      rethrow;
+    } on Object {
+      throw const RosterImportException(
+        'File XLSX bị hỏng hoặc không đọc được.',
+      );
+    }
   }
 
   Map<String, List<List<String>>> _readOds(Uint8List bytes) {
-    final archive = ZipDecoder().decodeBytes(bytes, verify: true);
+    if (bytes.isEmpty) {
+      throw const RosterImportException('File ODS rỗng hoặc bị hỏng.');
+    }
+    final Archive archive;
+    try {
+      archive = ZipDecoder().decodeBytes(bytes, verify: true);
+    } on Object {
+      throw const RosterImportException(
+        'File ODS bị hỏng hoặc không đọc được.',
+      );
+    }
     final content = archive.findFile('content.xml');
     if (content == null) {
       throw const RosterImportException('File ODS không có content.xml.');
     }
-    final xml = XmlDocument.parse(utf8.decode(content.content as List<int>));
+    final XmlDocument xml;
+    try {
+      xml = XmlDocument.parse(utf8.decode(content.content as List<int>));
+    } on Object {
+      throw const RosterImportException(
+        'Nội dung XML trong file ODS không hợp lệ.',
+      );
+    }
     final result = <String, List<List<String>>>{};
     for (final table in xml.descendants.whereType<XmlElement>().where(
       (node) => node.name.local == 'table' && node.name.prefix == 'table',

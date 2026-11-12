@@ -42,3 +42,15 @@ test('rejects duplicate records and preserves IDs containing separators', () => 
   assert.throws(() => mergeAttendance([item, item], [], []), /duplicate/);
   assert.deepEqual(mergeAttendance([], [item], []).records, [item]);
 });
+
+test('trims whitespace on conflict resolution choices and rejects blank IDs', () => {
+  const result = mergeAttendance([], [record('a', 'present')], [record('a', 'absent')]);
+  assert.deepEqual(
+    resolveAttendanceConflicts(result, [{ studentId: ' a ', sessionId: ' s ', source: 'left' }]),
+    [record('a', 'present')],
+  );
+  assert.throws(
+    () => resolveAttendanceConflicts(result, [{ studentId: '   ', sessionId: 's', source: 'left' }]),
+    /invalid conflict choice/,
+  );
+});

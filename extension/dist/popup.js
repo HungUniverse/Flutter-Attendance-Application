@@ -436,27 +436,48 @@
     "roll_number",
     "status"
   ];
+  function stripFormulaPrefix(value) {
+    const trimmed = value.trim();
+    if (trimmed.startsWith("'") && /^'[\t\r\n ]*[=+\-@]/.test(trimmed)) {
+      return trimmed.slice(1).trim();
+    }
+    return trimmed;
+  }
   function parseAttendanceCsv(source) {
     const result = import_papaparse.default.parse(source.replace(/^\uFEFF/, ""), {
       header: true,
-      skipEmptyLines: true
+      skipEmptyLines: "greedy"
     });
     if (result.errors.length) throw new Error(result.errors[0].message);
     if (!result.meta.fields || required.some((key) => !result.meta.fields.includes(key))) {
       throw new Error("CSV thi\u1EBFu c\u1ED9t b\u1EAFt bu\u1ED9c ho\u1EB7c sai schema.");
     }
     if (!result.data.length) throw new Error("CSV kh\xF4ng c\xF3 sinh vi\xEAn.");
-    const first = result.data[0];
     const seen = /* @__PURE__ */ new Set();
     for (const row of result.data) {
-      row.roll_number = normalizeId(row.roll_number);
-      row.member_code = normalizeId(row.member_code ?? "");
-      row.status = row.status?.trim().toUpperCase();
+      row.semester = stripFormulaPrefix(String(row.semester ?? "")).toUpperCase();
+      row.course_code = stripFormulaPrefix(String(row.course_code ?? "")).toUpperCase();
+      row.class_code = stripFormulaPrefix(String(row.class_code ?? "")).toUpperCase();
+      row.schedule_code = stripFormulaPrefix(String(row.schedule_code ?? ""));
+      row.meeting_id = stripFormulaPrefix(String(row.meeting_id ?? ""));
+      row.meeting_number = stripFormulaPrefix(String(row.meeting_number ?? ""));
+      row.meeting_date = stripFormulaPrefix(String(row.meeting_date ?? ""));
+      row.full_name = stripFormulaPrefix(String(row.full_name ?? ""));
+      row.email = stripFormulaPrefix(String(row.email ?? ""));
+      row.roll_number = normalizeId(stripFormulaPrefix(String(row.roll_number ?? "")));
+      row.member_code = normalizeId(stripFormulaPrefix(String(row.member_code ?? "")));
+      row.status = stripFormulaPrefix(String(row.status ?? "")).toUpperCase();
+      if (!row.semester || !row.course_code || !row.class_code || !row.meeting_id || !row.meeting_date) {
+        throw new Error("CSV thi\u1EBFu th\xF4ng tin l\u1EDBp ho\u1EB7c bu\u1ED5i h\u1ECDc b\u1EAFt bu\u1ED9c.");
+      }
       if (!row.roll_number || !["P", "A"].includes(row.status)) {
         throw new Error("CSV ch\u1EE9a MSSV ho\u1EB7c tr\u1EA1ng th\xE1i kh\xF4ng h\u1EE3p l\u1EC7.");
       }
       if (seen.has(row.roll_number)) throw new Error(`CSV tr\xF9ng MSSV ${row.roll_number}.`);
       seen.add(row.roll_number);
+    }
+    const first = result.data[0];
+    for (const row of result.data) {
       if (row.class_code !== first.class_code || row.meeting_id !== first.meeting_id || row.meeting_date !== first.meeting_date || row.schedule_code !== first.schedule_code) {
         throw new Error("M\u1ED9t CSV ch\u1EC9 \u0111\u01B0\u1EE3c ch\u1EE9a m\u1ED9t l\u1EDBp v\xE0 m\u1ED9t bu\u1ED5i.");
       }
@@ -471,6 +492,23 @@
       throw new Error(`JSON thi\u1EBFu ${label}.`);
     }
     return value.trim();
+  }
+  function isValidIsoDateTime(value) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(value);
+    if (!match) return false;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const hour = Number(match[4]);
+    const minute = Number(match[5]);
+    if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59) {
+      return false;
+    }
+    const check = new Date(Date.UTC(year, month - 1, day));
+    if (check.getUTCFullYear() !== year || check.getUTCMonth() !== month - 1 || check.getUTCDate() !== day) {
+      return false;
+    }
+    return !Number.isNaN(Date.parse(value));
   }
   function parseAttendanceJson(source) {
     let raw;
@@ -493,7 +531,7 @@
     const slot = meeting;
     const startAt = requiredString(slot.startAt, "meeting.startAt");
     const endAt = requiredString(slot.endAt, "meeting.endAt");
-    if (Number.isNaN(Date.parse(startAt)) || Number.isNaN(Date.parse(endAt))) {
+    if (!isValidIsoDateTime(startAt) || !isValidIsoDateTime(endAt) || Date.parse(endAt) <= Date.parse(startAt)) {
       throw new Error("Ng\xE0y gi\u1EDD slot trong JSON kh\xF4ng h\u1EE3p l\u1EC7.");
     }
     const students = session.attendance;
@@ -502,10 +540,10 @@
     }
     const base = {
       schema_version: String(session.schemaVersion ?? ""),
-      semester: requiredString(session.semester, "semester"),
-      course_code: requiredString(session.courseCode, "courseCode"),
-      class_code: requiredString(session.classCode, "classCode"),
-      schedule_code: requiredString(session.scheduleCode, "scheduleCode"),
+      semester: normalizeId(requiredString(session.semester, "semester")),
+      course_code: normalizeId(requiredString(session.courseCode, "courseCode")),
+      class_code: normalizeId(requiredString(session.classCode, "classCode")),
+      schedule_code: normalizeId(requiredString(session.scheduleCode, "scheduleCode")),
       meeting_id: requiredString(slot.id ?? session.sessionId, "meeting.id"),
       meeting_number: String(slot.number ?? ""),
       meeting_date: startAt.slice(0, 10),
@@ -521,16 +559,17 @@
       const roll = normalizeId(requiredString(student.rollNumber, `MSSV d\xF2ng ${index + 1}`));
       if (seen.has(roll)) throw new Error(`JSON tr\xF9ng MSSV ${roll}.`);
       seen.add(roll);
-      const status2 = student.attendance?.status;
+      const rawStatus = student.attendance?.status;
+      const status2 = typeof rawStatus === "string" ? rawStatus.trim().toUpperCase() : "";
       if (status2 !== "P" && status2 !== "A") {
         throw new Error(`Sinh vi\xEAn ${roll} ch\u01B0a c\xF3 tr\u1EA1ng th\xE1i P/A.`);
       }
       return {
         ...base,
         roll_number: roll,
-        member_code: normalizeId(String(student.memberCode ?? "")),
-        email: String(student.email ?? ""),
-        full_name: requiredString(student.fullName, `h\u1ECD t\xEAn ${roll}`),
+        member_code: normalizeId(stripFormulaPrefix(String(student.memberCode ?? ""))),
+        email: stripFormulaPrefix(String(student.email ?? "")),
+        full_name: stripFormulaPrefix(requiredString(student.fullName, `h\u1ECD t\xEAn ${roll}`)),
         status: status2,
         recorded_at: String(student.attendance?.recordedAt ?? ""),
         source: String(student.attendance?.source ?? "")
@@ -599,12 +638,16 @@
   }
   async function send(message) {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const url = tab.url ? new URL(tab.url) : null;
+    const url = tab?.url ? new URL(tab.url) : null;
     const allowed = url && (url.origin === "https://fap.fpt.edu.vn" || url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname));
-    if (!tab.id || !allowed) {
+    if (!tab?.id || !allowed) {
       throw new Error("H\xE3y m\u1EDF trang \u0111i\u1EC3m danh FAP ho\u1EB7c trang demo localhost.");
     }
-    return chrome.tabs.sendMessage(tab.id, message);
+    const response = await chrome.tabs.sendMessage(tab.id, message);
+    if (!response || typeof response !== "object") {
+      throw new Error("Kh\xF4ng k\u1EBFt n\u1ED1i \u0111\u01B0\u1EE3c v\u1EDBi trang FAP. H\xE3y t\u1EA3i l\u1EA1i trang r\u1ED3i th\u1EED l\u1EA1i.");
+    }
+    return response;
   }
   function fail(error) {
     status.textContent = String(error).replace("Error: ", "");
