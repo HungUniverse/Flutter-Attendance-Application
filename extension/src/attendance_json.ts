@@ -1,4 +1,4 @@
-import { normalizeId } from './csv';
+import { normalizeId, stripFormulaPrefix } from './csv';
 import type { AttendanceCsvRow, AttendanceStatus } from './types';
 
 interface SessionStudent {
@@ -68,10 +68,10 @@ export function parseAttendanceJson(source: string): AttendanceCsvRow[] {
   }
   const base = {
     schema_version: String(session.schemaVersion ?? ''),
-    semester: requiredString(session.semester, 'semester'),
-    course_code: requiredString(session.courseCode, 'courseCode'),
-    class_code: requiredString(session.classCode, 'classCode'),
-    schedule_code: requiredString(session.scheduleCode, 'scheduleCode'),
+    semester: normalizeId(requiredString(session.semester, 'semester')),
+    course_code: normalizeId(requiredString(session.courseCode, 'courseCode')),
+    class_code: normalizeId(requiredString(session.classCode, 'classCode')),
+    schedule_code: normalizeId(requiredString(session.scheduleCode, 'scheduleCode')),
     meeting_id: requiredString(slot.id ?? session.sessionId, 'meeting.id'),
     meeting_number: String(slot.number ?? ''),
     meeting_date: startAt.slice(0, 10),
@@ -95,9 +95,9 @@ export function parseAttendanceJson(source: string): AttendanceCsvRow[] {
     return {
       ...base,
       roll_number: roll,
-      member_code: normalizeId(String(student.memberCode ?? '')),
-      email: String(student.email ?? ''),
-      full_name: requiredString(student.fullName, `họ tên ${roll}`),
+      member_code: normalizeId(stripFormulaPrefix(String(student.memberCode ?? ''))),
+      email: stripFormulaPrefix(String(student.email ?? '')),
+      full_name: stripFormulaPrefix(requiredString(student.fullName, `họ tên ${roll}`)),
       status: status as AttendanceStatus,
       recorded_at: String(student.attendance?.recordedAt ?? ''),
       source: String(student.attendance?.source ?? ''),

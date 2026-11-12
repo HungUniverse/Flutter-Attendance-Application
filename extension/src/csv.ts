@@ -6,7 +6,7 @@ const required = [
   'roll_number', 'status'
 ] as const;
 
-function stripFormulaPrefix(value: string): string {
+export function stripFormulaPrefix(value: string): string {
   const trimmed = value.trim();
   if (trimmed.startsWith("'") && /^'[\t\r\n ]*[=+\-@]/.test(trimmed)) {
     return trimmed.slice(1).trim();

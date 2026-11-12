@@ -93,11 +93,22 @@ describe('QA Extension Suite — JSON Parser Edge Cases', () => {
     ],
   });
 
-  it('accepts lowercase/trimmed status and BOM-prefixed JSON', () => {
-    const rows = parseAttendanceJson(`\uFEFF${JSON.stringify(baseSession())}`);
+  it('accepts lowercase/trimmed status, metadata, formula-escaped names, and BOM-prefixed JSON', () => {
+    const raw = baseSession();
+    raw.semester = ' fa26 ';
+    raw.courseCode = ' prm393 ';
+    raw.classCode = ' se1917 ';
+    raw.scheduleCode = ' 11 ';
+    raw.attendance[0].fullName = "'=Nguyen Van A";
+    const rows = parseAttendanceJson(`\uFEFF${JSON.stringify(raw)}`);
     expect(rows).toHaveLength(1);
+    expect(rows[0].semester).toBe('FA26');
+    expect(rows[0].course_code).toBe('PRM393');
+    expect(rows[0].class_code).toBe('SE1917');
+    expect(rows[0].schedule_code).toBe('11');
     expect(rows[0].roll_number).toBe('SE000001');
     expect(rows[0].member_code).toBe('MEM01');
+    expect(rows[0].full_name).toBe('=Nguyen Van A');
     expect(rows[0].status).toBe('P');
   });
 

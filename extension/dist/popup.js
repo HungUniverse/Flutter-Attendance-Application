@@ -540,10 +540,10 @@
     }
     const base = {
       schema_version: String(session.schemaVersion ?? ""),
-      semester: requiredString(session.semester, "semester"),
-      course_code: requiredString(session.courseCode, "courseCode"),
-      class_code: requiredString(session.classCode, "classCode"),
-      schedule_code: requiredString(session.scheduleCode, "scheduleCode"),
+      semester: normalizeId(requiredString(session.semester, "semester")),
+      course_code: normalizeId(requiredString(session.courseCode, "courseCode")),
+      class_code: normalizeId(requiredString(session.classCode, "classCode")),
+      schedule_code: normalizeId(requiredString(session.scheduleCode, "scheduleCode")),
       meeting_id: requiredString(slot.id ?? session.sessionId, "meeting.id"),
       meeting_number: String(slot.number ?? ""),
       meeting_date: startAt.slice(0, 10),
@@ -567,9 +567,9 @@
       return {
         ...base,
         roll_number: roll,
-        member_code: normalizeId(String(student.memberCode ?? "")),
-        email: String(student.email ?? ""),
-        full_name: requiredString(student.fullName, `h\u1ECD t\xEAn ${roll}`),
+        member_code: normalizeId(stripFormulaPrefix(String(student.memberCode ?? ""))),
+        email: stripFormulaPrefix(String(student.email ?? "")),
+        full_name: stripFormulaPrefix(requiredString(student.fullName, `h\u1ECD t\xEAn ${roll}`)),
         status: status2,
         recorded_at: String(student.attendance?.recordedAt ?? ""),
         source: String(student.attendance?.source ?? "")
@@ -638,12 +638,16 @@
   }
   async function send(message) {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const url = tab.url ? new URL(tab.url) : null;
+    const url = tab?.url ? new URL(tab.url) : null;
     const allowed = url && (url.origin === "https://fap.fpt.edu.vn" || url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname));
-    if (!tab.id || !allowed) {
+    if (!tab?.id || !allowed) {
       throw new Error("H\xE3y m\u1EDF trang \u0111i\u1EC3m danh FAP ho\u1EB7c trang demo localhost.");
     }
-    return chrome.tabs.sendMessage(tab.id, message);
+    const response = await chrome.tabs.sendMessage(tab.id, message);
+    if (!response || typeof response !== "object") {
+      throw new Error("Kh\xF4ng k\u1EBFt n\u1ED1i \u0111\u01B0\u1EE3c v\u1EDBi trang FAP. H\xE3y t\u1EA3i l\u1EA1i trang r\u1ED3i th\u1EED l\u1EA1i.");
+    }
+    return response;
   }
   function fail(error) {
     status.textContent = String(error).replace("Error: ", "");

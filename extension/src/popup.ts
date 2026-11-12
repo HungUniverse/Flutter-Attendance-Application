@@ -67,13 +67,17 @@ async function prepare(parsedRows: AttendanceCsvRow[]): Promise<void> {
 
 async function send(message: unknown): Promise<any> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  const url = tab.url ? new URL(tab.url) : null;
+  const url = tab?.url ? new URL(tab.url) : null;
   const allowed = url && (url.origin === 'https://fap.fpt.edu.vn' ||
     (url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname)));
-  if (!tab.id || !allowed) {
+  if (!tab?.id || !allowed) {
     throw new Error('Hãy mở trang điểm danh FAP hoặc trang demo localhost.');
   }
-  return chrome.tabs.sendMessage(tab.id, message);
+  const response = await chrome.tabs.sendMessage(tab.id, message);
+  if (!response || typeof response !== 'object') {
+    throw new Error('Không kết nối được với trang FAP. Hãy tải lại trang rồi thử lại.');
+  }
+  return response;
 }
 
 function fail(error: unknown): void {
