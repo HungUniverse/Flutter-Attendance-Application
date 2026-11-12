@@ -78,6 +78,13 @@ are advisory and configurable through an optional JSON options file. `audit-csv`
 exports the findings without embedding the full attendance table. Invalid or
 duplicate IDs and duplicate emails are rejected earlier by snapshot validation.
 
+`archive-new` starts a versioned snapshot history. `archive-add` appends a
+revision with its parent, author and note; revisions can branch from older
+points through the library API. `archive-compare` shows semantic changes,
+`archive-restore` appends an earlier snapshot as a new revision, and
+`archive-csv` exports a compact index without attendance rows. The archive is
+written only when the caller saves command output to a file.
+
 `schedule-generate` accepts a JSON object with `startDate`, `endDate`,
 `startTime`, `durationMinutes`, `weekdays`, `resources`, `idPrefix`, and an
 optional `exceptions` array. Dates and times use UTC, weekdays use Sunday=0

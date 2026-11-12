@@ -74,6 +74,14 @@ test('runs the full offline import, reporting, update and export workflow', asyn
       slots: [{ id: 'slot-a', start: '2026-01-05T09:00:00Z', end: '2026-01-05T10:00:00Z', roomId: 'r1' }],
     }));
     assert.equal(JSON.parse(run('schedule-plan', planOptions)).complete, true);
+    const archivePath = join(dir, 'archive.json');
+    const archiveUpdated = join(dir, 'archive-updated.json');
+    await writeFile(archivePath, run('archive-new', initial, 'Course history'));
+    await writeFile(archiveUpdated, run('archive-add', archivePath, updated, 'Record review', 'Teacher'));
+    assert.equal(JSON.parse(run('archive-list', archiveUpdated)).length, 2);
+    assert.equal(JSON.parse(run('archive-compare', archiveUpdated, 'r1', 'r2')).changes.attendance.added.length, 1);
+    assert.equal(JSON.parse(run('archive-restore', archiveUpdated, 'r1', 'Restore previous')).revisions.length, 3);
+    assert.match(run('archive-csv', archiveUpdated), /"revisionId"/);
     const auditReport = JSON.parse(run('audit', initial));
     assert.equal(auditReport.version, 1);
     assert.ok(auditReport.summary.total > 0);

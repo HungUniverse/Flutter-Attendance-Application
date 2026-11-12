@@ -27,6 +27,8 @@ import { createScenario, evaluateScenario, parseScenario, removeScenarioChange, 
 import { auditAttendanceSnapshot, auditToCsv } from './audit.mjs';
 import { previewAttendanceImport } from './import-preview.mjs';
 import { planSchedule } from './schedule-planner.mjs';
+import { appendArchiveRevision, archiveToCsv, compareArchiveRevisions, createArchive, listArchiveRevisions,
+  parseArchive, restoreArchiveRevision, serializeArchive } from './archive.mjs';
 
 const usage = `Attendance workbench (Node.js 22+)
 
@@ -46,6 +48,12 @@ const usage = `Attendance workbench (Node.js 22+)
   node cli.mjs audit-csv SNAPSHOT.json [OPTIONS.json]
   node cli.mjs preview-import ROSTER.csv SESSIONS.json ATTENDANCE.csv
   node cli.mjs schedule-plan PLAN.json
+  node cli.mjs archive-new SNAPSHOT.json TITLE
+  node cli.mjs archive-add ARCHIVE.json SNAPSHOT.json MESSAGE [AUTHOR]
+  node cli.mjs archive-list ARCHIVE.json
+  node cli.mjs archive-compare ARCHIVE.json BEFORE_ID AFTER_ID
+  node cli.mjs archive-restore ARCHIVE.json REVISION_ID MESSAGE [AUTHOR]
+  node cli.mjs archive-csv ARCHIVE.json
   node cli.mjs apply SNAPSHOT.json CHANGES.json
   node cli.mjs compare BEFORE.json AFTER.json
   node cli.mjs export-csv SNAPSHOT.json
@@ -247,6 +255,32 @@ export async function runCommand(args) {
     case 'schedule-plan': {
       requireArgs(values, 1);
       return json(planSchedule(JSON.parse(await readText(values[0]))));
+    }
+    case 'archive-new': {
+      requireArgs(values, 2);
+      return serializeArchive(createArchive(await snapshot(values[0]), { title: values[1] }));
+    }
+    case 'archive-add': {
+      if (values.length < 3 || values.length > 4) throw new TypeError('expected archive, snapshot, message and optional author');
+      const [archiveText, data] = await Promise.all([readText(values[0]), snapshot(values[1])]);
+      return serializeArchive(appendArchiveRevision(parseArchive(archiveText), data, { message: values[2], author: values[3] }));
+    }
+    case 'archive-list': {
+      requireArgs(values, 1);
+      return json(listArchiveRevisions(parseArchive(await readText(values[0]))));
+    }
+    case 'archive-compare': {
+      requireArgs(values, 3);
+      return json(compareArchiveRevisions(parseArchive(await readText(values[0])), values[1], values[2]));
+    }
+    case 'archive-restore': {
+      if (values.length < 3 || values.length > 4) throw new TypeError('expected archive, revision ID, message and optional author');
+      const archive = parseArchive(await readText(values[0]));
+      return serializeArchive(restoreArchiveRevision(archive, values[1], { message: values[2], author: values[3] }));
+    }
+    case 'archive-csv': {
+      requireArgs(values, 1);
+      return archiveToCsv(parseArchive(await readText(values[0])));
     }
     default:
       throw new TypeError(`unknown command: ${command}; use --help`);

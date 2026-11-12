@@ -21,6 +21,8 @@ import { createScenario, evaluateScenario, parseScenario, removeScenarioChange, 
 import { auditAttendanceSnapshot, auditToCsv } from '../audit.mjs';
 import { previewAttendanceImport } from '../import-preview.mjs';
 import { planSchedule } from '../schedule-planner.mjs';
+import { appendArchiveRevision, archiveToCsv, compareArchiveRevisions, createArchive, getArchiveSnapshot,
+  listArchiveRevisions, parseArchive, serializeArchive } from '../archive.mjs';
 
 const labels = {
   overview: ['TỔNG QUAN', 'Tổng quan'],
@@ -47,6 +49,8 @@ const state = {
   scenario: null,
   auditOptions: {},
   auditFilter: 'all',
+  archive: null,
+  savedArchiveText: null,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -192,7 +196,8 @@ function commitSnapshot(next, description) {
 }
 
 function updateHistoryControls() {
-  const dirty = state.snapshot && serializeAttendanceSnapshot(state.snapshot) !== state.savedSnapshotText;
+  const dirty = (state.snapshot && serializeAttendanceSnapshot(state.snapshot) !== state.savedSnapshotText) ||
+    (state.archive && serializeArchive(state.archive) !== state.savedArchiveText);
   const indicator = $('#dirty-indicator');
   if (indicator) indicator.hidden = !dirty;
   const undo = $('#undo-action');
@@ -814,6 +819,72 @@ function showBundleManager() {
   });
 }
 
+function showArchiveManager() {
+  const revisions = state.archive ? listArchiveRevisions(state.archive) : [];
+  const rows = revisions.map((revision) => `<div class="session-row"><div><strong>${esc(revision.id)} · ${esc(revision.message)}</strong><small>${esc(revision.createdAt)} · ${revision.students} sinh viên · ${revision.sessions} buổi · ${revision.records} kết quả${revision.author ? ` · ${esc(revision.author)}` : ''}</small></div><span>${revision.isHead ? statusBadge('present') : ''}</span><div><button class="icon-button" type="button" data-archive-open="${esc(revision.id)}" title="Mở bản này">↗</button><button class="icon-button" type="button" data-archive-compare="${esc(revision.id)}" title="So sánh với đầu hiện tại" ${revision.id === state.archive?.headId ? 'disabled' : ''}>⇄</button></div></div>`).join('');
+  const titleInput = !state.archive ? `<div class="form-field"><label for="archive-title">Tên kho lịch sử</label><input id="archive-title" maxlength="160" value="Attendance history"></div>` : '';
+  showDialog(`<div class="modal-head"><div><h2>Kho lịch sử bản sao</h2><p>${state.archive ? `${esc(state.archive.title)} · ${revisions.length} phiên bản · đầu hiện tại ${esc(state.archive.headId)}` : 'Lưu các mốc bản sao và so sánh thay đổi mà không ghi vào ứng dụng chính.'}</p></div><button type="button" class="icon-button" data-close>×</button></div>${titleInput}<div class="toolbar"><button type="button" class="button button-primary" id="archive-create" ${state.snapshot && !state.archive ? '' : 'disabled'}>Tạo từ bản sao hiện tại</button><button type="button" class="button button-secondary" id="archive-add" ${state.snapshot && state.archive ? '' : 'disabled'}>Thêm phiên bản hiện tại</button><button type="button" class="button button-secondary" id="archive-import">Mở kho JSON</button><button type="button" class="button button-secondary" id="archive-export" ${state.archive ? '' : 'disabled'}>Tải kho JSON</button><button type="button" class="button button-secondary" id="archive-index" ${state.archive ? '' : 'disabled'}>Tải chỉ mục CSV</button><input id="archive-file" type="file" accept=".json,application/json" hidden></div><div class="session-list">${rows || emptyInline('Chưa có kho lịch sử. Tải hoặc tạo kho từ bản sao hiện tại.')}</div><div class="modal-actions"><button type="button" class="button button-secondary" data-close>Đóng</button></div>`, () => {
+    bindModalClose();
+    $('#archive-create').addEventListener('click', () => {
+      if (!state.snapshot || state.archive) return;
+      try {
+        state.archive = createArchive(state.snapshot, { title: $('#archive-title').value.trim() || 'Attendance history' });
+        updateHistoryControls(); showArchiveManager();
+      } catch (error) { showError(error); }
+    });
+    $('#archive-add').addEventListener('click', () => {
+      if (!state.archive || !state.snapshot) return;
+      const message = prompt('Ghi chú cho phiên bản này');
+      if (!message?.trim()) return;
+      try {
+        state.archive = appendArchiveRevision(state.archive, state.snapshot,
+          { message: message.trim(), expectedHeadId: state.archive.headId });
+        updateHistoryControls(); showArchiveManager();
+      } catch (error) { showError(error); }
+    });
+    $('#archive-import').addEventListener('click', () => $('#archive-file').click());
+    $('#archive-file').addEventListener('change', async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      try {
+        state.archive = parseArchive(await file.text());
+        state.savedArchiveText = serializeArchive(state.archive);
+        updateHistoryControls(); showArchiveManager(); notify(`Đã mở ${file.name}.`);
+      } catch (error) { showError(error); }
+      finally { event.target.value = ''; }
+    });
+    $('#archive-export').addEventListener('click', () => {
+      if (!state.archive) return;
+      const content = serializeArchive(state.archive);
+      download('attendance-archive.json', content);
+      state.savedArchiveText = content;
+      updateHistoryControls();
+    });
+    $('#archive-index').addEventListener('click', () => {
+      if (state.archive) download('attendance-archive-index.csv', archiveToCsv(state.archive), 'text/csv;charset=utf-8');
+    });
+    $$('[data-archive-open]').forEach((button) => button.addEventListener('click', () => {
+      try {
+        const snapshot = getArchiveSnapshot(state.archive, button.dataset.archiveOpen);
+        closeDialog(); loadSnapshot(snapshot, `Đã mở phiên bản ${button.dataset.archiveOpen} từ kho lịch sử.`);
+      } catch (error) { showError(error); }
+    }));
+    $$('[data-archive-compare]').forEach((button) => button.addEventListener('click', () =>
+      compareArchiveDialog(button.dataset.archiveCompare, state.archive.headId)));
+  });
+}
+
+function compareArchiveDialog(beforeId, afterId) {
+  try {
+    const result = compareArchiveRevisions(state.archive, beforeId, afterId);
+    const { roster, sessions, attendance } = result.changes;
+    showDialog(`<div class="modal-head"><div><h2>So sánh phiên bản ${esc(result.before.id)} → ${esc(result.after.id)}</h2><p>${esc(result.before.message)} → ${esc(result.after.message)}</p></div><button type="button" class="icon-button" data-close>×</button></div><div class="metric-grid">${metric('Sinh viên thêm/xóa', `${roster.added.length}/${roster.removed.length}`, 'hồ sơ', '♧')}${metric('Buổi thêm/xóa', `${sessions.added.length}/${sessions.removed.length}`, 'buổi', '▣')}${metric('Kết quả thêm/xóa', `${attendance.added.length}/${attendance.removed.length}`, 'bản ghi', '✓')}${metric('Thay đổi trạng thái', attendance.changed.length, 'bản ghi', '⇄')}</div><div class="toolbar"><button type="button" class="button button-secondary" id="download-archive-diff">Tải chi tiết JSON</button></div><div class="modal-actions"><button type="button" class="button button-secondary" data-close>Đóng</button></div>`, () => {
+      bindModalClose();
+      $('#download-archive-diff').addEventListener('click', () => download('attendance-archive-diff.json', `${JSON.stringify(result, null, 2)}\n`));
+    });
+  } catch (error) { showError(error); }
+}
+
 function importBundle() {
   const input = document.createElement('input'); input.type = 'file'; input.accept = '.json,application/json';
   input.onchange = async () => {
@@ -892,6 +963,7 @@ function loadEventBindings() {
   $('#review-import').addEventListener('click', importReviewDialog);
   $('#download-snapshot').addEventListener('click', exportSnapshot);
   $('#manage-bundle').addEventListener('click', showBundleManager);
+  $('#manage-archive').addEventListener('click', showArchiveManager);
   $('#compare-snapshot').addEventListener('click', compareSnapshotFile);
   $('#undo-action').addEventListener('click', undo);
   $('#redo-action').addEventListener('click', redo);
@@ -928,7 +1000,8 @@ function loadEventBindings() {
     if (file) handleSnapshotFile(file);
   });
   window.addEventListener('beforeunload', (event) => {
-    if (state.snapshot && serializeAttendanceSnapshot(state.snapshot) !== state.savedSnapshotText) {
+    if ((state.snapshot && serializeAttendanceSnapshot(state.snapshot) !== state.savedSnapshotText) ||
+        (state.archive && serializeArchive(state.archive) !== state.savedArchiveText)) {
       event.preventDefault();
       event.returnValue = '';
     }
