@@ -7,6 +7,8 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../application/attendance_controller.dart';
 import '../../domain/models.dart';
 import '../../lab3/services/contracts.dart';
+import '../../lab3/services/attendance_link_service.dart';
+import '../../lab3/services/firestore_attendance_links.dart';
 import '../theme.dart';
 
 class SharedQrPage extends StatefulWidget {
@@ -28,6 +30,7 @@ class _SharedQrPageState extends State<SharedQrPage> {
   LinkSession? session;
   String? error;
   Timer? timer;
+  StreamSubscription<void>? subscription;
   bool working = false;
   @override
   void initState() {
@@ -43,11 +46,19 @@ class _SharedQrPageState extends State<SharedQrPage> {
     if (working) return;
     working = true;
     try {
-      session = await widget.controller.sharedLinks!.createQr(
-        widget.controller.classById(widget.classId),
-        widget.controller.meetingById(widget.classId, widget.meetingId),
+      final service = widget.controller.sharedLinks!;
+      final course = widget.controller.classById(widget.classId);
+      final meeting = widget.controller.meetingById(widget.classId, widget.meetingId);
+      session = service is HttpAttendanceLinkService ? await service.createQr(
+        course, meeting,
         otp: widget.mode == QrMode.otp,
-      );
+      ) : await service.create(course, meeting);
+      if (service is LiveAttendanceLinks) {
+        await subscription?.cancel();
+        subscription = service.changes(session!).listen((_) => unawaited(_poll()), onError: (Object e) {
+          if (mounted) setState(() => error = '$e');
+        });
+      }
       error = null;
     } on Object catch (e) {
       error = '$e';
@@ -97,6 +108,7 @@ class _SharedQrPageState extends State<SharedQrPage> {
   @override
   void dispose() {
     timer?.cancel();
+    unawaited(subscription?.cancel());
     super.dispose();
   }
 
@@ -113,7 +125,7 @@ class _SharedQrPageState extends State<SharedQrPage> {
           0;
       final current = session;
       final closed = m.state == MeetingState.closed;
-      final receiving = current?.receiving == true && !closed;
+      final receiving = current?.receiving == true && current!.expiresAt.isAfter(DateTime.now()) && !closed;
       final status = closed
           ? 'Đã chốt'
           : receiving

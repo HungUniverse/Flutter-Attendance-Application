@@ -548,6 +548,11 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
     CourseClass courseClass,
     Meeting meeting,
   ) async {
+    if (widget.controller.finalFirebase) {
+      await widget.controller.startMeeting(courseClass.id, meeting.id);
+      if (mounted) _openQr(courseClass, widget.controller.meetingById(courseClass.id, meeting.id), QrMode.normal);
+      return;
+    }
     final mode = await showDialog<QrMode>(
       context: context,
       builder: (context) => AlertDialog(
