@@ -73,6 +73,9 @@ class TeacherViewModel extends ChangeNotifier {
   Timer? _liveTimer;
   StreamSubscription<void>? _linkSub;
   String? _watchingLinkId;
+  Completer<void>? _activeOperation;
+  DateTime? _noticesFetchedAt;
+  bool _foreground = true;
   int _generation = 0;
 
   String get uid =>
@@ -91,8 +94,8 @@ class TeacherViewModel extends ChangeNotifier {
     });
     if (timers) {
       _timer = Timer.periodic(const Duration(seconds: 10), (_) {
-        if (user != null && !busy && !loadingWorkspace) {
-          unawaited(_run('refresh_attendance', _refresh, quiet: true));
+        if (_foreground && user != null && !busy && !loadingWorkspace) {
+          unawaited(refreshInBackground());
         }
       });
     }
@@ -110,6 +113,7 @@ class TeacherViewModel extends ChangeNotifier {
     exportedFile = null;
     reportDestination = null;
     notices = [];
+    _noticesFetchedAt = null;
     permission = null;
     messagingToken = null;
     error = null;
@@ -183,22 +187,34 @@ class TeacherViewModel extends ChangeNotifier {
     bool allowAccountChange = false,
   }) async {
     if (busy || loadingWorkspace || disposed) return false;
+    // Background work stays serialized with edits, but does not disable the UI.
+    // A foreground edit may wait for one in-flight refresh; timer ticks never queue.
+    if (quiet && _activeOperation != null) return false;
     final generation = _generation;
-    busy = true;
+    final previous = _activeOperation?.future;
+    final completion = Completer<void>();
+    _activeOperation = completion;
     if (!quiet) {
+      busy = true;
       error = null;
       message = null;
     }
     _notify();
     try {
+      if (previous != null) await previous;
+      if (disposed || generation != _generation) return false;
       await action();
       return allowAccountChange || generation == _generation;
     } on Object catch (e, stack) {
-      if (generation == _generation) error = _friendly(e);
+      if (generation == _generation && (!quiet || e is WorkspaceAccessDenied)) {
+        error = _friendly(e);
+      }
       await _safe(() => telemetry.error(e, stack, operation));
       return false;
     } finally {
-      busy = false;
+      if (!quiet) busy = false;
+      if (identical(_activeOperation, completion)) _activeOperation = null;
+      completion.complete();
       _watchLink();
       _notify();
     }
@@ -225,8 +241,8 @@ class TeacherViewModel extends ChangeNotifier {
   void _scheduleLiveRefresh() {
     _liveTimer?.cancel();
     _liveTimer = Timer(const Duration(milliseconds: 250), () {
-      if (disposed || link == null) return;
-      if (busy || loadingWorkspace) {
+      if (disposed || !_foreground || link == null) return;
+      if (busy || loadingWorkspace || _activeOperation != null) {
         _scheduleLiveRefresh();
       } else {
         unawaited(_run('live_check_in', _refreshLink, quiet: true));
@@ -591,6 +607,19 @@ class TeacherViewModel extends ChangeNotifier {
 
   Future<bool> stopLink() => _run('stop_link', _stopLink);
   Future<bool> refresh() => _run('refresh', _refresh);
+  Future<bool> refreshInBackground() =>
+      _run('refresh_attendance', () => _refresh(background: true), quiet: true);
+
+  void setForeground(bool value) {
+    if (_foreground == value) return;
+    _foreground = value;
+    if (value) {
+      unawaited(refreshInBackground());
+    } else {
+      _liveTimer?.cancel();
+    }
+  }
+
   Future<bool> receiveServerWorkspace() => _run('resolve_sync', () async {
     if (sync != null && workspace != null) {
       final owner = uid;
@@ -630,17 +659,25 @@ class TeacherViewModel extends ChangeNotifier {
     }
   }
 
-  Future<void> _refreshNotices(String owner) async {
+  Future<void> _refreshNotices(String owner, {bool force = true}) async {
+    if (!force &&
+        _noticesFetchedAt != null &&
+        now().difference(_noticesFetchedAt!) < const Duration(minutes: 1)) {
+      return;
+    }
     final generation = _generation;
     try {
       final history = await notifications.history(owner);
-      if (generation == _generation && !disposed) notices = history;
+      if (generation == _generation && !disposed) {
+        notices = history;
+        _noticesFetchedAt = now();
+      }
     } on Object catch (e, stack) {
       await _safe(() => telemetry.error(e, stack, 'notification_history'));
     }
   }
 
-  Future<void> _refresh() async {
+  Future<void> _refresh({bool background = false}) async {
     if (user == null) return;
     final owner = uid;
     final generation = _generation;
@@ -653,7 +690,11 @@ class TeacherViewModel extends ChangeNotifier {
       workspace = loaded;
       await _clearClosedLink(owner, link);
       if (generation != _generation || disposed) return;
-      if (workspace != null &&
+      if (link == null &&
+          workspace != null &&
+          workspace!.classes.any(
+            (c) => c.meetings.any((m) => m.state == MeetingState.active),
+          ) &&
           (links is HttpAttendanceLinkService ||
               links is LiveAttendanceLinks)) {
         final recovered = links is LiveAttendanceLinks
@@ -678,7 +719,7 @@ class TeacherViewModel extends ChangeNotifier {
     if (generation != _generation || disposed) return;
     await _reconcile();
     if (generation != _generation || disposed) return;
-    await _refreshNotices(owner);
+    await _refreshNotices(owner, force: !background);
   }
 
   Future<void> _reconcile() async {
