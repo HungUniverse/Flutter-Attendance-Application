@@ -247,5 +247,61 @@ void main() {
         equals(AttendanceStatus.absent),
       );
     });
+
+    test('should normalize case-variant attendance keys, demote extra active meetings, and fill blank audit reasons on repair', () {
+      // Arrange
+      final start = DateTime(2026, 11, 2, 7, 0);
+      final broken = _validCourse().copyWith(
+        meetings: [
+          Meeting(
+            id: 'm1',
+            number: 1,
+            startAt: start,
+            endAt: start.add(const Duration(hours: 2)),
+            state: MeetingState.active,
+          ),
+          Meeting(
+            id: 'm2',
+            number: 2,
+            startAt: start.add(const Duration(days: 3)),
+            endAt: start.add(const Duration(days: 3, hours: 2)),
+            state: MeetingState.active,
+          ),
+        ],
+        attendance: {
+          'm1': {
+            'se194673': AttendanceRecord(
+              status: AttendanceStatus.present,
+              source: AttendanceSource.scan,
+              recordedAt: start,
+            ),
+          },
+        },
+        auditEvents: [
+          AuditEvent(
+            id: 'a_empty',
+            createdAt: start,
+            action: 'attendance_override',
+            reason: '   ',
+          ),
+        ],
+      );
+
+      // Act
+      final repaired = validator.repairCourseClass(broken, now: start);
+      final issuesAfter = validator.validateClass(repaired);
+
+      // Assert
+      expect(issuesAfter, isEmpty);
+      expect(
+        repaired.recordFor('m1', 'SE194673')?.status,
+        equals(AttendanceStatus.present),
+      );
+      expect(
+        repaired.meetings.where((m) => m.state == MeetingState.active),
+        hasLength(1),
+      );
+      expect(repaired.auditEvents.single.reason.trim(), isNotEmpty);
+    });
   });
 }

@@ -320,24 +320,61 @@ class WorkspaceIntegrityValidator {
     DateTime? now,
   }) {
     final timestamp = now ?? DateTime.now();
-    final validMeetingIds = courseClass.meetings.map((m) => m.id).toSet();
-    final validRolls = courseClass.students.map((s) => s.rollNumber).toSet();
+
+    final deduplicatedStudents = <Student>[];
+    final seenUpperRolls = <String>{};
+    final seenEmails = <String>{};
+    final canonicalRollByUpper = <String, String>{};
+
+    for (final student in courseClass.students) {
+      final roll = student.rollNumber.trim();
+      final upperRoll = roll.toUpperCase();
+      final email = student.normalizedEmail;
+      if (roll.isEmpty || student.fullName.trim().isEmpty) continue;
+      if (!seenUpperRolls.add(upperRoll)) continue;
+      if (email.isNotEmpty && email.contains('@') && !seenEmails.add(email)) {
+        seenUpperRolls.remove(upperRoll);
+        continue;
+      }
+      deduplicatedStudents.add(student);
+      canonicalRollByUpper[upperRoll] = student.rollNumber;
+    }
+
+    var seenActive = false;
+    final repairedMeetings = <Meeting>[];
+    final validMeetingIds = <String>{};
+    for (final meeting in courseClass.meetings) {
+      if (!validMeetingIds.add(meeting.id)) continue;
+      if (meeting.state == MeetingState.active) {
+        if (!seenActive) {
+          seenActive = true;
+          repairedMeetings.add(meeting);
+        } else {
+          repairedMeetings.add(meeting.copyWith(state: MeetingState.upcoming));
+        }
+      } else {
+        repairedMeetings.add(meeting);
+      }
+    }
 
     final cleanedAttendance = <String, Map<String, AttendanceRecord>>{};
     for (final entry in courseClass.attendance.entries) {
       if (!validMeetingIds.contains(entry.key)) continue;
-      final validRecords = <String, AttendanceRecord>{
-        for (final recordEntry in entry.value.entries)
-          if (validRolls.contains(recordEntry.key))
-            recordEntry.key: recordEntry.value,
-      };
+      final validRecords = <String, AttendanceRecord>{};
+      for (final recordEntry in entry.value.entries) {
+        final canonicalRoll =
+            canonicalRollByUpper[recordEntry.key.trim().toUpperCase()];
+        if (canonicalRoll != null) {
+          validRecords[canonicalRoll] = recordEntry.value;
+        }
+      }
       cleanedAttendance[entry.key] = validRecords;
     }
 
-    for (final meeting in courseClass.meetings) {
+    for (final meeting in repairedMeetings) {
       if (meeting.state != MeetingState.closed) continue;
       final records = cleanedAttendance.putIfAbsent(meeting.id, () => {});
-      for (final student in courseClass.students) {
+      for (final student in deduplicatedStudents) {
         final existing = records[student.rollNumber];
         if (existing == null || existing.status == AttendanceStatus.unmarked) {
           records[student.rollNumber] = AttendanceRecord(
@@ -350,6 +387,27 @@ class WorkspaceIntegrityValidator {
       }
     }
 
-    return courseClass.copyWith(attendance: cleanedAttendance);
+    final repairedAudit = <AuditEvent>[
+      for (final audit in courseClass.auditEvents)
+        audit.reason.trim().isEmpty
+            ? AuditEvent(
+                id: audit.id,
+                createdAt: audit.createdAt,
+                action: audit.action,
+                reason: 'Bổ sung lý do kiểm toán mặc định khi đồng bộ dữ liệu.',
+                rollNumber: audit.rollNumber,
+                meetingId: audit.meetingId,
+                oldValue: audit.oldValue,
+                newValue: audit.newValue,
+              )
+            : audit,
+    ];
+
+    return courseClass.copyWith(
+      students: deduplicatedStudents,
+      meetings: repairedMeetings,
+      attendance: cleanedAttendance,
+      auditEvents: repairedAudit,
+    );
   }
 }
