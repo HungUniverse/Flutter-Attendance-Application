@@ -29,6 +29,9 @@ export function evaluateFptAttendancePolicy(roster, sessionIds, records, options
   }
 
   const maxAllowedAbsences = Math.floor(totalPlannedSessions * maxAbsenceRatio);
+  let eligible = 0;
+  let warning = 0;
+  let debarred = 0;
   const students = reports.map((report) => {
     const { present, absent, missing } = report;
     const absenceRatio = totalPlannedSessions > 0 ? absent / totalPlannedSessions : 0;
@@ -39,8 +42,12 @@ export function evaluateFptAttendancePolicy(roster, sessionIds, records, options
     let status = 'eligible';
     if (totalPlannedSessions > 0 && absenceRatio > maxAbsenceRatio) {
       status = 'debarred';
+      debarred++;
     } else if (totalPlannedSessions > 0 && absenceRatio >= warningRatio) {
       status = 'warning';
+      warning++;
+    } else {
+      eligible++;
     }
     return {
       student: report.student,
@@ -63,9 +70,9 @@ export function evaluateFptAttendancePolicy(roster, sessionIds, records, options
     completedSessions,
     totalPlannedSessions,
     maxAllowedAbsences,
-    eligible: students.filter((s) => s.status === 'eligible').length,
-    warning: students.filter((s) => s.status === 'warning').length,
-    debarred: students.filter((s) => s.status === 'debarred').length,
+    eligible,
+    warning,
+    debarred,
   };
 
   return {
@@ -77,7 +84,7 @@ export function evaluateFptAttendancePolicy(roster, sessionIds, records, options
 
 function escapeCsv(value) {
   const text = String(value ?? '');
-  const safe = /^[\t\r\n ]*[=+\-@]/.test(text) ? `'${text}` : text;
+  const safe = /^(?:[\t\r]|[\t\r\n ]*[=+\-@])/.test(text) ? `'${text}` : text;
   return `"${safe.replaceAll('"', '""')}"`;
 }
 

@@ -70,7 +70,12 @@ test('validates options and exports spreadsheet-safe CSV', () => {
   const evaluation = evaluateFptAttendancePolicy(roster, sessions, [], {
     totalPlannedSessions: 20,
   });
+  evaluation.students.push({
+    ...evaluation.students[0],
+    student: { id: 'SE004', name: '\tTabbed Name', email: 'd@fpt.edu.vn' },
+  });
   const csv = fptPolicyReportToCsv(evaluation);
   assert.match(csv, /"SE002","'=Tran Thi B","b@fpt\.edu\.vn"/);
+  assert.match(csv, /"SE004","'\tTabbed Name","d@fpt\.edu\.vn"/);
   assert.throws(() => fptPolicyReportToCsv(null), TypeError);
 });

@@ -5,12 +5,17 @@ export function buildSessionMatrix(roster, sessionIds, records) {
   const reports = buildAttendanceReport(roster, sessionIds, records);
   // buildAttendanceReport validates and normalizes the session IDs even for an empty roster.
   return sessionIds.map((id, index) => {
-    const entries = reports.map((report) => ({
-      student: report.student,
-      status: report.sessions[index].status,
-    }));
-    const present = entries.filter((entry) => entry.status === 'present').length;
-    const absent = entries.filter((entry) => entry.status === 'absent').length;
+    let present = 0;
+    let absent = 0;
+    const entries = reports.map((report) => {
+      const status = report.sessions[index].status;
+      if (status === 'present') present++;
+      else if (status === 'absent') absent++;
+      return {
+        student: report.student,
+        status,
+      };
+    });
     const recorded = present + absent;
     return {
       sessionId: id.trim(),

@@ -147,7 +147,7 @@ export function sessionsNeededForRate(present, total, target) {
 /** Export records as RFC 4180-style CSV, with spreadsheet formula injection escaped. */
 export function attendanceToCsv(records) {
   const escape = (value) => {
-    const safe = /^[\t\r\n ]*[=+\-@]/.test(value) ? `'${value}` : value;
+    const safe = /^(?:[\t\r]|[\t\r\n ]*[=+\-@])/.test(value) ? `'${value}` : value;
     return `"${safe.replaceAll('"', '""')}"`;
   };
   const lines = normalizeRecords(records).map((record) =>
