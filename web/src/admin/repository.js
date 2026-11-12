@@ -90,6 +90,11 @@ export class AdminRepository {
       return { workspace, classes };
     });
   }
+  async workspaceForSemester(value) {
+    const id=await hashId(`${this.uid}/${semesterCode(value)}`);
+    const snapshot=await getDocFromServer(this.ref(`workspaces/${id}`));
+    return snapshot.exists() ? this.loadWorkspace(id) : undefined;
+  }
   advance(tx, workspace, changes = {}) {
     tx.set(this.ref(`workspaces/${workspace.id}`), {
       ownerUid: this.uid,

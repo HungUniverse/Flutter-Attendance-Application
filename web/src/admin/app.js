@@ -2,9 +2,10 @@ import "./style.css";
 import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import { auth, db, googleProvider } from "../firebase-client.js";
 import { AdminRepository } from "./repository.js";
+import { rosterField } from "./class-fields.js";
+import { openMarkbookImport } from "./markbook-form.js";
 import {
   parseRoster,
-  rosterText,
   attendanceSummary,
   semesterCode,
 } from "./model.js";
@@ -48,6 +49,7 @@ let counts,
   search = "",
   requestFilter = "pending";
 let dataRevision = "";
+let importingMarkbook = false;
 function route() {
   const key = location.hash.slice(1);
   return Object.hasOwn(tabs, key) ? key : "dashboard";
@@ -186,7 +188,7 @@ function render() {
   badge.hidden = !pending;
   document.getElementById("page-actions").innerHTML =
     tab === "classes"
-      ? '<button class="primary" data-action="create-class">＋ Thêm lớp học</button>'
+      ? '<div class="detail-actions"><button class="secondary" data-action="import-markbook">Nạp Markbook</button><button class="primary" data-action="create-class">＋ Thêm lớp học</button></div>'
       : tab === "announcements"
         ? '<button class="primary" data-action="compose">＋ Soạn thông báo</button>'
         : '<span class="date-label">' +
@@ -334,12 +336,12 @@ function classForm(course) {
   const known = new Map(workspaces.map((w) => [w.data.semester, w.revision]));
   const today = new Date();
   today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
-  const content = `<div class="form-grid"><label>Mã môn<input name="courseCode" required maxlength="32" value="${h(initial?.courseCode)}" placeholder="PRM393"></label><label>Mã lớp<input name="classCode" required maxlength="40" value="${h(initial?.classCode)}" placeholder="SE1933"></label></div>${course ? `<p class="soft-note">Lịch ${h(initial.scheduleCode)} · ${course.meetings.length} buổi. Lịch sử và mã buổi được giữ nguyên khi sửa thông tin lớp.</p>` : `<div class="form-grid"><label>Học kỳ<input name="semester" required maxlength="16" value="${h(workspace?.data.semester || "FA26")}"></label><label>Ngày bắt đầu<input name="start" type="date" required value="${h(workspace?.data.semesterStart?.slice(0, 10) || today.toISOString().slice(0, 10))}"></label><label>Mã lịch<select name="scheduleCode">${[1, 2, 3].flatMap((group) => [1, 2, 3, 4].map((slot) => `<option value="${group}${slot}">${group}${slot} · ${["T2 / T5", "T3 / T6", "T4 / T7"][group - 1]} · ${["07:00", "09:30", "12:30", "15:00"][slot - 1]}</option>`)).join("")}</select></label><label>Số tuần<input name="weeks" type="number" min="1" max="52" value="10" required></label><label>Buổi mỗi tuần<select name="perWeek"><option value="2">2 buổi</option><option value="1">1 buổi (ngày đầu trong nhóm)</option></select></label></div>`}<label>Danh sách sinh viên<textarea name="roster" rows="9" required spellcheck="false" placeholder="SE123456 | Nguyễn Văn An | email@gmail.com">${h(rosterText(initial?.students))}</textarea><small>Mỗi dòng: MSSV | Họ tên | Email. Có thể dán ba cột tương ứng từ Excel. Tối đa 200 sinh viên, không trùng MSSV/email.</small></label>`;
+  const content = `<div class="form-grid"><label>Mã môn<input name="courseCode" required maxlength="32" value="${h(initial?.courseCode)}" placeholder="PRM393"></label><label>Mã lớp<input name="classCode" required maxlength="40" value="${h(initial?.classCode)}" placeholder="SE1933"></label></div>${course ? `<p class="soft-note">Lịch ${h(initial.scheduleCode)} · ${course.meetings.length} buổi. Lịch sử và mã buổi được giữ nguyên khi sửa thông tin lớp.</p>` : `<div class="form-grid"><label>Học kỳ<input name="semester" required maxlength="16" value="${h(workspace?.data.semester || "FA26")}"></label><label>Ngày bắt đầu<input name="start" type="date" required value="${h((workspace?.data.semester === "FA26" || !workspace ? "2026-09-07" : workspace.data.semesterStart?.slice(0, 10)))}"></label><label>Mã lịch<select name="scheduleCode">${[1, 2, 3].flatMap((group) => [1, 2, 3, 4].map((slot) => `<option value="${group}${slot}">${group}${slot} · ${["T2 / T5", "T3 / T6", "T4 / T7"][group - 1]} · ${["07:30", "09:30", "12:30", "15:00"][slot - 1]}</option>`)).join("")}</select></label><label>Số tuần<input name="weeks" type="number" min="1" max="52" value="10" required></label><label>Buổi mỗi tuần<select name="perWeek"><option value="2">2 buổi</option><option value="1">1 buổi (ngày đầu trong nhóm)</option></select></label></div>`}${rosterField(initial)}`;
   showDialog(
     course ? "Chỉnh sửa lớp học" : "Thêm lớp học",
     content,
     async (input) => {
-      const students = parseRoster(input.roster, initial?.students);
+      const students = parseRoster(input.roster, initial?.students, input.classCode);
       if (course) {
         await repo.editClass(course, students, input, captured);
         track("admin_class_updated");
@@ -479,6 +481,13 @@ root.addEventListener("click", (e) => {
   if (!target) return;
   const action = target.dataset.action;
   if (action === "create-class") classForm();
+  if (action === "import-markbook") {
+    const current = generation;
+    openMarkbookImport({repo,
+      onBusy:value=>{if(current===generation)importingMarkbook=value;},
+      onSaved:async result=>{if(current!==generation)return;selected=result.workspaceId;await refresh();feedback(`Đã lưu ${result.saved}/${result.total} lớp từ Markbook.`);},
+    });
+  }
   if (action === "class-detail") classDetail(target.dataset.id);
   if (action === "review") review(target.dataset.id);
   if (action === "compose") compose();
@@ -557,7 +566,7 @@ onAuthStateChanged(auth, async (account) => {
             selected = workspaces[0]?.id || "";
           renderSemester();
           const next = workspaces.find((w) => w.id === selected);
-          if (`${next?.id}/${next?.revision}` !== dataRevision) refresh();
+          if (!importingMarkbook && `${next?.id}/${next?.revision}` !== dataRevision) refresh();
         },
         failure,
       ),
