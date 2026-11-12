@@ -109,7 +109,7 @@ class AttendanceController extends ChangeNotifier {
         try { await remote.requireTeacher(); }
         on Object { await desktopAuth.signOut(); rethrow; }
       }
-      if (sync == null) _legacyWorkspace = workspace;
+      if (sync == null && workspace != null) _legacyWorkspace = workspace;
       final documents = await getApplicationDocumentsDirectory();
       sync?.removeListener(notifyListeners);
       sync?.dispose();

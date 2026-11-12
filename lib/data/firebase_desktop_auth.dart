@@ -23,7 +23,7 @@ class FirebaseDesktopAuth extends FirebaseTeacherAuth {
       request.response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
       request.response.headers.set(HttpHeaders.contentTypeHeader, 'text/html; charset=utf-8');
       if (request.method != 'POST' || request.uri.path != '/callback'
-          || request.headers.value(HttpHeaders.originHeader) != Uri.parse(hostingUrl).origin) {
+          || request.headers.value('origin') != Uri.parse(hostingUrl).origin) {
         request.response.statusCode = HttpStatus.forbidden;
         await request.response.close();
         return;
