@@ -162,13 +162,17 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(AttendancePage), findsOneWidget);
 
-      // Return to DashboardPage via UI BackButton
+      // Return to ClassManagementPage and then DashboardPage via UI BackButton
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+      expect(find.text('Danh sách lớp'), findsOneWidget);
+
       await tester.tap(find.byType(BackButton));
       await tester.pumpAndSettle();
       expect(find.byType(DashboardPage), findsOneWidget);
 
       // 6. Sign Out Flow: Navigate to Account and Sign Out
-      await tester.tap(find.byIcon(Icons.account_circle_outlined));
+      await tester.tap(find.byKey(const ValueKey('timetable-nav-2')));
       await tester.pumpAndSettle();
       expect(find.byType(AccountPage), findsOneWidget);
 
