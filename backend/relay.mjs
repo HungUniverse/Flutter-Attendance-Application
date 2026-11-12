@@ -184,8 +184,8 @@ export function createRelay({ store, verifyIdentity, teachers, publicOrigin,
           || typeof input.label !== 'string' || input.label.length > 200
           || !Number.isSafeInteger(input.number) || input.number < 1 || input.number > 1000
           || !Array.isArray(input.students) || input.students.length < 1 || input.students.length > 1000) fail(400, 'Lớp hoặc buổi học không hợp lệ. Chỉ mở buổi học hôm nay.');
-        const emails = [...new Set(input.students.map(s => s.email))];
-        if (emails.some(e => typeof e !== 'string' || e.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))) fail(400, 'Email không hợp lệ.');
+        const emails = [...new Set(input.students.map(s => typeof s?.email === 'string' ? s.email.trim().toLowerCase() : ''))];
+        if (emails.some(e => !e || e.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))) fail(400, 'Email không hợp lệ.');
         const value = await store.transaction(state => {
           const existing = state.sessions.find(s => s.owner === user.uid && open(s));
           if (existing) {
@@ -194,7 +194,7 @@ export function createRelay({ store, verifyIdentity, teachers, publicOrigin,
           }
           const s = { id: randomUUID(), owner: user.uid, token: randomBytes(32).toString('hex'),
             classId: input.classId, meetingId: input.meetingId, label: input.label,
-            number: input.number, meetingDate: input.meetingDate, emails: emails.map(e => e.toLowerCase()),
+            number: input.number, meetingDate: input.meetingDate, emails,
             receiving: true, codeSecret:input.mode==='otp' ? randomBytes(32).toString('hex') : null,
             expiresAt: new Date(`${input.meetingDate}T23:59:59.999+07:00`).toISOString(), submissions: {} };
           state.sessions.push(s);

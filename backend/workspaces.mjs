@@ -54,10 +54,10 @@ export function validateWorkspace(input) {
   }
   const ids = new Set();
   for (const c of w.classes) {
-    if (!c || typeof c.id !== 'string' || ids.has(c.id) || !Array.isArray(c.students)
+    if (!c || typeof c.id !== 'string' || !c.id.trim() || ids.has(c.id.trim()) || !Array.isArray(c.students)
         || !Array.isArray(c.meetings) || c.students.length > 1000 || c.meetings.length > 200) {
       const error = new Error('Danh sách lớp không hợp lệ.'); error.status = 400; throw error;
     }
-    ids.add(c.id);
+    ids.add(c.id.trim());
   }
 }

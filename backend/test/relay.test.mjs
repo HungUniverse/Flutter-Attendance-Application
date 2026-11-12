@@ -129,3 +129,11 @@ test('expired desktop authorization cannot be claimed',async t=>{
   f.advance(120001);
   assert.equal((await f.request('/api/desktop-login/complete',{method:'POST',user:'teacher',data})).status,410);
 });
+test('rejects null student entries with 400 and normalizes case-variant student emails',async t=>{
+  const f=await fixture(t);
+  assert.equal((await f.create('teacher',{students:[null]})).status,400);
+  const created=await f.create('teacher',{students:[{email:' SV@EXAMPLE.COM '},{email:'sv@example.com'}]});
+  assert.equal(created.status,200);
+  const blankClass={workspace:{id:'w1',semester:'FA26',classes:[{id:'   ',students:[],meetings:[]}]},revision:0,mutationId:randomUUID()};
+  assert.equal((await f.request('/api/workspaces',{method:'PUT',user:'teacher',data:blankClass})).status,400);
+});

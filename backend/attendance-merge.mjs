@@ -51,19 +51,27 @@ export function resolveAttendanceConflicts(result, choices) {
         !['base', 'left', 'right'].includes(choice.source)) {
       throw new TypeError('invalid conflict choice');
     }
-    const key = JSON.stringify([choice.studentId, choice.sessionId]);
+    const studentId = choice.studentId.trim();
+    const sessionId = choice.sessionId.trim();
+    if (!studentId || !sessionId) throw new TypeError('invalid conflict choice');
+    const key = JSON.stringify([studentId, sessionId]);
     if (resolutionMap.has(key)) throw new TypeError('duplicate conflict choice');
     resolutionMap.set(key, choice.source);
   }
   for (const conflict of result.conflicts) {
-    const key = JSON.stringify([conflict.studentId, conflict.sessionId]);
+    if (!conflict || typeof conflict.studentId !== 'string' || typeof conflict.sessionId !== 'string') {
+      throw new TypeError('invalid merge result');
+    }
+    const studentId = conflict.studentId.trim();
+    const sessionId = conflict.sessionId.trim();
+    const key = JSON.stringify([studentId, sessionId]);
     if (existing.has(key)) throw new TypeError('duplicate conflict');
     existing.add(key);
     if (!resolutionMap.has(key)) throw new TypeError('missing conflict choice');
     const selected = conflict[resolutionMap.get(key)];
     if (selected !== null) {
       const [record] = normalizeRecords([selected]);
-      if (record.studentId !== conflict.studentId || record.sessionId !== conflict.sessionId) {
+      if (record.studentId !== studentId || record.sessionId !== sessionId) {
         throw new TypeError('conflict record does not match its key');
       }
       records.push(record);
