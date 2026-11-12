@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import '../../data/firestore_report_metadata.dart';
 import '../../data/shared_workspace_sync.dart';
 import '../../domain/models.dart';
 import 'mobile_workspace_repository.dart';
@@ -19,7 +22,13 @@ class SyncedMobileWorkspaceRepository extends FileMobileWorkspaceRepository {
   }
 
   @override
-  Future<File> export(String uid, TeacherWorkspace workspace, CourseClass course, Meeting meeting, String format) async {
+  Future<File> export(
+    String uid,
+    TeacherWorkspace workspace,
+    CourseClass course,
+    Meeting meeting,
+    String format,
+  ) async {
     _check(uid);
     final file = await super.export(uid, workspace, course, meeting, format);
     await reports?.record(uid, workspace, course, meeting, file, format);
@@ -32,5 +41,3 @@ class SyncedMobileWorkspaceRepository extends FileMobileWorkspaceRepository {
     await sync.save(workspace);
   }
 }
-import 'dart:io';
-import '../../data/firestore_report_metadata.dart';
