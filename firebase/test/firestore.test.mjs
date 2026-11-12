@@ -134,10 +134,31 @@ test('closed meeting corrections need a matching reason and append-only audit', 
     return batch.commit();
   };
   await assertFails(edit({records: {S1: mark('P')}}));
-  const audit = {id: 'a1', meetingId: 'm1', rollNumber: 'S1', oldValue: 'A', newValue: 'P', reason: 'Verified correction'};
+  const audit = {id: 'a1', createdAt: new Date().toISOString(), action: 'attendance_override', meetingId: 'm1', rollNumber: 'S1', oldValue: 'A', newValue: 'P', reason: 'Verified correction'};
   await assertSucceeds(edit({records: {S1: {...mark('P'), note: audit.reason}}, auditEvents: [audit]}));
   await assertFails(edit({state: 'active'}, 3));
   await assertFails(edit({records: {S1: {...mark('A'), note: ' '}}, auditEvents: [audit, {...audit, oldValue: 'P', newValue: 'A', reason: ' '}]}, 3));
+});
+test('student cannot write teacher collections', async () => {
+  const db = dbFor('student');
+  for (const path of ['workspaces/forged', 'classes/forged', 'classes/c1/meetings/m1']) {
+    await assertFails(setDoc(doc(db, path), {ownerUid: 'student', role: 'teacher'}));
+  }
+  await assertSucceeds(getDoc(doc(db, 'users/student')));
+});
+test('server calendar rejects opening a future meeting or reopening an active meeting as upcoming', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await updateDoc(doc(context.firestore(), 'classes/c1/meetings/m1'), {state: 'upcoming', dayStart: Timestamp.fromMillis(Date.now() + 86400000), dayEnd: Timestamp.fromMillis(Date.now() + 172800000)});
+  });
+  const db = dbFor('teacher'), batch = writeBatch(db);
+  batch.update(doc(db, 'workspaces/w1'), {revision: 2, updatedAt: serverTimestamp()});
+  batch.update(doc(db, 'classes/c1/meetings/m1'), {state: 'active'});
+  await assertFails(batch.commit());
+});
+test('sessions reject excessive expiration and malformed receiving state', async () => {
+  const db = dbFor('teacher');
+  await assertFails(setDoc(doc(db, 'attendanceSessions/too-long'), {...session(), expiresAt: Timestamp.fromMillis(Date.now() + 600000)}));
+  await assertFails(setDoc(doc(db, 'attendanceSessions/bad-type'), {...session(), receiving: 'true'}));
 });
 test('announcements are addressed to the correct recipient', async () => {
   await assertSucceeds(getDoc(doc(dbFor('student'), 'announcements/a1')));

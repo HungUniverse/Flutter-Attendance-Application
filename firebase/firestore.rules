@@ -38,12 +38,17 @@ service cloud.firestore {
       return d.state == 'closed' && changed.size() == 1
         && d.auditEvents.size() == old.auditEvents.size() + 1
         && d.auditEvents.hasAll(old.auditEvents)
+        && audit.keys().hasOnly(['id', 'createdAt', 'action', 'reason', 'rollNumber', 'meetingId', 'oldValue', 'newValue'])
+        && audit.id is string && audit.id.size() > 0 && audit.createdAt is string
+        && audit.action == 'attendance_override'
         && audit.reason is string && audit.reason.matches('.*\\S.*')
         && audit.meetingId == old.id && audit.rollNumber in changed
         && audit.newValue in ['P', 'A']
         && audit.oldValue == old.records[audit.rollNumber].status
         && audit.newValue == d.records[audit.rollNumber].status
         && d.records[audit.rollNumber].source == 'manual'
+        && d.records[audit.rollNumber].keys().hasOnly(['status', 'source', 'recordedAt', 'note'])
+        && d.records[audit.rollNumber].recordedAt is string
         && d.records[audit.rollNumber].note == audit.reason
         && d.diff(old).affectedKeys().hasOnly(['records', 'auditEvents']);
     }
