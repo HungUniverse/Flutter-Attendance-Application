@@ -51,6 +51,8 @@ Nếu từng gặp HTTP 403 ở `/callback`, đóng app và trang callback cũ, 
 
 APK nằm tại `build/app/outputs/flutter-apk/app-debug.apk`. Windows demo nằm tại `build/windows/x64/runner/Debug/fap_attendance.exe`. Chuyển toàn bộ thư mục Debug khi đưa sang máy khác. Đây là bản demo debug. Bản Android phát hành cần signing key và Play Integrity tương ứng.
 
+Bản sửa Android ngày 13/11/2026 chuyển làm mới định kỳ sang nền và tránh tải/ghi lại workspace khi revision chưa đổi. Cần cài APK đã build lại để nhận bản sửa. Chi tiết và giới hạn kiểm chứng nằm trong [đồng bộ nền Android](android-background-sync.md).
+
 Để đối chiếu desktop local Lab 3, dùng `flutter run -d windows --dart-define=LAB3_LEGACY=true`. Dữ liệu cũ chỉ được nhập vào tài khoản Firebase khi giảng viên chọn thao tác chuyển dữ liệu.
 
 ## Web và deploy
