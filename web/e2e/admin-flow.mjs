@@ -55,7 +55,7 @@ export async function exerciseAdminFlow(seedClosedMeeting) {
     await repo.sendAnnouncement(data.classes[0],{audience:"class",meetingId:"",title:"Thông báo lớp",body:"Buổi học tiếp theo giữ nguyên lịch."});
     await repo.sendAnnouncement(data.classes[0],{audience:"self",meetingId:meeting.id,title:"Ghi chú giảng viên",body:"Kiểm tra kết quả đã duyệt."});
     const emailInbox=await getDocsFromServer(query(collection(studentDb,"announcements"),where("recipientEmail","==","student@example.com")));
-    assert.equal(emailInbox.size,2); // Decision and class message.
+    assert.equal(emailInbox.size,1); // Class message; decisions are addressed by verified UID.
     await assert.rejects(getDocFromServer(doc(outsiderDb,"announcements",`request-${id}`)));
     const after=await repo.counts();assert.equal(after.pending,0);
     await repo.archiveClass(data.classes[0],data.workspace.revision);

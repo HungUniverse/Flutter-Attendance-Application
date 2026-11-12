@@ -516,6 +516,13 @@ test("request access is scoped to own student and owning teacher queries",async(
   await assertSucceeds(getDocs(query(collection(dbFor("teacher"),"attendanceRequests"),where("ownerUid","==","teacher"))));
   await assertFails(getDocs(collection(dbFor("student"),"attendanceRequests")));
 });
+test("a second link for the same meeting cannot create a second student request",async()=>{
+  await seedClosedRequest();
+  await env.withSecurityRulesDisabled(context=>setDoc(doc(context.firestore(),"attendanceSessions/s2"),{...session(),receiving:false}));
+  const db=dbFor("student");
+  await assertFails(setDoc(doc(db,"attendanceRequests/c1_m1_student"),{...correctionRequest(),sessionId:"s2"}));
+  await assertFails(setDoc(doc(db,"attendanceRequests/s2_student"),{...correctionRequest(),sessionId:"s2"}));
+});
 test("only owning teacher rejects a pending request, with a reason and server time",async()=>{
   await seedClosedRequest();
   const decision={state:"rejected",reviewerUid:"teacher",decisionReason:"Không đủ minh chứng",decidedAt:serverTimestamp()};

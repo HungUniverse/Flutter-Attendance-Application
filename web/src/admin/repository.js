@@ -132,7 +132,7 @@ export class AdminRepository {
       tx.update(snapshot.ref,{ state: decision, decisionReason: reason, reviewerUid: this.uid, decidedAt: serverTimestamp() });
       // One deterministic notice per decision; transaction retries cannot duplicate it.
       tx.set(this.ref(`announcements/request-${requestId}`), {
-        ownerUid: this.uid, recipientUid: request.uid, recipientEmail: request.email,
+        ownerUid: this.uid, recipientUid: request.uid,
         title: decision === "approved" ? "Yêu cầu sửa điểm danh đã được duyệt" : "Yêu cầu sửa điểm danh bị từ chối",
         body: reason, classId: request.classId, meetingId: request.meetingId, at: serverTimestamp(),
       });
