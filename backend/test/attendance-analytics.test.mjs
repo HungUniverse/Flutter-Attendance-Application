@@ -51,6 +51,14 @@ test('required sessions handles impossible perfect attendance and empty history'
   assert.throws(() => sessionsNeededForRate(2, 1, 0.5), RangeError);
 });
 
+test('required sessions meets exact decimal thresholds with the minimum count', () => {
+  assert.equal(sessionsNeededForRate(0, 1, 0.8), 4);
+  assert.equal(sessionsNeededForRate(0, 1, 0.9), 9);
+  assert.equal(sessionsNeededForRate(4, 5, 0.8), 0);
+  assert.equal(sessionsNeededForRate(0, Number.MAX_SAFE_INTEGER, 0.8), null);
+  assert.throws(() => sessionsNeededForRate(0, Number.MAX_SAFE_INTEGER + 1, 0.8), RangeError);
+});
+
 test('CSV quotes values and escapes spreadsheet formulas', () => {
   assert.equal(attendanceToCsv([{ studentId: '=A1', sessionId: 'a,"b', status: 'present' }]),
     'studentId,sessionId,status\r\n"\'=A1","a,""b","present"');
