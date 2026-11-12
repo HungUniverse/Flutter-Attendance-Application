@@ -51,6 +51,9 @@ class TeacherViewModel extends ChangeNotifier {
   final AttendanceDraftStore? drafts;
   TeacherWorkspace? _publishedWorkspace;
   Map<String, MeetingAttendanceDraft> _manualDrafts = {};
+  // These are already durable in checkIns. Only the final result goes into the
+  // workspace on close; rendering a new check-in must not await a workspace save.
+  final Map<String, MeetingAttendanceDraft> _liveResults = {};
   List<MeetingAttendanceDraft> get manualDrafts =>
       _manualDrafts.values.toList();
   int get draftCount =>
@@ -81,8 +84,9 @@ class TeacherViewModel extends ChangeNotifier {
   StreamSubscription<AppNotice>? _noticeSub;
   Timer? _timer;
   Timer? _liveTimer;
-  StreamSubscription<void>? _linkSub;
+  StreamSubscription<dynamic>? _linkSub;
   String? _watchingLinkId;
+  bool _linkStreamHealthy = false;
   Completer<void>? _activeOperation;
   DateTime? _noticesFetchedAt;
   bool _foreground = true;
@@ -120,6 +124,7 @@ class TeacherViewModel extends ChangeNotifier {
     workspace = null;
     _publishedWorkspace = null;
     _manualDrafts = {};
+    _liveResults.clear();
     aiReview = null;
     link = null;
     _watchLink();
@@ -254,6 +259,42 @@ class TeacherViewModel extends ChangeNotifier {
     unawaited(_linkSub?.cancel());
     _liveTimer?.cancel();
     _watchingLinkId = link?.id;
+    _linkStreamHealthy = false;
+    final session = link;
+    final generation = _generation;
+    bool isCurrent() =>
+        !disposed &&
+        generation == _generation &&
+        session != null &&
+        link?.id == session.id &&
+        _watchingLinkId == session.id;
+    if (session != null && links is RealtimeAttendanceUpdates) {
+      _linkSub = (links as RealtimeAttendanceUpdates)
+          .watchUpdates(session)
+          .listen(
+            (update) {
+              if (!isCurrent()) return;
+              try {
+                _applyLiveUpdate(update);
+                _linkStreamHealthy = true;
+              } on Object catch (failure) {
+                _linkStreamHealthy = false;
+                linkError = _friendly(failure);
+              }
+              _notify();
+            },
+            onError: (Object failure) {
+              if (!isCurrent()) return;
+              _linkStreamHealthy = false;
+              linkError = _friendly(failure);
+              _notify();
+            },
+            onDone: () {
+              if (isCurrent()) _linkStreamHealthy = false;
+            },
+          );
+      return;
+    }
     _linkSub = link == null
         ? null
         : (links as LiveAttendanceLinks)
@@ -316,7 +357,78 @@ class TeacherViewModel extends ChangeNotifier {
                   m.startAt.isAtSameMomentAs(draft.startAt),
             );
 
-  TeacherWorkspace _applyDrafts(TeacherWorkspace value) => value.copyWith(
+  TeacherWorkspace _applyDrafts(TeacherWorkspace value) =>
+      _applyManualDrafts(_applyLiveResults(value));
+
+  TeacherWorkspace _applyLiveResults(TeacherWorkspace value) {
+    _liveResults.removeWhere(
+      (_, result) => _draftMeeting(value, result)?.state != MeetingState.active,
+    );
+    return value.copyWith(
+      classes: value.classes.map((c) {
+        final records = {...c.attendance};
+        for (final m in c.meetings) {
+          final result =
+              _liveResults['${value.semester}/${c.id}/${m.id}/${m.startAt.toIso8601String()}'];
+          if (result == null) continue;
+          records[m.id] = {
+            ...?records[m.id],
+            for (final student in c.students)
+              if (result.records.containsKey(student.rollNumber) &&
+                  (c.recordFor(m.id, student.rollNumber) == null ||
+                      c.recordFor(m.id, student.rollNumber)!.status ==
+                          AttendanceStatus.unmarked))
+                student.rollNumber: result.records[student.rollNumber]!,
+          };
+        }
+        return c.copyWith(attendance: records);
+      }).toList(),
+    );
+  }
+
+  void _applyLiveUpdate(LinkUpdate update) {
+    final value = _publishedWorkspace;
+    if (value == null || link?.id != update.session.id) return;
+    final c = value.classes.firstWhereOrNull(
+      (c) => c.id == update.session.classId,
+    );
+    final m = c?.meetings.firstWhereOrNull(
+      (m) => m.id == update.session.meetingId,
+    );
+    if (c == null || m == null || m.state != MeetingState.active) return;
+    final key =
+        '${value.semester}/${c.id}/${m.id}/${m.startAt.toIso8601String()}';
+    // Both the stream and explicit poll contain the complete accepted set.
+    final records = <String, AttendanceRecord>{};
+    for (final submission in update.submissions) {
+      if (!m.isOnDate(submission.at)) continue;
+      final student = c.students.firstWhereOrNull(
+        (s) => s.normalizedEmail == submission.email.trim().toLowerCase(),
+      );
+      if (student == null) continue;
+      records.putIfAbsent(
+        student.rollNumber,
+        () => AttendanceRecord(
+          status: AttendanceStatus.present,
+          source: AttendanceSource.scan,
+          recordedAt: submission.at,
+        ),
+      );
+    }
+    _liveResults[key] = MeetingAttendanceDraft(
+      semester: value.semester,
+      classId: c.id,
+      meetingId: m.id,
+      startAt: m.startAt,
+      records: records,
+    );
+    link = update.session;
+    linkError = null;
+    // Manual selections always win. Reapply both overlays after every reload.
+    workspace = _applyDrafts(value);
+  }
+
+  TeacherWorkspace _applyManualDrafts(TeacherWorkspace value) => value.copyWith(
     classes: value.classes.map((c) {
       final records = {...c.attendance};
       for (final m in c.meetings) {
@@ -341,15 +453,21 @@ class TeacherViewModel extends ChangeNotifier {
   TeacherWorkspace _withoutOpenDrafts(TeacherWorkspace value) => value.copyWith(
     classes: value.classes.map((c) {
       final records = {...c.attendance};
-      final original = _publishedWorkspace?.classes.firstWhereOrNull(
-        (old) => old.id == c.id,
-      );
+      final original = _publishedWorkspace?.semester == value.semester
+          ? _publishedWorkspace?.classes.firstWhereOrNull(
+              (old) => old.id == c.id,
+            )
+          : null;
       for (final m in c.meetings.where((m) => m.state != MeetingState.closed)) {
-        final draft =
-            _manualDrafts['${value.semester}/${c.id}/${m.id}/${m.startAt.toIso8601String()}'];
-        if (draft == null) continue;
+        final key =
+            '${value.semester}/${c.id}/${m.id}/${m.startAt.toIso8601String()}';
+        final rolls = {
+          ...?_manualDrafts[key]?.records.keys,
+          ...?_liveResults[key]?.records.keys,
+        };
+        if (rolls.isEmpty) continue;
         final clean = {...?records[m.id]};
-        for (final roll in draft.records.keys) {
+        for (final roll in rolls) {
           final published = original?.recordFor(m.id, roll);
           if (published == null) {
             clean.remove(roll);
@@ -729,6 +847,7 @@ class TeacherViewModel extends ChangeNotifier {
         final created = await links.create(course(classId), m);
         // Retain the server handle even if local persistence fails, so Stop remains available.
         link = created;
+        _watchLink();
         await repository.saveLink(uid, created);
         linkError = null;
         await _safe(() => telemetry.event('attendance_link_created'));
@@ -738,11 +857,22 @@ class TeacherViewModel extends ChangeNotifier {
     if (current == null) return;
     final generation = _generation;
     bool isCurrent() =>
-        generation == _generation && !disposed && identical(link, current);
+        generation == _generation && !disposed && link?.id == current.id;
     try {
       final owner = uid;
       final update = await links.poll(current);
       if (!isCurrent()) return;
+      if (links is RealtimeAttendanceUpdates) {
+        _applyLiveUpdate(update);
+        _notify();
+        // Only metadata is persisted here. Accepted check-ins are already on
+        // Firestore; close() freezes and polls them before one final result save.
+        if (current.receiving != update.session.receiving ||
+            current.expiresAt != update.session.expiresAt) {
+          await repository.saveLink(owner, update.session);
+        }
+        return;
+      }
       final original = course(current.classId);
       var c = original;
       final m = meeting(current.classId, current.meetingId);
@@ -907,7 +1037,7 @@ class TeacherViewModel extends ChangeNotifier {
       }
       _notify();
     }
-    await _refreshLink();
+    if (!background || !_linkStreamHealthy) await _refreshLink();
     if (generation != _generation || disposed) return;
     await _reconcile();
     if (generation != _generation || disposed) return;
