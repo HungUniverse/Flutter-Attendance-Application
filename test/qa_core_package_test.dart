@@ -118,6 +118,8 @@ void main() {
       );
 
       final closed = service.closeMeeting(course, 'm1', now: now);
+      expect(closed.attendance['m1']?.containsKey('se194673'), isFalse);
+      expect(closed.attendance['m1']?.containsKey('SE194673'), isTrue);
       expect(
         closed.recordFor('m1', 'SE194673')?.status,
         equals(AttendanceStatus.present),

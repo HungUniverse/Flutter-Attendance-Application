@@ -84,17 +84,19 @@ class AttendanceService {
       final canonicalRoll = student.rollNumber;
       final normalizedRoll = canonicalRoll.trim().toUpperCase();
       final existing = courseClass.recordFor(meetingId, canonicalRoll);
+      records.removeWhere(
+        (key, _) =>
+            key != canonicalRoll &&
+            key.trim().toUpperCase() == normalizedRoll,
+      );
       if (existing == null || existing.status == AttendanceStatus.unmarked) {
-        records.removeWhere(
-          (key, _) =>
-              key != canonicalRoll &&
-              key.trim().toUpperCase() == normalizedRoll,
-        );
         records[canonicalRoll] = AttendanceRecord(
           status: AttendanceStatus.absent,
           source: AttendanceSource.finalize,
           recordedAt: recordedAt,
         );
+      } else {
+        records[canonicalRoll] = existing;
       }
     }
     return courseClass.copyWith(

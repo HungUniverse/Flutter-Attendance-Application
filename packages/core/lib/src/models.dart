@@ -272,6 +272,7 @@ class CourseClass {
   final List<AuditEvent> auditEvents;
 
   CourseClass copyWith({
+    String? scheduleCode,
     List<Student>? students,
     ScheduleRule? scheduleRule,
     List<Meeting>? meetings,
@@ -281,7 +282,7 @@ class CourseClass {
     id: id,
     courseCode: courseCode,
     classCode: classCode,
-    scheduleCode: scheduleCode,
+    scheduleCode: scheduleCode ?? this.scheduleCode,
     students: students ?? this.students,
     scheduleRule: scheduleRule ?? this.scheduleRule,
     meetings: meetings ?? this.meetings,
