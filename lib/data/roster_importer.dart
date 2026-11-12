@@ -27,11 +27,10 @@ class RosterImporter {
 
   final ScheduleService _scheduleService;
 
-  static String? semesterFromFileName(String fileName) =>
-      RegExp(r'^(FA|SP|SU)\d{2}(?=[_ .-]|$)', caseSensitive: false)
-          .firstMatch(fileName.split(RegExp(r'[/\\]')).last)
-          ?.group(0)
-          ?.toUpperCase();
+  static String? semesterFromFileName(String fileName) => RegExp(
+    r'^(FA|SP|SU)\d{2}(?=[_ .-]|$)',
+    caseSensitive: false,
+  ).firstMatch(fileName.split(RegExp(r'[/\\]')).last)?.group(0)?.toUpperCase();
 
   RosterImportResult importBytes(
     Uint8List bytes, {
@@ -91,8 +90,9 @@ class RosterImporter {
     required int weeks,
     required int meetingsPerWeek,
   }) {
-    final nameMatch = RegExp(r'^([1-3][1-4])_([A-Za-z0-9]+)(?:_([A-Za-z0-9_-]+))?$')
-        .firstMatch(sheetName.trim());
+    final nameMatch = RegExp(
+      r'^([1-3][1-4])_([A-Za-z0-9]+)(?:_([A-Za-z0-9_-]+))?$',
+    ).firstMatch(sheetName.trim());
     if (nameMatch == null) {
       throw const RosterImportException(
         'Tên sheet phải có dạng 11_PRM393_MaLop.',

@@ -360,11 +360,12 @@ class TeacherWorkspace {
     List<CourseClass>? classes,
     String? teacherEmail,
     DateTime? updatedAt,
+    DateTime? semesterStart,
   }) => TeacherWorkspace(
     schemaVersion: schemaVersion,
     id: id,
     semester: semester,
-    semesterStart: semesterStart,
+    semesterStart: semesterStart ?? this.semesterStart,
     teacherEmail: teacherEmail ?? this.teacherEmail,
     classes: classes ?? this.classes,
     updatedAt: updatedAt ?? this.updatedAt,

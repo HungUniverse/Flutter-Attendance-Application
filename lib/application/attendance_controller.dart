@@ -293,6 +293,7 @@ class AttendanceController extends ChangeNotifier {
           imported: result.classes,
         );
         workspace = previous.copyWith(
+          semesterStart: previous.classes.isEmpty ? semesterStart : null,
           classes: mergeResult.classes,
           teacherEmail: teacherEmail.trim().isEmpty
               ? previous.teacherEmail
