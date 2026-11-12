@@ -19,6 +19,19 @@ roster and session list, and reports coverage. A candidate snapshot is included
 only when the import is valid; incomplete attendance remains a warning for the
 reviewer. The browser offers the same preview before opening the resulting copy.
 
+`map-suggest` inspects only CSV headers and suggests the roster or attendance
+field mapping. It recognizes common English and Vietnamese column names and
+flags ambiguous or approximate matches for review. `map-preview` accepts comma,
+semicolon, tab or pipe separated files, localized attendance statuses, manual
+header mappings, custom status aliases, and explicit duplicate-row policies.
+Its options JSON can contain `rosterOptions` and `attendanceOptions`, each with
+`delimiter`, `mapping` and `duplicatePolicy`; attendance options can also set
+`statusAliases`. By default duplicates are errors. `first` and `last` policies
+must be chosen explicitly and are recorded as warnings. Missing statuses become
+unrecorded cells. No partial snapshot is returned while errors remain.
+`map-issues-csv` exports row diagnostics without copying source-cell values.
+CSV input is limited to 20 MB, 500,000 rows and 256 columns.
+
 The `report` command shows coverage and missing pairs. `forecast` estimates
 attendance after the supplied number of future sessions, and leaves students
 with missing historical results without a forecast. `apply` accepts a JSON

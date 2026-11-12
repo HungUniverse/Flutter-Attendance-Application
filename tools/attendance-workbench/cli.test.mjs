@@ -186,3 +186,34 @@ test('anonymizes snapshots, class bundles and revision archives from explicit lo
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('maps localized CSV headers and previews explicit status and duplicate policies', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'attendance-workbench-map-'));
+  try {
+    const roster = join(dir, 'students.csv');
+    const attendance = join(dir, 'marks.csv');
+    const sessions = join(dir, 'sessions.json');
+    const options = join(dir, 'mapping.json');
+    const run = (...args) => execFileSync(process.execPath, [cli, ...args], { encoding: 'utf8' });
+    await writeFile(roster, 'MSSV;Họ và tên;Email sinh viên\nA001;Nguyễn An;an@example.test\n');
+    await writeFile(attendance, 'Mã sinh viên|Buổi học|Trạng thái\nA001|D1|Có mặt\nA001|D2|chưa ghi\n');
+    await writeFile(sessions, '["D1","D2"]');
+    const suggested = JSON.parse(run('map-suggest', roster, 'roster'));
+    assert.equal(suggested.ready, true);
+    const preview = JSON.parse(run('map-preview', roster, attendance, sessions));
+    assert.equal(preview.ready, true);
+    assert.equal(preview.summary.attendance.explicitMissing, 1);
+    assert.equal(preview.snapshot.records.length, 1);
+    await writeFile(attendance, 'Student ID|Session ID|Status\nA001|D1|P\nA001|D1|A\n');
+    await writeFile(options, JSON.stringify({ attendanceOptions: {
+      mapping: { studentId: 'Student ID', sessionId: 'Session ID', status: 'Status' },
+      statusAliases: { present: ['P'], absent: ['A'] }, duplicatePolicy: 'last',
+    } }));
+    const resolved = JSON.parse(run('map-preview', roster, attendance, sessions, options));
+    assert.equal(resolved.ready, true);
+    assert.equal(resolved.snapshot.records[0].status, 'absent');
+    assert.match(run('map-issues-csv', roster, attendance, sessions, options), /duplicate_replaced/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

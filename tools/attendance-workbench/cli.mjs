@@ -31,6 +31,7 @@ import { appendArchiveRevision, archiveToCsv, compareArchiveRevisions, createArc
   parseArchive, restoreArchiveRevision, serializeArchive } from './archive.mjs';
 import { generateSyntheticDataset, listSyntheticProfiles, summarizeDatasetSnapshot } from './dataset-lab.mjs';
 import { anonymizeArchive, anonymizeBundle, anonymizeSnapshot, anonymizationReport } from './privacy.mjs';
+import { mappedImportIssuesToCsv, parseDelimitedCsv, previewMappedImport, suggestHeaderMapping } from './import-studio.mjs';
 
 const usage = `Attendance workbench (Node.js 22+)
 
@@ -64,6 +65,9 @@ const usage = `Attendance workbench (Node.js 22+)
   node cli.mjs anonymize-bundle BUNDLE.json OPTIONS.json
   node cli.mjs anonymize-archive ARCHIVE.json OPTIONS.json
   node cli.mjs anonymize-report SNAPSHOT.json OPTIONS.json
+  node cli.mjs map-suggest CSV.csv roster|attendance [DELIMITER]
+  node cli.mjs map-preview ROSTER.csv ATTENDANCE.csv SESSIONS.json [OPTIONS.json]
+  node cli.mjs map-issues-csv ROSTER.csv ATTENDANCE.csv SESSIONS.json [OPTIONS.json]
   node cli.mjs apply SNAPSHOT.json CHANGES.json
   node cli.mjs compare BEFORE.json AFTER.json
   node cli.mjs export-csv SNAPSHOT.json
@@ -326,6 +330,24 @@ export async function runCommand(args) {
       requireArgs(values, 2);
       const [archive, optionsText] = await Promise.all([readText(values[0]), readText(values[1])]);
       return `${JSON.stringify(anonymizeArchive(archive, JSON.parse(optionsText)), null, 2)}\n`;
+    }
+    case 'map-suggest': {
+      if (values.length < 2 || values.length > 3) throw new TypeError('expected CSV file, roster or attendance, and optional delimiter');
+      const parsed = parseDelimitedCsv(await readText(values[0]), { delimiter: values[2] });
+      if (!parsed.rows.length) throw new TypeError('CSV must have a header');
+      return json(suggestHeaderMapping(parsed.rows[0].fields.map((field) => field.trim()), values[1]));
+    }
+    case 'map-preview':
+    case 'map-issues-csv': {
+      if (values.length < 3 || values.length > 4) throw new TypeError('expected roster CSV, attendance CSV, sessions JSON and optional mapping options JSON');
+      const [rosterCsv, attendanceCsv, sessionsText, optionsText] = await Promise.all([
+        readText(values[0]), readText(values[1]), readText(values[2]), values[3] ? readText(values[3]) : Promise.resolve('{}'),
+      ]);
+      const config = JSON.parse(optionsText);
+      if (!config || typeof config !== 'object' || Array.isArray(config)) throw new TypeError('mapping options must be an object');
+      const preview = previewMappedImport({ rosterCsv, attendanceCsv, sessions: sessionsText,
+        rosterOptions: config.rosterOptions, attendanceOptions: config.attendanceOptions });
+      return command === 'map-issues-csv' ? mappedImportIssuesToCsv(preview) : json(preview);
     }
     default:
       throw new TypeError(`unknown command: ${command}; use --help`);
