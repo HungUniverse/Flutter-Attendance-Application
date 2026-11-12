@@ -26,7 +26,7 @@ void main() {
             'classId': 'c1',
             'meetingId': 'm1',
             'url': 'https://attendance.test/join/token',
-            'expiresAt': '2026-11-05T23:59:59+07:00',
+            'expiresAt': DateTime.now().add(const Duration(hours: 1)).toUtc().toIso8601String(),
             'receiving': true,
             'code': '123456',
           }),

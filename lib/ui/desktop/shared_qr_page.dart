@@ -48,16 +48,27 @@ class _SharedQrPageState extends State<SharedQrPage> {
     try {
       final service = widget.controller.sharedLinks!;
       final course = widget.controller.classById(widget.classId);
-      final meeting = widget.controller.meetingById(widget.classId, widget.meetingId);
-      session = service is HttpAttendanceLinkService ? await service.createQr(
-        course, meeting,
-        otp: widget.mode == QrMode.otp,
-      ) : await service.create(course, meeting);
+      final meeting = widget.controller.meetingById(
+        widget.classId,
+        widget.meetingId,
+      );
+      session = service is HttpAttendanceLinkService
+          ? await service.createQr(
+              course,
+              meeting,
+              otp: widget.mode == QrMode.otp,
+            )
+          : await service.create(course, meeting);
       if (service is LiveAttendanceLinks) {
         await subscription?.cancel();
-        subscription = service.changes(session!).listen((_) => unawaited(_poll()), onError: (Object e) {
-          if (mounted) setState(() => error = '$e');
-        });
+        subscription = service
+            .changes(session!)
+            .listen(
+              (_) => unawaited(_poll()),
+              onError: (Object e) {
+                if (mounted) setState(() => error = '$e');
+              },
+            );
       }
       error = null;
     } on Object catch (e) {
@@ -125,7 +136,10 @@ class _SharedQrPageState extends State<SharedQrPage> {
           0;
       final current = session;
       final closed = m.state == MeetingState.closed;
-      final receiving = current?.receiving == true && current!.expiresAt.isAfter(DateTime.now()) && !closed;
+      final receiving =
+          current?.receiving == true &&
+          current!.expiresAt.isAfter(DateTime.now()) &&
+          !closed;
       final status = closed
           ? 'Đã chốt'
           : receiving
@@ -149,7 +163,7 @@ class _SharedQrPageState extends State<SharedQrPage> {
           constraints: const BoxConstraints(maxWidth: 320),
           child: receiving
               ? QrImageView(
-                  data: current!.url,
+                  data: current.url,
                   size: 320,
                   backgroundColor: Colors.white,
                   semanticsLabel: 'Mã QR điểm danh',
@@ -179,25 +193,25 @@ class _SharedQrPageState extends State<SharedQrPage> {
             style: text.displaySmall?.copyWith(fontWeight: FontWeight.w800),
           ),
           Text('Sinh viên có mặt', style: text.bodyMedium),
-          if (receiving && current?.code != null) ...[
+          if (receiving && current.code != null) ...[
             const SizedBox(height: 16),
             Text('Mã xác nhận', style: text.bodyMedium),
             SelectableText(
-              current!.code!,
+              current.code!,
               style: text.headlineMedium?.copyWith(letterSpacing: 4),
             ),
           ],
           const SizedBox(height: 20),
           if (receiving)
             OutlinedButton.icon(
-              onPressed: () => _copyLink(current!.url),
+              onPressed: () => _copyLink(current.url),
               icon: const Icon(Icons.copy_rounded, size: 18),
               label: const Text('Sao chép link'),
             )
-          else if (current == null && !closed && !working)
+          else if (!closed && !working)
             OutlinedButton(
               onPressed: _start,
-              child: const Text('Thử mở lại QR'),
+              child: const Text('Tạo lại QR'),
             ),
           if (!closed) ...[
             const SizedBox(height: 8),
