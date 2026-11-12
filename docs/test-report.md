@@ -90,3 +90,9 @@ Windows dùng App Check debug provider cho bản demo. Cách setup và tái ch�
 Người dùng xác nhận admin là chủ hệ thống quản lý giảng viên. `/admin` được thay bằng CRUD hồ sơ giảng viên, khóa/mở lại và xóa quyền, có audit. Cổng quản lý lớp chuyển sang `/teacher`. Danh mục `teacherDirectory` thay quyền teacher cũ trong `users`; `users.role == admin` chỉ được cấp bằng công cụ chủ project. Công cụ bootstrap đã ghi và đọc lại tài khoản admin được chỉ định, chuyển hồ sơ giảng viên cũ một lần.
 
 Không chạy thêm test theo yêu cầu trước đó; số liệu Rules/DOM ở trên thuộc lượt trước khi đổi mô hình phân quyền. Kiểm tra biên dịch Rules diễn ra khi deploy. Chưa kiểm chứng CRUD trên trình duyệt thật hoặc đăng nhập thiết bị thật trong lượt này.
+
+## Bản nháp Android và mốc thời gian link
+
+Bản 1.0.1+2 bổ sung journal P/A thủ công trên thiết bị, tách snapshot đã đồng bộ và lớp phủ bản nháp, gửi các lựa chọn khi chốt. Link dùng giai đoạn chuẩn bị dừng nhận để lấy server timestamp rồi mở trong transaction tiếp theo; Rules giữ giới hạn hai phút và chặn check-in trước khi mở. Xem [phạm vi và giới hạn](android-attendance-drafts.md).
+
+Không chạy lại bộ test cũ; các kỳ vọng lưu ngay sau từng `mark()` của bộ TeacherViewModel trước đây không mô tả luồng nháp mới. Không có thiết bị ADB để xác nhận lỗi tạo link thực tế; mã lỗi Firebase nay được hiển thị để tiếp tục chẩn đoán khi cần. Phân tích mã tĩnh trên các tệp sửa không có lỗi.
