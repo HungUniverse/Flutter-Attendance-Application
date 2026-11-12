@@ -2,11 +2,11 @@
 
 ## Phạm vi đã chốt
 
-Android, Windows và web quản lý dành cho giảng viên. Sinh viên dùng web check-in, hộp thư và yêu cầu sửa kết quả. Người dùng đã yêu cầu triển khai tiếp web quản lý. Repo Flutter tiếp tục build tại thư mục gốc, `packages/core/` chứa model và nghiệp vụ dùng chung.
+Admin quản lý đội ngũ giảng viên tại `/admin`. Android, Windows và `/teacher` dành cho giảng viên quản lý lớp của mình. Sinh viên dùng web check-in, hộp thư và yêu cầu sửa kết quả. Repo Flutter tiếp tục build tại thư mục gốc, `packages/core/` chứa model và nghiệp vụ dùng chung.
 
 Project là `fap-attendance-71655`. Web được phục vụ tại [FAP Attendance](https://fap-attendance-71655.web.app). Trang gốc hướng dẫn mở QR, link điểm danh cụ thể nằm ở `/join/{sessionId}`.
 
-Giảng viên mở [/admin](https://fap-attendance-71655.web.app/admin). Sinh viên mở [/student](https://fap-attendance-71655.web.app/student) để xem hộp thư và yêu cầu. Chi tiết chức năng và luồng duyệt nằm trong [hướng dẫn web quản lý](admin-web.md).
+Chủ hệ thống mở [/admin](https://fap-attendance-71655.web.app/admin), giảng viên mở [/teacher](https://fap-attendance-71655.web.app/teacher). Sinh viên mở [/student](https://fap-attendance-71655.web.app/student). Chi tiết phân quyền và luồng duyệt nằm trong [hướng dẫn web quản lý](admin-web.md).
 
 Nhập danh sách theo [định dạng Markbook giảng viên](markbook-format.md). Lịch FA26 dùng mốc 07/09/2026; slot 1 là 07:30–09:15. Web có nút **Nạp Markbook** để xem trước và chọn các sheet.
 
@@ -28,7 +28,13 @@ App Check setup tạo `mobile/firebase-debug.json` riêng trên máy, đăng ký
 
 Google Sign-In cần SHA-1 và SHA-256 của keystore dùng để ký APK. Đăng ký bằng `apps:android:sha:create`, rồi tải lại `google-services.json`. Hai fingerprint của APK debug trên máy triển khai đã được đăng ký và đối chiếu bằng `apksigner`.
 
-Chủ project cấp tài khoản giảng viên bằng email Google cụ thể.
+Chủ project cấp admin ban đầu bằng email Google cụ thể. Công cụ đọc lại vai trò để xác minh và chuyển quyền giảng viên cũ sang danh mục một lần.
+
+```powershell
+node firebase/provision-admin.mjs administrator@gmail.com
+```
+
+Sau đó admin thêm/sửa/khóa/xóa giảng viên trực tiếp trong `/admin`. Công cụ CLI dưới đây vẫn có thể cấp quyền giảng viên cho chủ project, giữ vai trò admin nếu tài khoản đã là admin.
 
 ```powershell
 npm run provision:teacher --prefix firebase -- lecturer@example.com

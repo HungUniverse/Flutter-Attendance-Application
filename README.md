@@ -5,7 +5,7 @@
 ## Firebase Final
 
 - Web check-in tại [FAP Attendance](https://fap-attendance-71655.web.app). Sinh viên mở link `/join/{sessionId}` do giảng viên tạo.
-- [Web quản lý giảng viên](https://fap-attendance-71655.web.app/admin): lớp học, dashboard, duyệt yêu cầu sửa điểm danh và soạn thông báo. [Trang sinh viên](https://fap-attendance-71655.web.app/student) có hộp thư và theo dõi yêu cầu.
+- [Admin hệ thống](https://fap-attendance-71655.web.app/admin): thêm, sửa, khóa/mở lại và xóa hồ sơ giảng viên. [Không gian giảng viên](https://fap-attendance-71655.web.app/teacher): lớp học, dashboard, duyệt yêu cầu sửa điểm danh và soạn thông báo. [Trang sinh viên](https://fap-attendance-71655.web.app/student) có hộp thư và theo dõi yêu cầu.
 - Giảng viên dùng Google Sign-In và hồ sơ quyền được chủ project cấp. Sinh viên đăng nhập Google với email đã xác minh trong roster.
 - Có điểm danh thủ công, link/QR, cập nhật lượt gửi, chốt, sửa có lý do, xuất PDF/CSV/JSON trên thiết bị và metadata Firestore.
 - Android duy trì Analytics, Remote Config, Crashlytics, hộp thư Firestore và gợi ý AI có thể sửa/xác nhận.
