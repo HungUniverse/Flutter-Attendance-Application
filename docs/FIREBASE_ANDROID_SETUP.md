@@ -67,7 +67,7 @@ Nếu chưa muốn bật, vẫn làm được phần local, Auth và UI; phần 
    Publish, kể cả khi đã từng cấu hình rules cho đường dẫn cũ.
 3. Nếu tạo bucket sau khi tải JSON, tải lại cấu hình để có đúng storage bucket.
 4. Trong app, chốt buổi học > Xuất file > chọn sao lưu Firebase Storage.
-5. Kiểm tra tiến độ, URL và file tại
+5. Kiểm tra tiến độ và file trong Storage → Files tại
    `reports/{uid}/{học kỳ}/{môn}/{lớp}/{ngày}_Slot-{số buổi}/{tên tệp}`.
    App hiển thị thư mục đích sau khi xuất. Xem [STORAGE_LAYOUT.md](STORAGE_LAYOUT.md)
    để đối chiếu ví dụ và cách xử lý báo cáo cũ.
