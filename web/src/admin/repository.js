@@ -91,8 +91,8 @@ export class AdminRepository {
     });
   }
   async workspaceForSemester(value) {
-    const id=await hashId(`${this.uid}/${semesterCode(value)}`);
-    const snapshot=await getDocFromServer(this.ref(`workspaces/${id}`));
+    const id = await hashId(`${this.uid}/${semesterCode(value)}`);
+    const snapshot = await getDocFromServer(this.ref(`workspaces/${id}`));
     return snapshot.exists() ? this.loadWorkspace(id) : undefined;
   }
   advance(tx, workspace, changes = {}) {
@@ -163,7 +163,11 @@ export class AdminRepository {
               updatedAt: null,
             },
           };
-      if (!Object.keys(workspace.layout).length) workspace.data={...workspace.data,semesterStart:`${start}T00:00:00.000`};
+      if (!Object.keys(workspace.layout).length)
+        workspace.data = {
+          ...workspace.data,
+          semesterStart: `${start}T00:00:00.000`,
+        };
       this.advance(tx, workspace, {
         layout: { ...workspace.layout, [classId]: meetings.map((m) => m.id) },
       });
@@ -195,7 +199,7 @@ export class AdminRepository {
           dayStart: Timestamp.fromDate(m.dayStart),
           dayEnd: Timestamp.fromDate(m.dayEnd),
         });
-      return { workspaceId, classId, revision:workspace.revision+1 };
+      return { workspaceId, classId, revision: workspace.revision + 1 };
     });
   }
   async editClass(course, students, input, expectedRevision) {

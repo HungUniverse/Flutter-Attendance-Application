@@ -26,7 +26,7 @@ export function parseRoster(text, previous = [], expectedClass = "") {
   const rows = String(text)
     .split(/\r?\n/)
     .filter((line) => line.trim())
-    .filter(line => !/^\s*Class\s*[|\t]\s*RollNumber\s*[|\t]/i.test(line));
+    .filter((line) => !/^\s*Class\s*[|\t]\s*RollNumber\s*[|\t]/i.test(line));
   if (!rows.length || rows.length > 200)
     throw new AdminError("Danh sách cần từ 1 đến 200 sinh viên.");
   return rows.map((line, index) => {
@@ -37,9 +37,18 @@ export function parseRoster(text, previous = [], expectedClass = "") {
       throw new AdminError(
         `Dòng ${index + 1}: dùng năm cột Class | RollNumber | Email | MemberCode | FullName.`,
       );
-    const standard=cells.length>=5;
-    if(standard && expectedClass && cells[0].toUpperCase()!==expectedClass.trim().toUpperCase())throw new AdminError(`Dòng ${index+1}: cột Class phải là ${expectedClass}.`);
-    const [roll, name, address] = standard ? [cells[1],cells[4],cells[2]] : cells;
+    const standard = cells.length >= 5;
+    if (
+      standard &&
+      expectedClass &&
+      cells[0].toUpperCase() !== expectedClass.trim().toUpperCase()
+    )
+      throw new AdminError(
+        `Dòng ${index + 1}: cột Class phải là ${expectedClass}.`,
+      );
+    const [roll, name, address] = standard
+      ? [cells[1], cells[4], cells[2]]
+      : cells;
     const rollNumber = required(
       roll,
       `MSSV dòng ${index + 1}`,
@@ -70,7 +79,10 @@ export function parseRoster(text, previous = [], expectedClass = "") {
 }
 export const rosterText = (students, classCode = "") =>
   (students || [])
-    .map((s) => `${classCode} | ${s.rollNumber} | ${s.email} | ${s.memberCode || ""} | ${s.fullName}`)
+    .map(
+      (s) =>
+        `${classCode} | ${s.rollNumber} | ${s.email} | ${s.memberCode || ""} | ${s.fullName}`,
+    )
     .join("\n");
 export const rosterMap = (students) =>
   Object.fromEntries(students.map((s) => [s.email, s.rollNumber]));
