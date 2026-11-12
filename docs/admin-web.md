@@ -11,7 +11,7 @@ Web quản lý dùng vai trò `teacher` hiện có, không thêm vai trò quản
 ## Chức năng
 
 - Tổng quan có ba truy vấn `count()` phía Firestore: lớp chưa lưu trữ, yêu cầu chờ duyệt, metadata báo cáo. Các thẻ tính trên tất cả học kỳ của tài khoản. Biểu đồ P/A/chưa ghi tính từ buổi đang mở và đã chốt trong học kỳ được chọn; không tính buổi sắp diễn ra.
-- Tạo lớp, sinh lịch theo nhóm và slot của core, xem danh sách và từng buổi, sửa mã lớp/môn và roster, lưu trữ lớp. Dán ba cột MSSV, họ tên, email từ Excel hoặc nhập `MSSV | Họ tên | Email`, mỗi dòng một sinh viên; tối đa 200 sinh viên. Import ODS/XLSX vẫn thực hiện trong Android/Windows.
+- Tạo lớp, sinh lịch theo nhóm và slot của core, xem danh sách và từng buổi, sửa mã lớp/môn và roster, lưu trữ lớp. **Nạp Markbook** hỗ trợ ODS/XLSX trực tiếp trên web, có bản xem trước và chọn sheet. Form thủ công dùng năm cột `Class | RollNumber | Email | MemberCode | FullName`, tối đa 200 sinh viên/lớp. Xem [mẫu Markbook và quy tắc lịch](markbook-format.md).
 - Sửa roster không được bỏ MSSV đã có kết quả. Khi đã có buổi chốt, không thêm MSSV mới để tránh kết quả trống trong lịch sử. Lưu trữ giữ document và lịch sử; phải chốt buổi đang hoạt động trước. Giao diện chưa có khôi phục lớp đã lưu trữ.
 - Hàng chờ yêu cầu của sinh viên: đọc kết quả hiện tại, duyệt hoặc từ chối với lý do bắt buộc. Duyệt cập nhật kết quả, audit, revision workspace, trạng thái yêu cầu và thông báo trong cùng transaction. Quyết định đã xử lý không được xử lý lại.
 - Soạn thông báo cho toàn bộ email trong roster hoặc hộp thư giảng viên trên Android, có thể gắn một buổi. Thông báo lớp được gửi bằng một batch; sinh viên đọc tại `/student`. Đây là hộp thư Firestore, chưa gửi push FCM từ web.

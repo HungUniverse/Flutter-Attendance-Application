@@ -12,6 +12,7 @@
 - [Cách chạy và deploy Final](docs/FINAL_SETUP.md), [mô hình dữ liệu](docs/data-model.md), [luồng liên vai trò](docs/cross-role-flow.md), [báo cáo kiểm thử](docs/test-report.md).
 - AI Logic hiện trả HTTP 429 do project hết credit trả trước. Chốt điểm danh vẫn hoạt động. Tình trạng thực tế được ghi trong [AI feature](docs/ai-feature.md).
 - [Hướng dẫn web quản lý](docs/admin-web.md). Bản báo cáo/slide PDF và video nộp bài cần bổ sung theo mã số sinh viên và minh chứng thực tế.
+- [Định dạng Markbook và lịch giảng viên](docs/markbook-format.md): nạp ODS/XLSX, giữ năm cột danh tính và nhận lịch theo tên sheet. FA26 bắt đầu 07/09/2026, slot 1 lúc 07:30.
 
 ```powershell
 flutter pub get

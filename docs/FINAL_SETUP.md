@@ -8,6 +8,8 @@ Project là `fap-attendance-71655`. Web được phục vụ tại [FAP Attendan
 
 Giảng viên mở [/admin](https://fap-attendance-71655.web.app/admin). Sinh viên mở [/student](https://fap-attendance-71655.web.app/student) để xem hộp thư và yêu cầu. Chi tiết chức năng và luồng duyệt nằm trong [hướng dẫn web quản lý](admin-web.md).
 
+Nhập danh sách theo [định dạng Markbook giảng viên](markbook-format.md). Lịch FA26 dùng mốc 07/09/2026; slot 1 là 07:30–09:15. Web có nút **Nạp Markbook** để xem trước và chọn các sheet.
+
 ## Chuẩn bị máy phát triển
 
 Yêu cầu Flutter 3.47.4 / Dart 3.13.3, Node.js 24, Java 21 và Android SDK. Windows cần Visual Studio Build Tools với C++. Các phiên bản thực tế được ghi trong báo cáo kiểm thử.
