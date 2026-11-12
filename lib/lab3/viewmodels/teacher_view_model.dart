@@ -209,13 +209,17 @@ class TeacherViewModel extends ChangeNotifier {
     unawaited(_linkSub?.cancel());
     _liveTimer?.cancel();
     _watchingLinkId = link?.id;
-    _linkSub = link == null ? null : (links as LiveAttendanceLinks).changes(link!).listen(
-      (_) => _scheduleLiveRefresh(),
-      onError: (Object error) {
-        linkError = _friendly(error);
-        _notify();
-      },
-    );
+    _linkSub = link == null
+        ? null
+        : (links as LiveAttendanceLinks)
+              .changes(link!)
+              .listen(
+                (_) => _scheduleLiveRefresh(),
+                onError: (Object error) {
+                  linkError = _friendly(error);
+                  _notify();
+                },
+              );
   }
 
   void _scheduleLiveRefresh() {
@@ -439,6 +443,10 @@ class TeacherViewModel extends ChangeNotifier {
         if (meeting(classId, meetingId).state != MeetingState.active) {
           throw const AppProblem('Buổi học chưa mở hoặc đã chốt.');
         }
+        if (links is LiveAttendanceLinks) {
+          link = await (links as LiveAttendanceLinks).forMeeting(course(classId), meeting(classId, meetingId));
+          await repository.saveLink(uid, link);
+        }
         if (link != null) {
           // Freeze the server, then retrieve all accepted submissions before finalizing.
           await links.stop(link!);
@@ -464,17 +472,26 @@ class TeacherViewModel extends ChangeNotifier {
         message = 'Đã chốt. Các ô chưa ghi đã chuyển thành Absent.';
       });
 
-  Future<bool> requestAiReview(String classId, String meetingId) => _run('ai_review', () async {
-    aiReview = null;
-    if (ai == null || !settings.enableAi) throw const AppProblem('Gợi ý AI đang tắt. Bạn có thể tiếp tục chốt.');
-    final owner = uid;
-    final totals = counts(classId, meetingId);
-    final review = await ai!.review(present: totals[AttendanceStatus.present]!, absent: totals[AttendanceStatus.absent]!, unmarked: totals[AttendanceStatus.unmarked]!);
-    if (uid == owner && !disposed) aiReview = review;
-  });
+  Future<bool> requestAiReview(String classId, String meetingId) => _run(
+    'ai_review',
+    () async {
+      aiReview = null;
+      if (ai == null || !settings.enableAi)
+        throw const AppProblem('Gợi ý AI đang tắt. Bạn có thể tiếp tục chốt.');
+      final owner = uid;
+      final totals = counts(classId, meetingId);
+      final review = await ai!.review(
+        present: totals[AttendanceStatus.present]!,
+        absent: totals[AttendanceStatus.absent]!,
+        unmarked: totals[AttendanceStatus.unmarked]!,
+      );
+      if (uid == owner && !disposed) aiReview = review;
+    },
+  );
 
   Future<bool> acceptAiReview(String edited) => _run('ai_accept', () async {
-    if (aiReview == null || ai == null) throw const AppProblem('Hãy lấy gợi ý AI trước.');
+    if (aiReview == null || ai == null)
+      throw const AppProblem('Hãy lấy gợi ý AI trước.');
     await ai!.accept(edited);
     message = 'Đã xác nhận nội dung kiểm tra AI.';
   });
@@ -629,7 +646,9 @@ class TeacherViewModel extends ChangeNotifier {
       workspace = loaded;
       await _clearClosedLink(owner, link);
       if (generation != _generation || disposed) return;
-      if (workspace != null && (links is HttpAttendanceLinkService || links is LiveAttendanceLinks)) {
+      if (workspace != null &&
+          (links is HttpAttendanceLinkService ||
+              links is LiveAttendanceLinks)) {
         final recovered = links is LiveAttendanceLinks
             ? await (links as LiveAttendanceLinks).current()
             : await (links as HttpAttendanceLinkService).current();
@@ -663,6 +682,14 @@ class TeacherViewModel extends ChangeNotifier {
         (m) => m.state != MeetingState.closed && m.isBeforeDate(now()),
       ),
     )) {
+      if (link == null && links is LiveAttendanceLinks) {
+        for (final c in value.classes) {
+          for (final m in c.meetings.where((m) => m.state == MeetingState.active && m.isBeforeDate(now()))) {
+            link = await (links as LiveAttendanceLinks).forMeeting(c, m);
+            if (link != null) await repository.saveLink(uid, link);
+          }
+        }
+      }
       // Retrieve last accepted link results while the session is still locally active.
       if (link != null &&
           meeting(link!.classId, link!.meetingId).isBeforeDate(now())) {
@@ -737,7 +764,8 @@ class TeacherViewModel extends ChangeNotifier {
         () => telemetry.event('attendance_exported', {'format': format}),
       );
       final reports = repository is SyncedMobileWorkspaceRepository
-          ? (repository as SyncedMobileWorkspaceRepository).reports : null;
+          ? (repository as SyncedMobileWorkspaceRepository).reports
+          : null;
       message = reports?.warning ?? 'Đã lưu file trên thiết bị.';
     },
   );
@@ -749,7 +777,10 @@ class TeacherViewModel extends ChangeNotifier {
     }
     cloudUrl = null;
     uploadProgress = 0;
-    if (uploads == null) throw const AppProblem('Báo cáo Final được lưu và chia sẻ trên thiết bị.');
+    if (uploads == null)
+      throw const AppProblem(
+        'Báo cáo Final được lưu và chia sẻ trên thiết bị.',
+      );
     cloudUrl = await uploads!.upload(file, destination, (progress) {
       uploadProgress = progress;
       _notify();

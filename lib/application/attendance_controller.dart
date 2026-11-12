@@ -106,10 +106,16 @@ class AttendanceController extends ChangeNotifier {
     notifyListeners();
     try {
       await desktopAuth.signIn();
-      final remote = finalFirebase ? FirestoreWorkspaceRemote(FirebaseFirestore.instance, desktopAuth) : null;
+      final remote = finalFirebase
+          ? FirestoreWorkspaceRemote(FirebaseFirestore.instance, desktopAuth)
+          : null;
       if (remote != null) {
-        try { await remote.requireTeacher(); }
-        on Object { await desktopAuth.signOut(); rethrow; }
+        try {
+          await remote.requireTeacher();
+        } on Object {
+          await desktopAuth.signOut();
+          rethrow;
+        }
       }
       if (sync == null && workspace != null) _legacyWorkspace = workspace;
       final documents = await getApplicationDocumentsDirectory();
@@ -122,8 +128,13 @@ class AttendanceController extends ChangeNotifier {
       sync!.addListener(notifyListeners);
       _store = SyncedDesktopStore(sync!, desktopAuth.current!.uid);
       sharedLinks = finalFirebase
-          ? FirestoreAttendanceLinks(FirebaseFirestore.instance, desktopAuth, () => workspace?.semester,
-              hostingUrl: 'https://${FirebaseFirestore.instance.app.options.projectId}.web.app')
+          ? FirestoreAttendanceLinks(
+              FirebaseFirestore.instance,
+              desktopAuth,
+              () => workspace?.semester,
+              hostingUrl:
+                  'https://${FirebaseFirestore.instance.app.options.projectId}.web.app',
+            )
           : HttpAttendanceLinkService(desktopAuth);
       workspace = await _store!.loadMostRecentWorkspace();
       lastMessage =
@@ -220,7 +231,10 @@ class AttendanceController extends ChangeNotifier {
     int weeks = 10,
     int meetingsPerWeek = 2,
   }) async {
-    if (finalFirebase && sync == null) throw const AppProblem('Vui lòng đăng nhập Google trước khi nạp lớp vào Firebase.');
+    if (finalFirebase && sync == null)
+      throw const AppProblem(
+        'Vui lòng đăng nhập Google trước khi nạp lớp vào Firebase.',
+      );
     busy = true;
     lastMessage = null;
     notifyListeners();
@@ -327,7 +341,19 @@ class AttendanceController extends ChangeNotifier {
     try {
       final current = now ?? DateTime.now();
       final finalized = <(String, String)>[];
-      final updatedClasses = value.classes.map((courseClass) {
+      for (final c in value.classes) {
+        for (final m in c.meetings.where((m) => m.state == MeetingState.active && m.isBeforeDate(current))) {
+          if (sharedLinks is LiveAttendanceLinks) {
+            final session = await (sharedLinks as LiveAttendanceLinks).forMeeting(c, m);
+            if (session != null) {
+              await sharedLinks!.stop(session);
+              await sharedResults(session);
+            }
+          }
+        }
+      }
+      final reconciled = workspace!;
+      final updatedClasses = reconciled.classes.map((courseClass) {
         for (final meeting in courseClass.meetings) {
           if (meeting.state != MeetingState.closed &&
               meeting.isBeforeDate(current)) {
@@ -341,7 +367,7 @@ class AttendanceController extends ChangeNotifier {
       }).toList();
       if (finalized.isEmpty) return 0;
 
-      workspace = value.copyWith(classes: updatedClasses);
+      workspace = reconciled.copyWith(classes: updatedClasses);
       for (final item in finalized) {
         final courseClass = classById(item.$1);
         await _store!.saveFinalVersion(
@@ -415,7 +441,7 @@ class AttendanceController extends ChangeNotifier {
     if (sharedLinks != null) {
       final service = sharedLinks!;
       final session = service is LiveAttendanceLinks
-          ? await service.current()
+          ? await service.forMeeting(classById(classId), meetingById(classId, meetingId))
           : await (service as HttpAttendanceLinkService).current();
       if (session != null &&
           session.classId == classId &&
@@ -466,21 +492,42 @@ class AttendanceController extends ChangeNotifier {
     await save();
   }
 
-  Future<File> exportMeeting(String classId, String meetingId, {String format = 'csv'}) async {
+  Future<File> exportMeeting(
+    String classId,
+    String meetingId, {
+    String format = 'csv',
+  }) async {
     if (_store == null) throw StateError('Storage chưa khởi tạo.');
     final courseClass = classById(classId);
     final meeting = meetingById(classId, meetingId);
     final directory = await _store!.exportDirectory(workspace!, courseClass);
-    final file = format == 'pdf' ? await AttendancePdfExporter().export(directory, workspace!, courseClass, meeting) : await _csvExporter.export(
-      directory,
-      workspace!,
-      courseClass,
-      meeting,
-    );
+    final file = format == 'pdf'
+        ? await AttendancePdfExporter().export(
+            directory,
+            workspace!,
+            courseClass,
+            meeting,
+          )
+        : await _csvExporter.export(
+            directory,
+            workspace!,
+            courseClass,
+            meeting,
+          );
     lastMessage = 'Đã xuất ${file.path}';
     if (finalFirebase && sync != null) {
-      final reports = FirestoreReportMetadata(FirebaseFirestore.instance, sync!.root);
-      await reports.record(desktopAuth.current!.uid, workspace!, courseClass, meeting, file, format);
+      final reports = FirestoreReportMetadata(
+        FirebaseFirestore.instance,
+        sync!.root,
+      );
+      await reports.record(
+        desktopAuth.current!.uid,
+        workspace!,
+        courseClass,
+        meeting,
+        file,
+        format,
+      );
       lastMessage = reports.warning ?? lastMessage;
     }
     notifyListeners();
