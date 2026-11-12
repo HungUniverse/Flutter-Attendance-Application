@@ -1197,7 +1197,7 @@ class TeacherViewModel extends ChangeNotifier {
     uploadProgress = 1;
     await _safe(
       () => telemetry.event('report_uploaded', {
-        'format': file.path.endsWith('.csv') ? 'csv' : 'json',
+        'format': destination.fileName.split('.').last,
       }),
     );
     if (generation != _generation) return;
