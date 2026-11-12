@@ -91,10 +91,14 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
               ),
               const SizedBox(width: 12),
               if (selected.state == MeetingState.closed)
-                OutlinedButton.icon(
-                  onPressed: () => _export(selected),
-                  icon: const Icon(Icons.download),
-                  label: const Text('Export CSV'),
+                PopupMenuButton<String>(
+                  tooltip: 'Xuất báo cáo',
+                  onSelected: (format) => _export(selected, format: format),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'pdf', child: Text('Xuất PDF')),
+                    PopupMenuItem(value: 'csv', child: Text('Xuất CSV')),
+                  ],
+                  child: const Padding(padding: EdgeInsets.all(12), child: Row(children: [Icon(Icons.download), SizedBox(width: 8), Text('Xuất báo cáo')])),
                 )
               else if (isPast && selected.state == MeetingState.active)
                 FilledButton.icon(
@@ -695,11 +699,12 @@ class _ClassDetailPageState extends State<ClassDetailPage> {
     }
   }
 
-  Future<void> _export(Meeting meeting) async {
+  Future<void> _export(Meeting meeting, {String format = 'csv'}) async {
     try {
       final file = await widget.controller.exportMeeting(
         widget.classId,
         meeting.id,
+        format: format,
       );
       if (mounted) {
         ScaffoldMessenger.of(context)
