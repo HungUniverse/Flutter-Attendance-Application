@@ -137,6 +137,7 @@ class SharedWorkspaceSync extends ChangeNotifier {
       ? jsonDecode(await file.readAsString()) as Map<String, dynamic>
       : {'revision': 0};
   Future<void> _write(File file, Object value) async {
+    await file.parent.create(recursive: true);
     await writeReportAtomically(
       file,
       Stream.value(utf8.encode(jsonEncode(value))),

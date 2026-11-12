@@ -110,7 +110,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Assert
-      expect(find.text('PRM393'), findsOneWidget);
+      expect(find.text('PRM393 · SE1901'), findsWidgets);
       expect(find.text('Qua link'), findsOneWidget);
       expect(find.text('Thủ công'), findsOneWidget);
       expect(find.text('Nguyễn Thị Minh Anh'), findsOneWidget);

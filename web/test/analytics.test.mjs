@@ -129,6 +129,7 @@ test("buildCourseAttendanceAnalytics and exportClassAttendanceCsv summarize and 
 
   // Deduplicates legacy case-variant student roll entries and escapes leading tab cells
   const legacyCourse = sampleCourse();
+  legacyCourse.data.courseCode = "\tPRM393";
   legacyCourse.data.students.push({
     rollNumber: "se001",
     memberCode: "\tM001",
@@ -139,5 +140,6 @@ test("buildCourseAttendanceAnalytics and exportClassAttendanceCsv summarize and 
   const deduped = buildCourseAttendanceAnalytics(legacyCourse);
   assert.equal(deduped.totalStudents, 3);
   const legacyCsv = exportClassAttendanceCsv(legacyCourse);
-  assert.match(legacyCsv, /"'\tM001"/);
+  assert.match(legacyCsv, /"'\tPRM393"/);
+  assert.match(legacyCsv, /"M001"/);
 });
