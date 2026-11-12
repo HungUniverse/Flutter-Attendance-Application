@@ -65,10 +65,6 @@ class FirebaseTeacherAuth implements AuthService {
   @override
   Future<void> signIn() async {
     try {
-      if (Platform.isWindows) {
-        await auth.signInWithProvider(GoogleAuthProvider()..setCustomParameters({'prompt': 'select_account'}));
-        return;
-      }
       await _googleReady();
       final account = await GoogleSignIn.instance.authenticate();
       final idToken = account.authentication.idToken;
