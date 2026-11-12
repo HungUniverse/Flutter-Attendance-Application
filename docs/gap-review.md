@@ -6,7 +6,7 @@ Android giảng viên dùng Firebase Auth và Firestore trực tiếp. Web sinh 
 
 ## Phạm vi đã xác nhận
 
-Người dùng chọn Android và web check-in trước, chuyển cả Windows sang Firebase. Web quản lý giảng viên được hoãn. Project là `fap-attendance-71655`. Email Google do người dùng cung cấp đã được cấp và đọc lại quyền giảng viên để xác minh. Thông tin đăng nhập demo được cung cấp qua kênh riêng.
+Người dùng chọn Android và web check-in trước, chuyển cả Windows sang Firebase, sau đó yêu cầu triển khai tiếp web quản lý. Web dùng chính vai trò giảng viên, có CRUD lớp bằng lưu trữ, hàng chờ sửa kết quả, dashboard và form thông báo. Project là `fap-attendance-71655`. Email Google do người dùng cung cấp đã được cấp và đọc lại quyền giảng viên để xác minh. Thông tin đăng nhập demo được cung cấp qua kênh riêng.
 
 ## Còn cần bổ sung
 
