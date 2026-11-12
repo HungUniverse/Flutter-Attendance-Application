@@ -1166,14 +1166,12 @@ class _ExportPageState extends State<ExportPage> {
                     LinearProgressIndicator(value: vm.uploadProgress),
                   if (vm.uploads != null)
                     Text('Tải lên: ${(vm.uploadProgress * 100).round()}%'),
-                  if (vm.cloudUrl != null) ...[
+                  if (vm.reportBackedUp)
                     const Text(
                       'Đã sao lưu Firebase Storage',
                       style: TextStyle(color: AppColors.success),
                     ),
-                    SelectableText(vm.cloudUrl!),
-                  ],
-                  if (vm.uploads != null && vm.cloudUrl == null)
+                  if (vm.uploads != null && !vm.reportBackedUp)
                     OutlinedButton(
                       onPressed: vm.busy
                           ? null

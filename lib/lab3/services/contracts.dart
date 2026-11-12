@@ -89,7 +89,7 @@ abstract class NotificationService {
 }
 
 abstract class UploadService {
-  Future<String> upload(
+  Future<void> upload(
     File file,
     ReportDestination destination,
     void Function(double) progress,

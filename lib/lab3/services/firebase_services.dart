@@ -222,7 +222,7 @@ class FirebaseReportUpload implements UploadService {
   FirebaseReportUpload(this.storage);
   final FirebaseStorage storage;
   @override
-  Future<String> upload(
+  Future<void> upload(
     File file,
     ReportDestination destination,
     void Function(double) progress,
@@ -260,7 +260,6 @@ class FirebaseReportUpload implements UploadService {
     );
     try {
       await task;
-      return await ref.getDownloadURL();
     } on FirebaseException catch (error) {
       if (error.code == 'unauthorized' || error.code == 'unauthenticated') {
         throw const AppProblem(

@@ -162,7 +162,7 @@ class FakeUpload implements UploadService {
   bool fail = false;
   ReportDestination? lastDestination;
   @override
-  Future<String> upload(
+  Future<void> upload(
     File file,
     ReportDestination destination,
     void Function(double) progress,
@@ -171,7 +171,6 @@ class FakeUpload implements UploadService {
     progress(.5);
     if (fail) throw const AppProblem('Không có quyền tải lên.');
     progress(1);
-    return 'https://example.test/report';
   }
 }
 

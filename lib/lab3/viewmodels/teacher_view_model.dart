@@ -71,7 +71,7 @@ class TeacherViewModel extends ChangeNotifier {
   String? error;
   String? message;
   String? linkError;
-  String? cloudUrl;
+  bool reportBackedUp = false;
   String? permission;
   String? messagingToken;
   double uploadProgress = 0;
@@ -129,7 +129,7 @@ class TeacherViewModel extends ChangeNotifier {
     link = null;
     _watchLink();
     linkError = null;
-    cloudUrl = null;
+    reportBackedUp = false;
     exportedFile = null;
     reportDestination = null;
     notices = [];
@@ -1162,7 +1162,7 @@ class TeacherViewModel extends ChangeNotifier {
       );
       exportedFile = file;
       reportDestination = destination;
-      cloudUrl = null;
+      reportBackedUp = false;
       uploadProgress = 0;
       await _safe(
         () => telemetry.event('attendance_exported', {'format': format}),
@@ -1179,17 +1179,17 @@ class TeacherViewModel extends ChangeNotifier {
     if (file == null || destination == null || destination.ownerUid != uid) {
       throw const AppProblem('Hãy xuất file trước khi sao lưu.');
     }
-    cloudUrl = null;
+    reportBackedUp = false;
     uploadProgress = 0;
-    if (uploads == null) {
-      throw const AppProblem(
-        'Báo cáo Final được lưu và chia sẻ trên thiết bị.',
-      );
+    final service = uploads;
+    if (service == null) {
+      throw const AppProblem('Chưa cấu hình Firebase Storage.');
     }
-    cloudUrl = await uploads!.upload(file, destination, (progress) {
+    await service.upload(file, destination, (progress) {
       uploadProgress = progress;
       _notify();
     });
+    reportBackedUp = true;
     await _safe(
       () => telemetry.event('report_uploaded', {
         'format': file.path.endsWith('.csv') ? 'csv' : 'json',

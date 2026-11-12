@@ -335,12 +335,12 @@ void main() {
     expect(await h.vm.upload(), false);
     expect(h.upload.lastDestination, same(destination));
     expect(await file.exists(), true);
-    expect(h.vm.cloudUrl, isNull);
+    expect(h.vm.reportBackedUp, isFalse);
     h.upload.fail = false;
     expect(await h.vm.upload(), true);
     expect(h.upload.lastDestination, same(destination));
     expect(h.vm.uploadProgress, 1);
-    expect(h.vm.cloudUrl, isNotNull);
+    expect(h.vm.reportBackedUp, isTrue);
     expect(await h.vm.shareExport(), true);
     expect(h.device.sharedFile!.path, file.path);
   });
