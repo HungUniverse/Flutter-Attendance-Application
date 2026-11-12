@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -15,9 +16,26 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'contracts.dart';
 import 'report_destination.dart';
+import '../../firebase_options.dart';
 
 Future<void> initializeMobileFirebase() async {
-  if (Firebase.apps.isEmpty) await Firebase.initializeApp();
+  if (Firebase.apps.isEmpty) {
+    const key = String.fromEnvironment('FIREBASE_API_KEY');
+    await Firebase.initializeApp(options: key.isEmpty ? (Platform.isWindows ? desktopFirebaseOptions : null) : const FirebaseOptions(
+      apiKey: key,
+      appId: String.fromEnvironment('FIREBASE_APP_ID'),
+      messagingSenderId: String.fromEnvironment('FIREBASE_SENDER_ID'),
+      projectId: String.fromEnvironment('FIREBASE_PROJECT_ID', defaultValue: 'fap-attendance-71655'),
+      authDomain: String.fromEnvironment('FIREBASE_AUTH_DOMAIN'),
+    ));
+  }
+  if (Platform.isAndroid) {
+    await FirebaseAppCheck.instance.activate(
+      providerAndroid: kDebugMode ? const AndroidDebugProvider() : const AndroidPlayIntegrityProvider(),
+    );
+  } else if (Platform.isWindows) {
+    await FirebaseAppCheck.instance.activate(providerWindows: const WindowsDebugProvider());
+  }
 }
 
 @pragma('vm:entry-point')
@@ -47,6 +65,10 @@ class FirebaseTeacherAuth implements AuthService {
   @override
   Future<void> signIn() async {
     try {
+      if (Platform.isWindows) {
+        await auth.signInWithProvider(GoogleAuthProvider()..setCustomParameters({'prompt': 'select_account'}));
+        return;
+      }
       await _googleReady();
       final account = await GoogleSignIn.instance.authenticate();
       final idToken = account.authentication.idToken;
@@ -74,6 +96,10 @@ class FirebaseTeacherAuth implements AuthService {
 
   @override
   Future<void> signOut() async {
+    if (Platform.isWindows) {
+      await auth.signOut();
+      return;
+    }
     await _googleReady();
     await GoogleSignIn.instance.signOut();
     await auth.signOut();
