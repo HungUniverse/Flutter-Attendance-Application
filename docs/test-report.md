@@ -102,3 +102,18 @@ Không chạy lại bộ test cũ; các kỳ vọng lưu ngay sau từng `mark()
 Đã pull `8dc8b70`, trong đó bộ kiểm thử upstream đã điều chỉnh kỳ vọng về bản nháp. Lượt tối ưu này không chạy test theo yêu cầu người dùng. `flutter analyze` trên `firestore_attendance_links.dart` và `teacher_view_model.dart` không có lỗi; build APK debug với cấu hình Firebase demo thành công.
 
 Android hiển thị trực tiếp snapshot check-in từ máy chủ, không chờ hàng đợi đồng bộ hoặc ghi workspace. Kết quả trực tiếp được phủ lại khi tải workspace; P/A thủ công vẫn ưu tiên và chốt vẫn lấy kết quả sau khi dừng phiên. Xem [chi tiết và giới hạn](android-background-sync.md). Chưa đo độ trễ trên thiết bị thật; không dùng kết quả build/phân tích mã để khẳng định thời gian cập nhật cụ thể. Không thay đổi Rules/Hosting hay luồng poll Windows trong lượt này.
+
+## Chuẩn hóa toàn dự án và mở rộng kiểm thử (13/11/2026)
+
+- **Chuẩn hóa mã MSSV và lịch học (`packages/core`, `lib/domain`, `lib/data`)**:
+  - `AttendanceService.closeMeeting` chuẩn hóa khóa bản ghi điểm danh về đúng `student.rollNumber` và dọn sạch các biến thể chữ hoa/thường hoặc khoảng trắng dư thừa.
+  - `RosterMergeService` hợp nhất lịch sử điểm danh khi MSSV thay đổi chữ hoa/thường, loại bỏ dòng sinh viên trùng lặp trong file nhập và không ghi đè trạng thái `present` của buổi đã chốt.
+  - `AttendanceCsvExporter`, `AttendancePdfExporter` và `WorkspaceStore._snapshot` truy xuất qua `courseClass.recordFor` và dùng helper chung `spreadsheetText` để thoát công thức bảng tính (`=`, `+`, `-`, `@`, `\t`, `\r`).
+  - `WorkspaceIntegrityValidator` trim `scheduleCode` nhất quán với `ScheduleRule` và `ScheduleService`.
+- **Khôi phục an toàn lưu trữ và đồng hồ server (`lib/data`, `lib/lab3`)**:
+  - `WorkspaceStore` ghi file nguyên tử qua `writeReportAtomically`, giữ bản `.bak` và tự khôi phục `workspace.json` từ `workspace.json.bak` khi file chính bị lỗi/hỏng.
+  - `TeacherViewModel.shareLink` và `_clearClosedLink` dùng `linkNow` (`ServerTimedAttendanceLinks`) thay vì giờ cục bộ trên máy, đảm bảo chia sẻ link không bị chặn sai khi đồng hồ thiết bị lệch so với Firebase server.
+- **Tối ưu Backend, Web Admin, Extension và CLI Workbench**:
+  - `backend/relay.mjs` tách hàng đợi đọc chỉ-đọc (`SessionStore.read`) và chỉ đánh dấu challenge đã dùng sau khi ghi điểm danh thành công (`afterCommit`).
+  - `backend/attendance-analytics.mjs`, `backend/attendance-report.mjs`, `backend/attendance-matrix.mjs`, `backend/attendance-fpt-policy.mjs` và `web/src/admin/analytics.js` tối ưu duyệt một lượt và tính ngưỡng chính xác bằng tìm kiếm nhị phân.
+  - `tools/attendance-workbench/cli.mjs` bổ sung lệnh `fpt-policy` và `fpt-policy-csv` đánh giá quy chế điểm danh FPT (cảnh báo 15%, cấm thi >20%).

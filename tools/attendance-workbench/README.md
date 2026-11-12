@@ -245,6 +245,11 @@ drift (`lateDriftThreshold`, default 0.4), and alternating present/absent
 oscillations (`minAlternatingLength`, default 6). `anomaly-scan-csv` exports the
 anomaly list with spreadsheet-safe CSV escaping.
 
+`fpt-policy` evaluates a validated snapshot against FPT University's attendance
+rules (`warningRatio` default 0.15, `maxAbsenceRatio` default 0.20, and optional
+`totalPlannedSessions`). `fpt-policy-csv` exports the student eligibility report
+as spreadsheet-safe CSV.
+
 `archive-new` starts a versioned snapshot history. `archive-add` appends a
 revision with its parent, author and note; revisions can branch from older
 points through the library API. `archive-compare` shows semantic changes,

@@ -127,3 +127,13 @@ Không ghi những mục trên thành Pass. Làm tiếp theo
 Các adapter Firebase đã viết và biên dịch được không thay cho việc xác nhận cả
 sáu dịch vụ chạy thật. Các lỗi dịch vụ trong ViewModel tests là lỗi giả lập có
 chủ đích để kiểm tra phản hồi, cần thêm bằng chứng tích hợp theo yêu cầu Lab 3.
+
+## Chuẩn hóa và kiểm thử hồi quy toàn monorepo - 13/11/2026
+
+- `dart analyze`: **No issues found**.
+- Bộ kiểm thử đơn vị và nghiệp vụ Flutter (`test/`): kiểm tra chuẩn hóa khóa MSSV trong `packages/core`, khôi phục `.bak` trong `WorkspaceStore`, chống CSV injection (`spreadsheetText`), hợp nhất danh sách lớp (`RosterMergeService`), kiểm tra toàn vẹn (`WorkspaceIntegrityValidator`), và đồng hồ server (`ServerTimedAttendanceLinks`) trên `TeacherViewModel`.
+- Backend (`npm --prefix backend test`): **87/87 Pass** (bao gồm `SessionStore.read` không ghi đĩa khi chỉ đọc, giữ challenge khi lỗi ghi check-in, tìm kiếm nhị phân `sessionsNeededForRate`, và FPT policy CSV).
+- Web Admin (`npm --prefix web test`): **29/29 Pass** (bao gồm loại bỏ trùng lặp MSSV lệch hoa/thường và thoát ký tự tab đầu dòng khi xuất CSV).
+- Chrome Extension (`npm --prefix extension test` & `npm --prefix extension run build`): **22/22 Pass**, bundle build sạch.
+- Attendance Workbench CLI (`node --test tools/attendance-workbench/*.test.mjs`): **8/8 Pass** (bao gồm lệnh `fpt-policy` và `fpt-policy-csv`).
+- Firebase Rules Static Contract (`node --test firebase/test/rules-static-contract.test.mjs`): **6/6 Pass**.

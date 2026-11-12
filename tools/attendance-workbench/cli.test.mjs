@@ -89,6 +89,12 @@ test('runs the full offline import, reporting, update and export workflow', asyn
     const auditOptions = join(dir, 'audit-options.json');
     await writeFile(auditOptions, '{"minimumAttendanceRate":0.5,"minimumRecordedSessions":1}');
     assert.equal(JSON.parse(run('audit', initial, auditOptions)).options.minimumAttendanceRate, 0.5);
+    const fptPolicyOptions = join(dir, 'fpt-policy-options.json');
+    await writeFile(fptPolicyOptions, '{"totalPlannedSessions":5}');
+    const fptReport = JSON.parse(run('fpt-policy', initial, fptPolicyOptions));
+    assert.equal(fptReport.policy.maxAllowedAbsences, 1);
+    assert.equal(fptReport.summary.totalStudents, 2);
+    assert.match(run('fpt-policy-csv', initial, fptPolicyOptions), /"studentId","name","email"/);
     const scenarioPath = join(dir, 'scenario.json');
     const scenarioChanged = join(dir, 'scenario-changed.json');
     await writeFile(scenarioPath, run('scenario-new', initial, 'Correction review', policy));

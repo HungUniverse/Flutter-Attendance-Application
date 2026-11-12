@@ -65,6 +65,7 @@ import { decideSnapshotRelease, planSnapshotRelease, snapshotReleaseToCsv,
   verifySnapshotReleaseReceipt, compareSnapshotReleaseReceipts, snapshotReleaseDiffToCsv } from './snapshot-release-gate.mjs';
 import { planReviewBoard, reviewBoardToCsv } from './review-board.mjs';
 import { anomaliesToCsv, detectAttendanceAnomalies } from './anomaly-detector.mjs';
+import { evaluateFptAttendancePolicy, fptPolicyReportToCsv } from '../../backend/attendance-fpt-policy.mjs';
 
 const usage = `Attendance workbench (Node.js 22+)
 
@@ -133,6 +134,8 @@ const usage = `Attendance workbench (Node.js 22+)
   node cli.mjs audit-csv SNAPSHOT.json [OPTIONS.json]
   node cli.mjs anomaly-scan SNAPSHOT.json [OPTIONS.json]
   node cli.mjs anomaly-scan-csv SNAPSHOT.json [OPTIONS.json]
+  node cli.mjs fpt-policy SNAPSHOT.json [OPTIONS.json]
+  node cli.mjs fpt-policy-csv SNAPSHOT.json [OPTIONS.json]
   node cli.mjs preview-import ROSTER.csv SESSIONS.json ATTENDANCE.csv
   node cli.mjs schedule-plan PLAN.json
   node cli.mjs archive-new SNAPSHOT.json TITLE
@@ -316,6 +319,20 @@ export async function runCommand(args) {
       ]);
       const result = detectAttendanceAnomalies(data, optionsText ? JSON.parse(optionsText) : {});
       return command === 'anomaly-scan-csv' ? anomaliesToCsv(result) : json(result);
+    }
+    case 'fpt-policy':
+    case 'fpt-policy-csv': {
+      if (values.length < 1 || values.length > 2) throw new TypeError('expected snapshot and optional FPT policy options file');
+      const [data, optionsText] = await Promise.all([
+        snapshot(values[0]), values[1] ? readText(values[1]) : Promise.resolve(null),
+      ]);
+      const result = evaluateFptAttendancePolicy(
+        data.roster,
+        data.sessionIds,
+        data.records,
+        optionsText ? JSON.parse(optionsText) : {},
+      );
+      return command === 'fpt-policy-csv' ? `${fptPolicyReportToCsv(result)}\r\n` : json(result);
     }
     case 'preview-import': {
       requireArgs(values, 3);
