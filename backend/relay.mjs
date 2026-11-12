@@ -55,7 +55,7 @@ export function createRelay({ store, verifyIdentity, teachers, publicOrigin,
     let user;
     const desktop = desktopTokens.get(match[1]);
     try { user = desktop && desktop.expiresAt > clock() ? desktop.user : await verifyIdentity(match[1]); } catch { fail(401, 'Phiên đăng nhập không hợp lệ.'); }
-    if (!user.uid || !user.email || user.email_verified !== true) fail(403, 'Cần tài khoản có email đã xác minh.');
+    if (!user?.uid || !user.email || user.email_verified !== true) fail(403, 'Cần tài khoản có email đã xác minh.');
     return { ...user, email: user.email.toLowerCase() };
   }
   async function body(req) {
@@ -66,8 +66,11 @@ export function createRelay({ store, verifyIdentity, teachers, publicOrigin,
       if (length > 800 * 1024) fail(413, 'Dữ liệu quá lớn.');
       chunks.push(chunk);
     }
-    try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+    let parsed;
+    try { parsed = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
     catch { fail(400, 'Dữ liệu không hợp lệ.'); }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) fail(400, 'Dữ liệu không hợp lệ.');
+    return parsed;
   }
   const open = s => s.receiving && new Date(s.expiresAt).getTime() > clock();
   const secretCode = (s, window = Math.floor(clock()/15000)) => String(createHmac('sha256',s.codeSecret).update(String(window)).digest().readUInt32BE(0)%1000000).padStart(6,'0');
