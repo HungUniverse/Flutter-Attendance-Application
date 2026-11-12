@@ -26,9 +26,12 @@ class AttendancePdfExporter {
       title: '${course.courseCode} ${course.classCode} - ${meeting.number}',
       author: 'FAP Attendance',
     );
-    final records = course.attendance[meeting.id]!;
     final present = course.students
-        .where((s) => records[s.rollNumber]!.status == AttendanceStatus.present)
+        .where(
+          (s) =>
+              course.recordFor(meeting.id, s.rollNumber)!.status ==
+              AttendanceStatus.present,
+        )
         .length;
     final date = DateFormat('dd/MM/yyyy').format(meeting.startAt.toLocal());
     document.addPage(
@@ -75,17 +78,16 @@ class AttendancePdfExporter {
           pw.SizedBox(height: 18),
           pw.TableHelper.fromTextArray(
             headers: ['MSSV', 'Họ và tên', 'Email', 'P/A', 'Ghi chú'],
-            data: course.students
-                .map(
-                  (student) => [
-                    student.rollNumber,
-                    student.fullName,
-                    student.email,
-                    attendanceCode(records[student.rollNumber]!.status),
-                    records[student.rollNumber]!.note ?? '',
-                  ],
-                )
-                .toList(),
+            data: course.students.map((student) {
+              final record = course.recordFor(meeting.id, student.rollNumber)!;
+              return [
+                student.rollNumber,
+                student.fullName,
+                student.email,
+                attendanceCode(record.status),
+                record.note ?? '',
+              ];
+            }).toList(),
             headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
             headerStyle: const pw.TextStyle(fontSize: 9),
             cellStyle: const pw.TextStyle(fontSize: 8),

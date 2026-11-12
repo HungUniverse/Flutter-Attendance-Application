@@ -18,12 +18,11 @@ class AttendanceCsvExporter {
     if (meeting.state != MeetingState.closed) {
       throw StateError('Chỉ được export buổi đã chốt.');
     }
-    final records = courseClass.attendance[meeting.id] ?? const {};
-    if (courseClass.students.any(
-      (student) =>
-          records[student.rollNumber]?.status == null ||
-          records[student.rollNumber]!.status == AttendanceStatus.unmarked,
-    )) {
+    if (courseClass.students.any((student) {
+      final record = courseClass.recordFor(meeting.id, student.rollNumber);
+      return record?.status == null ||
+          record!.status == AttendanceStatus.unmarked;
+    })) {
       throw StateError('Buổi điểm danh vẫn còn ô trống.');
     }
     final rows = <List<Object?>>[
@@ -50,7 +49,7 @@ class AttendanceCsvExporter {
     final date = DateFormat('yyyy-MM-dd');
     final time = DateFormat('HH:mm');
     for (final student in courseClass.students) {
-      final record = records[student.rollNumber]!;
+      final record = courseClass.recordFor(meeting.id, student.rollNumber)!;
       rows.add([
         1,
         spreadsheetText(workspace.semester),

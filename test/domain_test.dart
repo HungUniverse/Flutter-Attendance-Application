@@ -301,6 +301,45 @@ void main() {
     expect(rows.last[14], 'A');
   });
 
+  test('attendance CSV exporter resolves case-variant student roll keys', () {
+    final start = DateTime(2026, 9, 7, 7);
+    final meeting = Meeting(
+      id: 'm1',
+      number: 1,
+      startAt: start,
+      endAt: start.add(const Duration(hours: 2)),
+      state: MeetingState.closed,
+    );
+    final course = CourseClass(
+      id: 'class-1',
+      courseCode: 'PRM393',
+      classCode: 'SE1917',
+      scheduleCode: '11',
+      students: [student],
+      scheduleRule: ScheduleRule(scheduleCode: '11', semesterStart: start),
+      meetings: [meeting],
+      attendance: {
+        'm1': {
+          '  se000001 ': AttendanceRecord(
+            status: AttendanceStatus.present,
+            source: AttendanceSource.scan,
+            recordedAt: start,
+          ),
+        },
+      },
+    );
+    final workspace = TeacherWorkspace(
+      id: 'w1',
+      semester: 'FA26',
+      semesterStart: start,
+      classes: [course],
+    );
+    final csv = AttendanceCsvExporter().encode(workspace, course, meeting);
+    final rows = const CsvToListConverter().convert(csv.substring(1));
+    expect(rows.last[10], 'SE000001');
+    expect(rows.last[14], 'P');
+  });
+
   test('rolling QR expires and challenge is one-time/device-bound', () {
     final issuer = RollingQrIssuer(secret: 'test-secret');
     final now = DateTime.utc(2026, 9, 7, 0, 0);
