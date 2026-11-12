@@ -179,7 +179,7 @@ class AttendanceAnalyticsService {
 
     for (final meeting in sortedMeetings) {
       final status =
-          courseClass.recordFor(meeting.id, student.rollNumber)?.status ??
+          _recordFor(courseClass, meeting.id, student.rollNumber)?.status ??
           AttendanceStatus.unmarked;
       switch (status) {
         case AttendanceStatus.present:
@@ -269,7 +269,7 @@ class AttendanceAnalyticsService {
 
       for (final student in courseClass.students) {
         final status =
-            courseClass.recordFor(meeting.id, student.rollNumber)?.status ??
+            _recordFor(courseClass, meeting.id, student.rollNumber)?.status ??
             AttendanceStatus.unmarked;
         switch (status) {
           case AttendanceStatus.present:
@@ -384,17 +384,43 @@ class AttendanceAnalyticsService {
     return AttendanceRiskLevel.eligible;
   }
 
+  static AttendanceRecord? _recordFor(
+    CourseClass courseClass,
+    String meetingId,
+    String rollNumber,
+  ) {
+    final records = courseClass.attendance[meetingId];
+    if (records == null) return null;
+    final direct = records[rollNumber];
+    if (direct != null) return direct;
+    final normalized = rollNumber.trim().toUpperCase();
+    for (final entry in records.entries) {
+      if (entry.key.trim().toUpperCase() == normalized) {
+        return entry.value;
+      }
+    }
+    return null;
+  }
+
   static String _escapeCsv(String value) {
+    final trimmedLeft = value.trimLeft();
     final sanitized =
         value.startsWith('=') ||
             value.startsWith('+') ||
             value.startsWith('-') ||
-            value.startsWith('@')
+            value.startsWith('@') ||
+            value.startsWith('\t') ||
+            value.startsWith('\r') ||
+            trimmedLeft.startsWith('=') ||
+            trimmedLeft.startsWith('+') ||
+            trimmedLeft.startsWith('-') ||
+            trimmedLeft.startsWith('@')
         ? "'$value"
         : value;
     if (sanitized.contains(',') ||
         sanitized.contains('"') ||
-        sanitized.contains('\n')) {
+        sanitized.contains('\n') ||
+        sanitized.contains('\r')) {
       return '"${sanitized.replaceAll('"', '""')}"';
     }
     return sanitized;

@@ -249,5 +249,34 @@ void main() {
       expect(json['courseCode'], equals('PRM393'));
       expect(summary.toPrettyJson(), contains('"classCode": "SE1901"'));
     });
+
+    test('should resolve case-mismatched attendance roll keys and quote carriage-return CSV values', () {
+      // Arrange
+      final course = _buildTestCourse(
+        meetingCount: 5,
+        closedCount: 1,
+        students: const [
+          Student(
+            rollNumber: 'SE194673',
+            memberCode: 'DuyTT\rLine2',
+            email: 'duongthanhduy@fpt.edu.vn',
+            fullName: '  =SUM(A1:A2)',
+          ),
+        ],
+        attendance: {
+          'm1': {'se194673': _rec(AttendanceStatus.present)},
+        },
+      );
+
+      // Act
+      final summary = service.summarizeClass(course);
+      final csv = service.exportSummaryCsv(summary);
+
+      // Assert
+      expect(summary.studentAnalytics.single.presentCount, equals(1));
+      expect(summary.meetingMetrics.first.presentCount, equals(1));
+      expect(csv, contains('"DuyTT\rLine2"'));
+      expect(csv, contains("'  =SUM(A1:A2)"));
+    });
   });
 }
