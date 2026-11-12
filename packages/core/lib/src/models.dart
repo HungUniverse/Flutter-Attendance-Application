@@ -14,11 +14,12 @@ String attendanceCode(AttendanceStatus status) => switch (status) {
   AttendanceStatus.unmarked => '',
 };
 
-AttendanceStatus attendanceStatusFromCode(String value) => switch (value) {
-  'P' => AttendanceStatus.present,
-  'A' => AttendanceStatus.absent,
-  _ => AttendanceStatus.unmarked,
-};
+AttendanceStatus attendanceStatusFromCode(String value) =>
+    switch (value.trim().toUpperCase()) {
+      'P' => AttendanceStatus.present,
+      'A' => AttendanceStatus.absent,
+      _ => AttendanceStatus.unmarked,
+    };
 
 class Student {
   const Student({
@@ -69,8 +70,12 @@ class ScheduleRule {
   final List<DateTime> excludedDates;
   final List<DateTime> additionalStarts;
 
-  int get dayGroup => int.tryParse(scheduleCode.substring(0, 1)) ?? 0;
-  int get dailySlot => int.tryParse(scheduleCode.substring(1, 2)) ?? 0;
+  int get dayGroup => scheduleCode.isEmpty
+      ? 0
+      : (int.tryParse(scheduleCode.substring(0, 1)) ?? 0);
+  int get dailySlot => scheduleCode.length < 2
+      ? 0
+      : (int.tryParse(scheduleCode.substring(1, 2)) ?? 0);
 
   Map<String, Object?> toJson() => {
     'scheduleCode': scheduleCode,
