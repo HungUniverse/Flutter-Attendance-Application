@@ -13,6 +13,7 @@ import '../../ui/theme.dart';
 import '../viewmodels/teacher_view_model.dart';
 import 'components.dart';
 import 'attendance_screens.dart';
+import 'weekly_timetable_page.dart';
 export 'attendance_screens.dart';
 
 void openPage(BuildContext context, Widget page) =>
@@ -388,17 +389,66 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  bool _grid = false;
-  int _tab = 0;
+  late final String _initialSemester = context
+      .read<TeacherViewModel>()
+      .workspace!
+      .semester;
+
+  void _openClasses() => openPage(context, const _ClassManagementPage());
+
+  @override
+  Widget build(BuildContext context) {
+    final semester = context.select(
+      (TeacherViewModel vm) => vm.workspace?.semester,
+    );
+    if (semester == null) return const SizedBox.shrink();
+    return WeeklyTimetablePage(
+      key: ValueKey(semester),
+      startAtSemester: semester != _initialSemester,
+      onHome: _openClasses,
+      onMeeting: (classId, meetingId) => openPage(
+        context,
+        AttendancePage(classId: classId, meetingId: meetingId),
+      ),
+      bottom: TimetableNavigation(
+        selected: 0,
+        onSelected: (index) {
+          switch (index) {
+            case 0:
+              _openClasses();
+            case 1:
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (context) => NotificationsPage(
+                    bottom: TimetableNavigation(
+                      selected: 1,
+                      onSelected: (index) {
+                        if (index == 0) Navigator.of(context).pop();
+                        if (index == 2) openPage(context, const AccountPage());
+                      },
+                    ),
+                  ),
+                ),
+              );
+            case 2:
+              openPage(context, const AccountPage());
+          }
+        },
+      ),
+    );
+  }
+}
+
+class _ClassManagementPage extends StatelessWidget {
+  const _ClassManagementPage();
+
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<TeacherViewModel>();
-    if (_tab == 1) {
-      return NotificationsPage(onHome: () => setState(() => _tab = 0));
-    }
+    if (vm.workspace == null) return const SizedBox.shrink();
     final classes = vm.workspace!.classes;
     return MobilePage(
-      title: 'Lịch tuần & lớp học',
+      title: 'Danh sách lớp',
       actions: [
         if (vm.sync != null)
           IconButton(
@@ -417,20 +467,6 @@ class _DashboardPageState extends State<DashboardPage> {
           icon: const Icon(Icons.account_circle_outlined),
         ),
       ],
-      bottom: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: (v) => setState(() => _tab = v),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.calendar_month),
-            label: 'Lịch & lớp',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.notifications_outlined),
-            label: 'Thông báo',
-          ),
-        ],
-      ),
       child: RefreshIndicator(
         onRefresh: () async {
           await vm.refresh();
@@ -499,15 +535,6 @@ class _DashboardPageState extends State<DashboardPage> {
                 ],
               ),
             ),
-            SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment(value: false, label: Text('Danh sách lớp')),
-                ButtonSegment(value: true, label: Text('Lịch tuần')),
-              ],
-              selected: {_grid},
-              onSelectionChanged: (v) => setState(() => _grid = v.first),
-            ),
-            if (_grid) const MobileWeekGrid(),
             FilledButton.icon(
               onPressed: vm.busy
                   ? null
@@ -611,243 +638,6 @@ class _ClassCard extends StatelessWidget {
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class MobileWeekGrid extends StatefulWidget {
-  const MobileWeekGrid({super.key});
-  @override
-  State<MobileWeekGrid> createState() => _MobileWeekGridState();
-}
-
-class _MobileWeekGridState extends State<MobileWeekGrid> {
-  late DateTime _monday;
-  final _scroll = ScrollController();
-  @override
-  void initState() {
-    super.initState();
-    final n = context.read<TeacherViewModel>().now();
-    _monday = DateTime(n.year, n.month, n.day - n.weekday + 1);
-  }
-
-  @override
-  void dispose() {
-    _scroll.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final vm = context.watch<TeacherViewModel>();
-    final days = List.generate(7, (i) => _monday.add(Duration(days: i)));
-    List<(CourseClass, Meeting)> cell(int slot, DateTime day) => [
-      for (final c in vm.workspace!.classes)
-        for (final m in c.meetings)
-          if (m.isOnDate(day) &&
-              m.startAt.hour == ScheduleService.slotTimes[slot]!.startHour)
-            (c, m),
-    ];
-    final heights = List.generate(4, (i) {
-      var max = 1;
-      for (final d in days) {
-        final n = cell(i + 1, d).length;
-        if (n > max) max = n;
-      }
-      return max * 124.0 + 2;
-    });
-    return SectionCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              IconButton(
-                tooltip: 'Tuần trước',
-                onPressed: () => setState(
-                  () => _monday = _monday.subtract(const Duration(days: 7)),
-                ),
-                icon: const Icon(Icons.chevron_left),
-              ),
-              TextButton(
-                onPressed: () {
-                  final n = vm.now();
-                  setState(
-                    () => _monday = DateTime(
-                      n.year,
-                      n.month,
-                      n.day - n.weekday + 1,
-                    ),
-                  );
-                },
-                child: const Text('Tuần này'),
-              ),
-              IconButton(
-                tooltip: 'Tuần sau',
-                onPressed: () => setState(
-                  () => _monday = _monday.add(const Duration(days: 7)),
-                ),
-                icon: const Icon(Icons.chevron_right),
-              ),
-            ],
-          ),
-          OutlinedButton(
-            onPressed: () async {
-              final date = await showDatePicker(
-                context: context,
-                initialDate: _monday,
-                firstDate: DateTime(2020),
-                lastDate: DateTime(2100),
-              );
-              if (date != null && mounted) {
-                setState(
-                  () => _monday = DateTime(
-                    date.year,
-                    date.month,
-                    date.day - date.weekday + 1,
-                  ),
-                );
-              }
-            },
-            child: Text(
-              '${DateFormat('dd/MM').format(days.first)} – ${DateFormat('dd/MM/yyyy').format(days.last)}',
-            ),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Vuốt ngang để xem đủ các ngày →',
-            style: TextStyle(fontSize: 14),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: 66,
-                child: Column(
-                  children: [
-                    const SizedBox(
-                      height: 68,
-                      child: Center(
-                        child: Text('Giờ', style: TextStyle(fontSize: 14)),
-                      ),
-                    ),
-                    for (var i = 0; i < 4; i++)
-                      SizedBox(
-                        height: heights[i],
-                        child: Center(
-                          child: Text(
-                            '${i + 1}\n${ScheduleService.slotTimes[i + 1]!.startHour.toString().padLeft(2, '0')}:${ScheduleService.slotTimes[i + 1]!.startMinute.toString().padLeft(2, '0')}',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: Scrollbar(
-                  controller: _scroll,
-                  thumbVisibility: true,
-                  child: SingleChildScrollView(
-                    controller: _scroll,
-                    scrollDirection: Axis.horizontal,
-                    child: SizedBox(
-                      width: 1050,
-                      child: Column(
-                        children: [
-                          Row(
-                            children: days
-                                .map(
-                                  (d) => Container(
-                                    width: 150,
-                                    height: 68,
-                                    alignment: Alignment.center,
-                                    color:
-                                        d.day == vm.now().day &&
-                                            d.month == vm.now().month &&
-                                            d.year == vm.now().year
-                                        ? AppColors.orangeSoft
-                                        : Colors.white,
-                                    child: Text(
-                                      '${d.weekday == 7 ? 'CN' : 'T${d.weekday + 1}'} · ${DateFormat('dd/MM').format(d)}',
-                                      style: const TextStyle(fontSize: 14),
-                                    ),
-                                  ),
-                                )
-                                .toList(),
-                          ),
-                          for (var i = 0; i < 4; i++)
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: days
-                                  .map(
-                                    (d) => Container(
-                                      width: 150,
-                                      height: heights[i],
-                                      decoration: BoxDecoration(
-                                        border: Border.all(
-                                          color: AppColors.border,
-                                        ),
-                                      ),
-                                      child: cell(i + 1, d).isEmpty
-                                          ? const Center(child: Text('—'))
-                                          : Column(
-                                              children: cell(i + 1, d)
-                                                  .map(
-                                                    (entry) => SizedBox(
-                                                      height: 124,
-                                                      child: TextButton(
-                                                        onPressed: () =>
-                                                            openPage(
-                                                              context,
-                                                              AttendancePage(
-                                                                classId:
-                                                                    entry.$1.id,
-                                                                meetingId:
-                                                                    entry.$2.id,
-                                                              ),
-                                                            ),
-                                                        child: Text(
-                                                          '${entry.$1.courseCode}\n${entry.$1.classCode} · Slot ${entry.$2.number}\n${stateLabel(entry.$2.state)}',
-                                                          style:
-                                                              const TextStyle(
-                                                                fontSize: 14,
-                                                              ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  )
-                                                  .toList(),
-                                            ),
-                                    ),
-                                  )
-                                  .toList(),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          if (!vm.workspace!.classes.any(
-            (c) => c.meetings.any(
-              (m) =>
-                  !m.startAt.isBefore(days.first) &&
-                  m.startAt.isBefore(days.last.add(const Duration(days: 1))),
-            ),
-          ))
-            const Padding(
-              padding: EdgeInsets.only(top: 12),
-              child: Text('Chưa có lịch dạy trong tuần này. Chọn tuần khác.'),
-            ),
         ],
       ),
     );
@@ -1056,31 +846,14 @@ class _SchedulePageState extends State<SchedulePage> {
 }
 
 class NotificationsPage extends StatelessWidget {
-  const NotificationsPage({super.key, this.onHome});
-  final VoidCallback? onHome;
+  const NotificationsPage({super.key, this.bottom});
+  final Widget? bottom;
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<TeacherViewModel>();
     return MobilePage(
       title: 'Thông báo',
-      bottom: onHome == null
-          ? null
-          : NavigationBar(
-              selectedIndex: 1,
-              onDestinationSelected: (index) {
-                if (index == 0) onHome!();
-              },
-              destinations: const [
-                NavigationDestination(
-                  icon: Icon(Icons.calendar_month),
-                  label: 'Lịch & lớp',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.notifications_outlined),
-                  label: 'Thông báo',
-                ),
-              ],
-            ),
+      bottom: bottom,
       actions: [
         IconButton(
           tooltip: 'Làm mới',

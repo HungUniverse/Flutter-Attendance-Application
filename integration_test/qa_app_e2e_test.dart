@@ -63,18 +63,20 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(DashboardPage), findsOneWidget);
-      expect(find.text('PRM393 · SE1901'), findsWidgets);
+      expect(find.text('PRM393'), findsOneWidget);
 
       // 3. Navigation Flow: Bottom Navigation Bar
-      await tester.tap(find.text('Thông báo'));
+      await tester.tap(find.byKey(const ValueKey('timetable-nav-1')));
       await tester.pumpAndSettle();
       expect(find.byType(NotificationsPage), findsOneWidget);
 
-      await tester.tap(find.text('Lịch & lớp'));
+      await tester.tap(find.byKey(const ValueKey('timetable-nav-0')));
       await tester.pumpAndSettle();
       expect(find.byType(DashboardPage), findsOneWidget);
 
       // 4. Core Business Flow: Expand Class Card -> Enter Attendance
+      await tester.tap(find.text('Home'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('PRM393 · SE1901').first);
       await tester.pumpAndSettle();
 

@@ -937,6 +937,26 @@ class TeacherViewModel extends ChangeNotifier {
     }
   }
 
+  Future<bool> selectSemester(String semester) => _run('select_semester', () async {
+    if (semester == workspace?.semester) return;
+    if (link != null) {
+      throw const AppProblem('Hãy dừng nhận link trước khi chuyển học kỳ.');
+    }
+    if (sync?.conflict == true) {
+      throw const AppProblem('Hãy xử lý xung đột đồng bộ trước khi chuyển học kỳ.');
+    }
+    final generation = _generation;
+    final selected = await repository.load(uid, semester: semester);
+    if (generation != _generation || disposed) return;
+    if (selected?.semester != semester) {
+      throw const AppProblem('Không tìm thấy dữ liệu học kỳ trên thiết bị.');
+    }
+    _publishedWorkspace = selected;
+    workspace = _applyDrafts(selected!);
+    aiReview = null;
+    await _reconcile();
+  });
+
   Future<bool> receiveServerWorkspace() => _run('resolve_sync', () async {
     if (sync != null && workspace != null) {
       final owner = uid;
