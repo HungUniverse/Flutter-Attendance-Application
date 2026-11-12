@@ -89,7 +89,8 @@ class SyncConflict extends AppProblem {
 }
 
 class WorkspaceAccessDenied extends AppProblem {
-  const WorkspaceAccessDenied() : super('Tài khoản chưa được cấp quyền giảng viên trong Firebase.');
+  const WorkspaceAccessDenied()
+    : super('Tài khoản chưa được cấp quyền giảng viên trong Firebase.');
 }
 
 /// Durable local outbox + optimistic server revision; never silently overwrites
@@ -118,6 +119,7 @@ class SharedWorkspaceSync extends ChangeNotifier {
   }
 
   void _status(String value, {bool isConflict = false}) {
+    if (status == value && conflict == isConflict) return;
     status = value;
     conflict = isConflict;
     if (!_disposed) notifyListeners();
@@ -316,7 +318,7 @@ class SharedWorkspaceSync extends ChangeNotifier {
     return _serial(() async {
       if (uid != owner) throw const AppProblem('Tài khoản đã thay đổi.');
       final disk = local(uid);
-      final cached = semester == null
+      var cached = semester == null
           ? await disk.loadMostRecentWorkspace()
           : await disk.loadWorkspace(semester);
       var key = semester ?? cached?.semester;
@@ -350,6 +352,7 @@ class SharedWorkspaceSync extends ChangeNotifier {
           try {
             final confirmed = await _push(uid, file, state);
             if (confirmed == null) await disk.saveWorkspace(pending);
+            cached = confirmed ?? pending;
           } on WorkspaceAccessDenied {
             rethrow;
           } on SyncConflict {
@@ -371,6 +374,13 @@ class SharedWorkspaceSync extends ChangeNotifier {
         final workspace = TeacherWorkspace.fromJson(
           Map<String, Object?>.from(row['workspace'] as Map),
         );
+        final metadata = await _read(_meta(uid, workspace.semester));
+        if (cached?.semester == workspace.semester &&
+            metadata['revision'] == row['revision'] &&
+            metadata['pending'] == null) {
+          _status('Đã đồng bộ');
+          return cached;
+        }
         if (cached != null && !await _meta(uid, workspace.semester).exists()) {
           await _write(
             File(
