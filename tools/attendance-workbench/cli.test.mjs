@@ -68,6 +68,12 @@ test('runs the full offline import, reporting, update and export workflow', asyn
     assert.equal(JSON.parse(await readFile(schedule, 'utf8')).length, 3);
     assert.deepEqual(JSON.parse(run('schedule-conflicts', schedule)), []);
     assert.match(run('schedule-calendar', schedule, 'example.com', '2026-01-01T00:00:00Z'), /BEGIN:VEVENT/);
+    const planOptions = join(dir, 'plan-options.json');
+    await writeFile(planOptions, JSON.stringify({
+      tasks: [{ id: 'lecture-a', groupId: 'g1', instructorId: 't1', durationMinutes: 60 }],
+      slots: [{ id: 'slot-a', start: '2026-01-05T09:00:00Z', end: '2026-01-05T10:00:00Z', roomId: 'r1' }],
+    }));
+    assert.equal(JSON.parse(run('schedule-plan', planOptions)).complete, true);
     const auditReport = JSON.parse(run('audit', initial));
     assert.equal(auditReport.version, 1);
     assert.ok(auditReport.summary.total > 0);

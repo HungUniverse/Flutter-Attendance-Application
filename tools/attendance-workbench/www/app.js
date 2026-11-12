@@ -20,6 +20,7 @@ import { createScenario, evaluateScenario, parseScenario, removeScenarioChange, 
   serializeScenario, setScenarioChange } from '../scenario.mjs';
 import { auditAttendanceSnapshot, auditToCsv } from '../audit.mjs';
 import { previewAttendanceImport } from '../import-preview.mjs';
+import { planSchedule } from '../schedule-planner.mjs';
 
 const labels = {
   overview: ['TỔNG QUAN', 'Tổng quan'],
@@ -303,7 +304,7 @@ function renderSessions() {
   }).join('');
   const conflicts = state.schedule.length ? findScheduleConflicts(state.schedule) : [];
   const schedulePanel = state.schedule.length ? panel('Lịch lặp đã tạo', `<div class="session-list">${state.schedule.map((session) => `<div class="session-row"><div><strong>${esc(session.id)}</strong><small>${esc(new Date(session.start).toLocaleString('vi-VN'))} – ${esc(new Date(session.end).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }))}</small></div><span>${conflicts.some((conflict) => conflict.firstId === session.id || conflict.secondId === session.id) ? statusBadge('absent') : statusBadge('present')}</span><button class="icon-button" data-remove-schedule="${esc(session.id)}" aria-label="Xóa ${esc(session.id)}">×</button></div>`).join('')}</div><div class="toolbar" style="margin-top:12px"><button class="button button-secondary" data-add-schedule-to-class>Thêm vào danh sách buổi</button><button class="button button-secondary" data-download-calendar>Tải lịch iCalendar</button></div>`, { description: conflicts.length ? `${conflicts.length} xung đột tài nguyên` : 'Lịch được tạo trong trình duyệt.' }) : '';
-  const actions = `<div class="toolbar"><button class="button button-primary" data-add-session>＋ Thêm buổi</button><button class="button button-secondary" data-generate-schedule>Tạo lịch lặp lại</button><button class="button button-secondary" data-import-schedule>Nhập lịch JSON</button></div>`;
+  const actions = `<div class="toolbar"><button class="button button-primary" data-add-session>＋ Thêm buổi</button><button class="button button-secondary" data-generate-schedule>Tạo lịch lặp lại</button><button class="button button-secondary" data-plan-schedule>Xếp lịch theo ràng buộc</button><button class="button button-secondary" data-import-schedule>Nhập lịch JSON</button></div>`;
   return `${panel('Các buổi học', `${actions}<div style="height:12px"></div>${rows ? `<div class="session-list">${rows}</div>` : emptyInline('Chưa có buổi học. Thêm một buổi hoặc tạo lịch lặp lại.')}`, { description: `${state.snapshot.sessionIds.length} buổi theo thứ tự hiện tại` })}${schedulePanel}`;
 }
 
@@ -349,6 +350,7 @@ function bindViewActions(root) {
   $$('[data-remove-session]', root).forEach((button) => button.addEventListener('click', () => removeSession(button.dataset.removeSession)));
   $('[data-add-session]', root)?.addEventListener('click', addSession);
   $('[data-generate-schedule]', root)?.addEventListener('click', scheduleDialog);
+  $('[data-plan-schedule]', root)?.addEventListener('click', schedulePlannerDialog);
   $('[data-import-schedule]', root)?.addEventListener('click', importSchedule);
   $('[data-add-schedule-to-class]', root)?.addEventListener('click', addScheduleToClass);
   $('[data-download-calendar]', root)?.addEventListener('click', downloadScheduleCalendar);
@@ -462,6 +464,50 @@ function scheduleDialog() {
         closeDialog(); render(); notify(`Đã tạo ${schedule.length} buổi.`);
       } catch (error) { showError(error); }
     };
+  });
+}
+
+function schedulePlannerDialog() {
+  showDialog(`<div class="modal-head"><div><h2>Xếp lịch theo ràng buộc</h2><p>Chọn tệp JSON gồm tasks, slots và các quy tắc unavailable. Công cụ tìm lịch khả thi trong giới hạn tìm kiếm.</p></div><button type="button" class="icon-button" data-close>×</button></div><div class="form-field"><label for="schedule-plan-file">Tệp cấu hình planner</label><input id="schedule-plan-file" type="file" accept=".json,application/json"></div><div class="file-drop"><p>Mỗi task khai báo thời lượng, nhóm, giảng viên và yêu cầu phòng. Mỗi slot khai báo thời gian, phòng, sức chứa và thiết bị.</p></div><div class="modal-actions"><button type="button" class="button button-secondary" data-close>Đóng</button><button type="button" class="button button-primary" id="run-schedule-plan">Tính lịch</button></div>`, () => {
+    bindModalClose();
+    $('#run-schedule-plan').addEventListener('click', async () => {
+      const file = $('#schedule-plan-file').files?.[0];
+      if (!file) { showError(new Error('Chọn tệp cấu hình lịch trước.')); return; }
+      try { renderSchedulePlan(planSchedule(JSON.parse(await file.text()))); }
+      catch (error) { showError(error); }
+    });
+  });
+}
+
+function schedulePlanEntries(plan) {
+  return plan.assignments.map((item) => ({
+    id: item.id,
+    start: item.start,
+    end: item.end,
+    resources: [...new Set([`room:${item.roomId}`,
+      ...(item.groupId ? [`group:${item.groupId}`] : []),
+      ...(item.instructorId ? [`instructor:${item.instructorId}`] : []), ...item.resources])],
+  }));
+}
+
+function renderSchedulePlan(plan) {
+  const entries = schedulePlanEntries(plan);
+  const existingIds = new Set(state.schedule.map((item) => item.id));
+  const idConflicts = entries.filter((item) => existingIds.has(item.id)).map((item) => item.id);
+  const scheduleConflicts = idConflicts.length ? [] : findScheduleConflicts([...state.schedule, ...entries]);
+  const canApply = plan.complete && !idConflicts.length && !scheduleConflicts.length;
+  const rows = plan.assignments.map((item) => `<tr><td>${esc(item.id)}</td><td>${esc(new Date(item.start).toLocaleString('vi-VN'))}</td><td>${esc(item.roomId)}</td><td>${esc(item.groupId ?? '—')}</td><td>${esc(item.instructorId ?? '—')}</td></tr>`).join('');
+  const unscheduled = plan.unscheduled.map((item) => `<article class="audit-issue audit-warning"><div class="audit-issue-top"><strong>${esc(item.title || item.id)}</strong></div><p>${esc(item.reasons.join(', '))}</p><small>${item.blockers.length} xung đột · ${item.candidateCount} lựa chọn phù hợp</small></article>`).join('');
+  const warning = idConflicts.length ? `<div class="empty-inline">Mã buổi bị trùng với lịch tạm hiện tại: ${esc(idConflicts.join(', '))}</div>`
+    : scheduleConflicts.length ? `<div class="empty-inline">Lịch có ${scheduleConflicts.length} xung đột với các buổi tạm hiện tại.</div>` : '';
+  showDialog(`<div class="modal-head"><div><h2>${plan.complete ? 'Đã tìm thấy lịch đầy đủ' : 'Lịch chưa xếp đủ'}</h2><p>Đã xếp ${plan.summary.scheduled}/${plan.summary.tasks} buổi · ${plan.summary.nodesExplored} bước tìm kiếm${plan.summary.searchLimitReached ? ' · chạm giới hạn tìm kiếm' : ''}.</p></div><button type="button" class="icon-button" data-close>×</button></div>${warning}<div class="table-wrap"><table><thead><tr><th>MÃ BUỔI</th><th>BẮT ĐẦU</th><th>PHÒNG</th><th>NHÓM</th><th>GIẢNG VIÊN</th></tr></thead><tbody>${rows || `<tr><td colspan="5">${emptyInline('Chưa có buổi nào được xếp.')}</td></tr>`}</tbody></table></div>${unscheduled ? `<div class="audit-issue-list">${unscheduled}</div>` : ''}<div class="modal-actions"><button type="button" class="button button-secondary" data-close>Đóng</button><button type="button" class="button button-secondary" id="download-schedule-plan">Tải kết quả JSON</button><button type="button" class="button button-primary" id="apply-schedule-plan" ${canApply ? '' : 'disabled'}>Dùng lịch này</button></div>`, () => {
+    bindModalClose();
+    $('#download-schedule-plan').addEventListener('click', () => download('attendance-schedule-plan.json', `${JSON.stringify(plan, null, 2)}\n`));
+    $('#apply-schedule-plan').addEventListener('click', () => {
+      if (!canApply) return;
+      state.schedule = [...state.schedule, ...entries];
+      closeDialog(); render(); notify(`Đã thêm ${entries.length} buổi vào lịch tạm.`);
+    });
   });
 }
 

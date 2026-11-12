@@ -26,6 +26,7 @@ import { createScenario, evaluateScenario, parseScenario, removeScenarioChange, 
   serializeScenario, setScenarioChange } from './scenario.mjs';
 import { auditAttendanceSnapshot, auditToCsv } from './audit.mjs';
 import { previewAttendanceImport } from './import-preview.mjs';
+import { planSchedule } from './schedule-planner.mjs';
 
 const usage = `Attendance workbench (Node.js 22+)
 
@@ -44,6 +45,7 @@ const usage = `Attendance workbench (Node.js 22+)
   node cli.mjs audit SNAPSHOT.json [OPTIONS.json]
   node cli.mjs audit-csv SNAPSHOT.json [OPTIONS.json]
   node cli.mjs preview-import ROSTER.csv SESSIONS.json ATTENDANCE.csv
+  node cli.mjs schedule-plan PLAN.json
   node cli.mjs apply SNAPSHOT.json CHANGES.json
   node cli.mjs compare BEFORE.json AFTER.json
   node cli.mjs export-csv SNAPSHOT.json
@@ -241,6 +243,10 @@ export async function runCommand(args) {
       if (values.length < 3 || values.length > 4) throw new TypeError('expected schedule, domain, timestamp and optional title');
       return sessionsToICalendar(JSON.parse(await readText(values[0])),
         { uidDomain: values[1], generatedAt: values[2], title: values[3] });
+    }
+    case 'schedule-plan': {
+      requireArgs(values, 1);
+      return json(planSchedule(JSON.parse(await readText(values[0]))));
     }
     default:
       throw new TypeError(`unknown command: ${command}; use --help`);

@@ -86,6 +86,14 @@ JSON schedule. `schedule-conflicts` checks that schedule for shared-resource
 overlaps. `schedule-calendar` exports it as iCalendar using the supplied UID
 domain and UTC generation timestamp, for example `2026-01-01T00:00:00Z`.
 
+`schedule-plan` assigns meetings from a JSON list of candidate time and room
+slots. It respects capacity, required room features, duration, group and
+instructor availability, and exclusive resources. The deterministic search
+returns a best partial plan when constraints prevent a complete timetable and
+reports the blockers. `maxSearchNodes` bounds the search; the result states
+whether that bound was reached. The browser can preview a plan and replace its
+temporary schedule only after the whole plan is feasible.
+
 ## Giao diện cục bộ
 
 Chạy `node tools/attendance-workbench/serve.mjs` từ thư mục gốc dự án và mở
