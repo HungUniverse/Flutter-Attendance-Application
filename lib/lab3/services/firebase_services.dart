@@ -21,20 +21,33 @@ import '../../firebase_options.dart';
 Future<void> initializeMobileFirebase() async {
   if (Firebase.apps.isEmpty) {
     const key = String.fromEnvironment('FIREBASE_API_KEY');
-    await Firebase.initializeApp(options: key.isEmpty ? (Platform.isWindows ? desktopFirebaseOptions : null) : const FirebaseOptions(
-      apiKey: key,
-      appId: String.fromEnvironment('FIREBASE_APP_ID'),
-      messagingSenderId: String.fromEnvironment('FIREBASE_SENDER_ID'),
-      projectId: String.fromEnvironment('FIREBASE_PROJECT_ID', defaultValue: 'fap-attendance-71655'),
-      authDomain: String.fromEnvironment('FIREBASE_AUTH_DOMAIN'),
-    ));
+    await Firebase.initializeApp(
+      options: key.isEmpty
+          ? (Platform.isWindows ? desktopFirebaseOptions : null)
+          : const FirebaseOptions(
+              apiKey: key,
+              appId: String.fromEnvironment('FIREBASE_APP_ID'),
+              messagingSenderId: String.fromEnvironment('FIREBASE_SENDER_ID'),
+              projectId: String.fromEnvironment(
+                'FIREBASE_PROJECT_ID',
+                defaultValue: 'fap-attendance-71655',
+              ),
+              authDomain: String.fromEnvironment('FIREBASE_AUTH_DOMAIN'),
+            ),
+    );
   }
   if (Platform.isAndroid) {
+    const debugToken = String.fromEnvironment('FIREBASE_APPCHECK_DEBUG_TOKEN');
     await FirebaseAppCheck.instance.activate(
-      providerAndroid: kDebugMode ? const AndroidDebugProvider() : const AndroidPlayIntegrityProvider(),
+      providerAndroid: kDebugMode
+          ? AndroidDebugProvider(debugToken: debugToken.isEmpty ? null : debugToken)
+          : const AndroidPlayIntegrityProvider(),
     );
   } else if (Platform.isWindows) {
-    await FirebaseAppCheck.instance.activate(providerWindows: const WindowsDebugProvider());
+    const debugToken = String.fromEnvironment('FIREBASE_APPCHECK_DEBUG_TOKEN');
+    await FirebaseAppCheck.instance.activate(
+      providerWindows: WindowsDebugProvider(debugToken: debugToken.isEmpty ? null : debugToken),
+    );
   }
 }
 

@@ -45,6 +45,7 @@ web/node_modules/
 web/dist/
 .firebase/
 **/.env.local
+mobile/firebase-debug.json
 **/*-debug.log
 backend/data/
 backend/.env
