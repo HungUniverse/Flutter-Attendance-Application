@@ -18,6 +18,7 @@ import 'services/device_service.dart';
 import 'services/firebase_services.dart';
 import '../data/shared_workspace_sync.dart';
 import '../data/firestore_workspace_remote.dart';
+import '../data/firestore_report_metadata.dart';
 import 'services/synced_workspace_repository.dart';
 import 'ui/mobile_theme.dart';
 import 'ui/teacher_app.dart';
@@ -59,7 +60,7 @@ class MobileBootstrapService {
     late TeacherViewModel model;
     model = TeacherViewModel(
       auth: auth,
-      repository: SyncedMobileWorkspaceRepository(root, sync),
+      repository: SyncedMobileWorkspaceRepository(root, sync, reports: FirestoreReportMetadata(db, root)),
       sync: sync,
       telemetry: telemetry,
       config: config,

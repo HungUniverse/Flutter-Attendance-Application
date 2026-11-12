@@ -15,6 +15,7 @@ import '../../domain/roster_merge_service.dart';
 import '../../domain/schedule_service.dart';
 import '../services/contracts.dart';
 import '../services/report_destination.dart';
+import '../services/synced_workspace_repository.dart';
 
 enum AttendanceMode { link, manual }
 
@@ -715,7 +716,9 @@ class TeacherViewModel extends ChangeNotifier {
       await _safe(
         () => telemetry.event('attendance_exported', {'format': format}),
       );
-      message = 'Đã lưu file trên thiết bị.';
+      final reports = repository is SyncedMobileWorkspaceRepository
+          ? (repository as SyncedMobileWorkspaceRepository).reports : null;
+      message = reports?.warning ?? 'Đã lưu file trên thiết bị.';
     },
   );
   Future<bool> upload() => _run('upload_report', () async {

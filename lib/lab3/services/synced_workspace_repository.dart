@@ -3,16 +3,27 @@ import '../../domain/models.dart';
 import 'mobile_workspace_repository.dart';
 
 class SyncedMobileWorkspaceRepository extends FileMobileWorkspaceRepository {
-  SyncedMobileWorkspaceRepository(super.root, this.sync);
+  SyncedMobileWorkspaceRepository(super.root, this.sync, {this.reports});
   final SharedWorkspaceSync sync;
+  final FirestoreReportMetadata? reports;
   void _check(String uid) {
     if (uid != sync.owner) throw StateError('Tài khoản đã thay đổi.');
   }
 
   @override
-  Future<TeacherWorkspace?> load(String uid, {String? semester}) {
+  Future<TeacherWorkspace?> load(String uid, {String? semester}) async {
     _check(uid);
-    return sync.load(semester: semester);
+    final value = await sync.load(semester: semester);
+    await reports?.flush(uid);
+    return value;
+  }
+
+  @override
+  Future<File> export(String uid, TeacherWorkspace workspace, CourseClass course, Meeting meeting, String format) async {
+    _check(uid);
+    final file = await super.export(uid, workspace, course, meeting, format);
+    await reports?.record(uid, workspace, course, meeting, file, format);
+    return file;
   }
 
   @override
@@ -21,3 +32,5 @@ class SyncedMobileWorkspaceRepository extends FileMobileWorkspaceRepository {
     await sync.save(workspace);
   }
 }
+import 'dart:io';
+import '../../data/firestore_report_metadata.dart';
