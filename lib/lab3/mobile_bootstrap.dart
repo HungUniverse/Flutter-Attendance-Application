@@ -78,8 +78,9 @@ class MobileBootstrapService {
           if (workspace == null || owner == null) return null;
           for (final course in workspace.classes) {
             if (firestoreClassId(owner, workspace.semester, course.id) ==
-                remoteId)
+                remoteId) {
               return course.id;
+            }
           }
           return null;
         },
