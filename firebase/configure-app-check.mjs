@@ -22,8 +22,16 @@ async function api(url, method = "GET", body) {
     );
   return data;
 }
-for (const service of ["firebaseappcheck.googleapis.com", "recaptchaenterprise.googleapis.com", "firebasevertexai.googleapis.com"]) {
-  await api(`https://serviceusage.googleapis.com/v1/projects/${projectNumber}/services/${service}:enable`, "POST", {});
+for (const service of [
+  "firebaseappcheck.googleapis.com",
+  "recaptchaenterprise.googleapis.com",
+  "firebasevertexai.googleapis.com",
+]) {
+  await api(
+    `https://serviceusage.googleapis.com/v1/projects/${projectNumber}/services/${service}:enable`,
+    "POST",
+    {},
+  );
 }
 const base = `https://firebaseappcheck.googleapis.com/v1/projects/${projectNumber}/apps`;
 const config = await api(`${base}/${webApp}/recaptchaEnterpriseConfig`);
@@ -95,6 +103,24 @@ await writeFile(
   localConfig,
   JSON.stringify({ FIREBASE_APPCHECK_DEBUG_TOKEN: token }, null, 2) + "\n",
 );
+for (const service of [
+  "firestore.googleapis.com",
+  "firebaseml.googleapis.com",
+]) {
+  const name = `projects/${projectNumber}/services/${service}`;
+  await api(
+    `https://firebaseappcheck.googleapis.com/v1/${name}?updateMask=enforcementMode`,
+    "PATCH",
+    { name, enforcementMode: "ENFORCED" },
+  );
+  const verified = await api(
+    `https://firebaseappcheck.googleapis.com/v1/${name}`,
+  );
+  if (verified.enforcementMode !== "ENFORCED")
+    throw new Error(
+      `App Check enforcement verification failed for ${service}.`,
+    );
+}
 console.log(
-  "Configured web reCAPTCHA Enterprise and registered local demo App Check tokens. Local token is stored in ignored mobile/firebase-debug.json.",
+  "Verified App Check enforcement for Firestore and AI Logic. Web reCAPTCHA and local demo tokens are configured. Local token is stored in ignored mobile/firebase-debug.json.",
 );
