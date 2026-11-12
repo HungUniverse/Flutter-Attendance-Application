@@ -252,8 +252,13 @@ class FailingRepository extends FileMobileWorkspaceRepository {
 }
 
 class Harness {
-  Harness(this.directory, {bool signedIn = true, this.inMemory = false, AttendanceReviewService? ai, AttendanceLinkService? linkService})
-    : auth = FakeAuth(signedIn: signedIn) {
+  Harness(
+    this.directory, {
+    bool signedIn = true,
+    this.inMemory = false,
+    AttendanceReviewService? ai,
+    AttendanceLinkService? linkService,
+  }) : auth = FakeAuth(signedIn: signedIn) {
     repo = inMemory
         ? MemoryRepository(directory)
         : FailingRepository(directory);
