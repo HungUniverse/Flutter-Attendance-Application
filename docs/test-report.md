@@ -10,8 +10,9 @@ Windows 10, Flutter 3.47.4, Dart 3.13.3, Node.js 24.19.0, Java 21.0.10 và Andro
 | --- | --- | --- |
 | `flutter analyze` | Không có lỗi hoặc lint | Flutter app, core và test |
 | `flutter test` | 83 pass, 1 skip | Nghiệp vụ, lưu trữ, UI, xuất PDF, AI fallback, khôi phục phiên, quyền và callback đăng nhập Windows |
-| Firebase Rules Emulator | 32/32 pass | Người chưa đăng nhập, giảng viên sở hữu, giảng viên khác, sinh viên hợp lệ và ngoài lớp |
-| Web unit test | 3/3 pass | Trạng thái phiên, callback Windows và thông báo lỗi |
+| Firebase Rules Emulator | 39/39 pass ở lượt chạy web admin trước các điều chỉnh cuối | Bao gồm yêu cầu sửa, quyết định nguyên tử, riêng tư hộp thư và luồng repository web |
+| Web unit test | 9/9 pass | Trạng thái phiên, callback Windows, roster, lịch, lịch sử và nội dung hiển thị |
+| Web DOM interaction test | 9/9 pass | Quyền giảng viên, dashboard, tạo lớp, xử lý yêu cầu, hộp thư sinh viên và xóa dữ liệu màn hình khi đổi tài khoản |
 | Native integration test | 3/3 lượt luồng pass | SDK JavaScript → Flutter Windows, dữ liệu Auth/Firestore Emulator |
 | Backend Lab 3 | 11/11 pass | Giữ khả năng đối chiếu relay cũ |
 | Chrome Extension Lab 3 | 10/10 pass | JSON, CSV và adapter |
@@ -74,4 +75,12 @@ Bản sửa callback đã tái hiện HTTP 403 bằng request có `Origin: null`
 - Ba cặp input/output AI thành công sau khi chủ project bổ sung credit. Ba yêu cầu SDK trong phiên kiểm tra hiện tại đều trả thông báo hết credit, được ghi trong thư mục bằng chứng local.
 - ARTEMIS, mã số nộp bài, báo cáo PDF, slide PDF và video demo theo tiêu chí bàn giao.
 
-Web quản lý giảng viên được hoãn theo phạm vi người dùng xác nhận. Windows dùng App Check debug provider cho bản demo. Cách setup và tái chạy kiểm thử nằm trong [FINAL_SETUP.md](FINAL_SETUP.md).
+## Lượt triển khai web quản lý
+
+Người dùng đã yêu cầu tiếp tục web quản lý giảng viên. Repository web đã chạy qua Firestore Emulator với Rules: tạo lớp và lịch, sửa roster, từ chối revision cũ, sinh viên gửi yêu cầu, giảng viên duyệt, giữ kết quả sinh viên khác và audit, từ chối xử lý lại, gửi thông báo và lưu trữ lớp. Lượt này dùng tài khoản tổng hợp `example.com`, không phải đăng nhập Google trên production.
+
+Sau lượt Rules 39/39, mã được siết ID yêu cầu theo lớp/buổi/UID, bảo vệ roster khi có buổi chốt và gửi phản hồi theo UID. Có thêm một ca Rules cho hai link cùng buổi. Người dùng yêu cầu dừng chạy thêm test và đẩy bản hoàn tất, nên bộ Rules chưa chạy lại trên các điều chỉnh cuối. Web đã có thêm 9 DOM test qua; DOM test dùng dịch vụ giả và không thay cho việc kiểm chứng layout hay Google Sign-In thật.
+
+Công cụ trình duyệt báo `The browser access host is unavailable` trong lượt web admin này; chưa kiểm tra trực quan dashboard, responsive và đăng nhập Google trên trình duyệt thật. Production bundle đã build thành công. Không có thay đổi mã Flutter trong lượt web admin.
+
+Windows dùng App Check debug provider cho bản demo. Cách setup và tái chạy kiểm thử nằm trong [FINAL_SETUP.md](FINAL_SETUP.md), luồng web trong [admin-web.md](admin-web.md).
