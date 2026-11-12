@@ -551,3 +551,15 @@ test("email-addressed class announcements are private and require a roster recip
   await assertFails(setDoc(doc(dbFor("other"),"announcements/email2"),{...notice,ownerUid:"other"}));
   await assertFails(setDoc(doc(dbFor("student"),"announcements/email2"),notice));
 });
+
+test("web repositories complete class request approval notification and archive flow under Rules",async()=>{
+  const { exerciseAdminFlow }=await import("../../web/e2e/admin-flow.mjs");
+  const result=await exerciseAdminFlow(async({course,meeting,sessionId})=>{
+    await env.withSecurityRulesDisabled(async context=>{
+      const db=context.firestore();
+      await updateDoc(doc(db,`classes/${course.id}/meetings/${meeting.id}`),{state:"closed",records:{S1:mark("A"),S2:mark("A")}});
+      await setDoc(doc(db,`attendanceSessions/${sessionId}`),{...session(),classId:course.id,localClassId:course.data.id,meetingId:meeting.id,receiving:false});
+    });
+  });
+  assert.equal(Object.values(result).every(Boolean),true);
+});
