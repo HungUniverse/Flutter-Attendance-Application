@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../data/roster_importer.dart';
@@ -17,6 +18,7 @@ import '../services/contracts.dart';
 import '../services/report_destination.dart';
 import '../services/synced_workspace_repository.dart';
 import '../services/ai_attendance_review.dart';
+import '../services/attendance_draft_store.dart';
 
 enum AttendanceMode { link, manual }
 
@@ -32,6 +34,7 @@ class TeacherViewModel extends ChangeNotifier {
     required this.links,
     this.sync,
     this.ai,
+    this.drafts,
     DateTime Function()? clock,
   }) : now = clock ?? DateTime.now;
 
@@ -45,6 +48,13 @@ class TeacherViewModel extends ChangeNotifier {
   final DeviceService device;
   final AttendanceLinkService links;
   final AttendanceReviewService? ai;
+  final AttendanceDraftStore? drafts;
+  TeacherWorkspace? _publishedWorkspace;
+  Map<String, MeetingAttendanceDraft> _manualDrafts = {};
+  List<MeetingAttendanceDraft> get manualDrafts =>
+      _manualDrafts.values.toList();
+  int get draftCount =>
+      _manualDrafts.values.fold(0, (sum, d) => sum + d.records.length);
   AiAttendanceReview? aiReview;
   final DateTime Function() now;
   final attendance = AttendanceService();
@@ -81,6 +91,9 @@ class TeacherViewModel extends ChangeNotifier {
   String get uid =>
       user?.uid ?? (throw const AppProblem('Vui lòng đăng nhập.'));
   FeatureSettings get settings => config.current;
+  DateTime get linkNow => links is ServerTimedAttendanceLinks
+      ? (links as ServerTimedAttendanceLinks).serverNow
+      : now();
 
   Future<void> initialize({bool timers = true}) async {
     sync?.addListener(_notify);
@@ -105,6 +118,8 @@ class TeacherViewModel extends ChangeNotifier {
     final generation = ++_generation;
     user = identity;
     workspace = null;
+    _publishedWorkspace = null;
+    _manualDrafts = {};
     aiReview = null;
     link = null;
     _watchLink();
@@ -126,8 +141,13 @@ class TeacherViewModel extends ChangeNotifier {
       if (identity == null) return;
       final loaded = await repository.load(identity.uid);
       final savedLink = await repository.loadLink(identity.uid);
+      final savedDrafts = drafts == null
+          ? <String, MeetingAttendanceDraft>{}
+          : await drafts!.load(identity.uid);
       if (generation != _generation || disposed) return;
-      workspace = loaded;
+      _manualDrafts = savedDrafts;
+      _publishedWorkspace = loaded;
+      workspace = loaded == null ? null : _applyDrafts(loaded);
       link = savedLink;
       _watchLink();
       await _clearClosedLink(identity.uid, savedLink);
@@ -166,6 +186,15 @@ class TeacherViewModel extends ChangeNotifier {
       return error.message?.toString() ?? 'Dữ liệu không hợp lệ.';
     }
     if (error is FormatException) return error.message;
+    if (error is FirebaseException) {
+      if (error.code == 'permission-denied') {
+        return 'Firebase từ chối quyền thao tác (permission-denied). Hãy đồng bộ lại và kiểm tra quyền giảng viên.';
+      }
+      if (error.code == 'unavailable' || error.code == 'deadline-exceeded') {
+        return 'Chưa kết nối được Firebase (${error.code}). Kiểm tra mạng rồi thử lại.';
+      }
+      return 'Firebase chưa hoàn tất thao tác (${error.code}). Hãy thử đồng bộ lại.';
+    }
     if (error is SocketException || error is TimeoutException) {
       return 'Không có kết nối. Dữ liệu đã lưu trên máy được giữ lại.';
     }
@@ -255,6 +284,7 @@ class TeacherViewModel extends ChangeNotifier {
     await _safe(() => telemetry.event('login', {'method': 'google'}));
   }, allowAccountChange: true);
   Future<bool> signOut() => _run('sign_out', () async {
+    await _saveDrafts(ensureSaved: true);
     // Stop the remote session first; do not leave a receiving link behind.
     if (link != null) await _stopLink();
     await _safe(() => notifications.stop());
@@ -272,17 +302,105 @@ class TeacherViewModel extends ChangeNotifier {
       workspace!.classes.singleWhere((c) => c.id == id);
   Meeting meeting(String classId, String meetingId) =>
       course(classId).meetings.singleWhere((m) => m.id == meetingId);
+  Meeting? _draftMeeting(
+    TeacherWorkspace? value,
+    MeetingAttendanceDraft draft,
+  ) => value?.semester != draft.semester
+      ? null
+      : value?.classes
+            .firstWhereOrNull((c) => c.id == draft.classId)
+            ?.meetings
+            .firstWhereOrNull((m) => m.id == draft.meetingId);
+
+  TeacherWorkspace _applyDrafts(TeacherWorkspace value) => value.copyWith(
+    classes: value.classes.map((c) {
+      final records = {...c.attendance};
+      for (final m in c.meetings) {
+        final draft = _manualDrafts['${value.semester}/${c.id}/${m.id}'];
+        if (draft == null ||
+            m.state != MeetingState.active ||
+            !m.startAt.isAtSameMomentAs(draft.startAt)) {
+          continue;
+        }
+        records[m.id] = {
+          ...?records[m.id],
+          for (final s in c.students)
+            if (draft.records.containsKey(s.rollNumber))
+              s.rollNumber: draft.records[s.rollNumber]!,
+        };
+      }
+      return c.copyWith(attendance: records);
+    }).toList(),
+  );
+
+  TeacherWorkspace _withoutOpenDrafts(TeacherWorkspace value) => value.copyWith(
+    classes: value.classes.map((c) {
+      final records = {...c.attendance};
+      final original = _publishedWorkspace?.classes.firstWhereOrNull(
+        (old) => old.id == c.id,
+      );
+      for (final m in c.meetings.where((m) => m.state != MeetingState.closed)) {
+        final draft = _manualDrafts['${value.semester}/${c.id}/${m.id}'];
+        if (draft == null) continue;
+        final clean = {...?records[m.id]};
+        for (final roll in draft.records.keys) {
+          final published = original?.recordFor(m.id, roll);
+          if (published == null) {
+            clean.remove(roll);
+          } else {
+            clean[roll] = published;
+          }
+        }
+        records[m.id] = clean;
+      }
+      return c.copyWith(attendance: records);
+    }).toList(),
+  );
+
+  Future<void> _saveDrafts({bool ensureSaved = false}) async {
+    if (drafts == null || user == null) return;
+    final generation = _generation;
+    try {
+      await drafts!.save(uid, _manualDrafts);
+    } on Object {
+      if (generation == _generation && !disposed) {
+        error = 'Các lựa chọn vẫn đang trên màn hình nhưng chưa lưu được bản nháp xuống máy. Hãy chốt trước khi đóng app.';
+        _notify();
+      }
+      if (ensureSaved) {
+        throw const AppProblem(
+          'Chưa lưu được bản nháp. Hãy thử lại trước khi đăng xuất.',
+        );
+      }
+    }
+  }
+
   Future<void> _persist(TeacherWorkspace value) async {
     final owner = uid;
     final generation = _generation;
-    final updated = value.copyWith(updatedAt: now().toUtc());
+    final updated = _withoutOpenDrafts(value)
+        .copyWith(updatedAt: now().toUtc());
+    final closedDrafts = _manualDrafts.values
+        .where(
+          (draft) =>
+              _draftMeeting(_publishedWorkspace, draft)?.state ==
+                  MeetingState.active &&
+              _draftMeeting(updated, draft)?.state == MeetingState.closed,
+        )
+        .map((d) => d.key)
+        .toList();
     await repository.save(owner, updated);
     if (generation != _generation || disposed) {
       throw const AppProblem(
         'Workspace đã thay đổi. Hãy kiểm tra lại dữ liệu.',
       );
     }
-    workspace = updated;
+    _publishedWorkspace = updated;
+    for (final key in closedDrafts) {
+      _manualDrafts.remove(key);
+    }
+    workspace = _applyDrafts(updated);
+    if (closedDrafts.isNotEmpty) await _saveDrafts();
     _notify();
   }
 
@@ -394,55 +512,88 @@ class TeacherViewModel extends ChangeNotifier {
     String roll,
     AttendanceStatus status, {
     String? reason,
-  }) => _run('attendance_mark', () async {
-    final c = course(classId);
-    final old = c.recordFor(meetingId, roll);
-    final updated = old == null || old.status == AttendanceStatus.unmarked
-        ? attendance.markManual(
-            c,
-            meetingId: meetingId,
-            rollNumber: roll,
+  }) {
+    if (busy || loadingWorkspace || disposed) return Future.value(false);
+    try {
+      final c = course(classId), m = meeting(classId, meetingId);
+      if (m.state != MeetingState.active || !m.isOnDate(now())) {
+        throw const AppProblem(
+          'Chỉ chọn bản nháp cho buổi đang mở hôm nay. Buổi đã chốt cần sửa có lý do.',
+        );
+      }
+      if (status == AttendanceStatus.unmarked ||
+          !c.students.any((s) => s.rollNumber == roll)) {
+        throw const AppProblem('Sinh viên hoặc kết quả không hợp lệ.');
+      }
+      final key = '${workspace!.semester}/$classId/$meetingId';
+      final previous = _manualDrafts[key];
+      _manualDrafts[key] = MeetingAttendanceDraft(
+        semester: workspace!.semester,
+        classId: classId,
+        meetingId: meetingId,
+        startAt: m.startAt,
+        records: {
+          ...?previous?.records,
+          roll: AttendanceRecord(
             status: status,
-            now: now(),
-          )
-        : attendance.overrideStatus(
-            c,
-            meetingId: meetingId,
-            rollNumber: roll,
-            status: status,
-            reason: reason ?? '',
-            auditId: const Uuid().v4(),
-            now: now(),
-          );
-    await _replace(updated);
-    await _safe(
-      () => telemetry.event('attendance_marked', {
-        'mode': 'manual',
-        'status': attendanceCode(status),
-      }),
-    );
-    message = 'Đã lưu trên thiết bị.';
-  });
+            source: AttendanceSource.manual,
+            recordedAt: now(),
+            note: reason,
+          ),
+        },
+      );
+      workspace = _applyDrafts(workspace!);
+      error = null;
+      message = 'Bản nháp trên máy · Chỉ gửi kết quả khi chốt.';
+      _notify();
+      unawaited(_saveDrafts());
+      unawaited(
+        _safe(
+          () => telemetry.event('attendance_draft_changed', {
+            'status': attendanceCode(status),
+          }),
+        ),
+      );
+      return Future.value(true);
+    } on Object catch (failure) {
+      error = _friendly(failure);
+      _notify();
+      return Future.value(false);
+    }
+  }
+
   Future<bool> edit(
     String classId,
     String meetingId,
     String roll,
     AttendanceStatus status,
     String reason,
-  ) => _run('attendance_edit', () async {
-    await _replace(
-      attendance.overrideStatus(
-        course(classId),
-        meetingId: meetingId,
-        rollNumber: roll,
-        status: status,
-        reason: reason,
-        auditId: const Uuid().v4(),
-        now: now(),
-      ),
-    );
-    message = 'Đã lưu thay đổi và lý do.';
-  });
+  ) {
+    if (meeting(classId, meetingId).state == MeetingState.active) {
+      return mark(classId, meetingId, roll, status, reason: reason);
+    }
+    return _run('attendance_edit', () async {
+      await _replace(
+        attendance.overrideStatus(
+          course(classId),
+          meetingId: meetingId,
+          rollNumber: roll,
+          status: status,
+          reason: reason,
+          auditId: const Uuid().v4(),
+          now: now(),
+        ),
+      );
+      final draft = _manualDrafts['${workspace!.semester}/$classId/$meetingId'];
+      if (draft?.records[roll]?.status == status) {
+        draft!.records.remove(roll);
+        if (draft.records.isEmpty) _manualDrafts.remove(draft.key);
+        await _saveDrafts();
+      }
+      message = 'Đã lưu thay đổi và lý do.';
+    });
+  }
+
   Map<AttendanceStatus, int> counts(String classId, String meetingId) {
     final c = course(classId);
     final result = {for (final s in AttendanceStatus.values) s: 0};
@@ -489,7 +640,9 @@ class TeacherViewModel extends ChangeNotifier {
             'absent_count': totals[AttendanceStatus.absent]!,
           }),
         );
-        message = 'Đã chốt. Các ô chưa ghi đã chuyển thành Absent.';
+        message = sync != null && sync!.status != 'Đã đồng bộ'
+            ? 'Đã chốt trên máy; chưa xác nhận đồng bộ Firebase. ${sync!.status}'
+            : 'Đã chốt. Các ô chưa ghi đã chuyển thành Absent.';
       });
 
   Future<bool> requestAiReview(String classId, String meetingId) => _run(
@@ -530,7 +683,7 @@ class TeacherViewModel extends ChangeNotifier {
               'Chưa kiểm tra được link hiện có. Hãy thử lại khi có mạng.',
             );
           }
-          if (link!.receiving && link!.expiresAt.isAfter(now())) return;
+          if (link!.receiving && link!.expiresAt.isAfter(linkNow)) return;
           await _stopLink();
         }
         if (!settings.enableLink) {
@@ -627,7 +780,8 @@ class TeacherViewModel extends ChangeNotifier {
       final generation = _generation;
       final received = await sync!.useServer(workspace!.semester);
       if (generation != _generation || disposed) return;
-      workspace = received;
+      _publishedWorkspace = received;
+      workspace = received == null ? null : _applyDrafts(received);
       await _clearClosedLink(owner, link);
     }
     _notify();
@@ -691,7 +845,8 @@ class TeacherViewModel extends ChangeNotifier {
         semester: workspace?.semester,
       );
       if (generation != _generation || disposed) return;
-      workspace = loaded;
+      _publishedWorkspace = loaded;
+      workspace = loaded == null ? null : _applyDrafts(loaded);
       await _clearClosedLink(owner, link);
       if (generation != _generation || disposed) return;
       if (link == null &&

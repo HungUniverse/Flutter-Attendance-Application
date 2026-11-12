@@ -15,6 +15,7 @@ import 'package:path_provider/path_provider.dart';
 import 'services/firestore_attendance_links.dart';
 import 'services/firestore_notifications.dart';
 import 'services/ai_attendance_review.dart';
+import 'services/attendance_draft_store.dart';
 import 'services/device_service.dart';
 import 'services/firebase_services.dart';
 import '../data/shared_workspace_sync.dart';
@@ -67,6 +68,7 @@ class MobileBootstrapService {
         reports: FirestoreReportMetadata(db, root),
       ),
       sync: sync,
+      drafts: AttendanceDraftStore(root),
       telemetry: telemetry,
       config: config,
       notifications: FirestoreNotifications(
