@@ -2,11 +2,14 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../data/attendance_csv_exporter.dart';
 import '../data/desktop_teacher_auth.dart';
+import '../data/firestore_workspace_remote.dart';
+import '../lab3/services/firestore_attendance_links.dart';
 import '../data/shared_workspace_sync.dart';
 import '../data/synced_desktop_store.dart';
 import '../lab3/services/attendance_link_service.dart';
@@ -24,10 +27,13 @@ class AttendanceController extends ChangeNotifier {
     AttendanceService? attendanceService,
     AttendanceCsvExporter? csvExporter,
     RosterMergeService? rosterMergeService,
+    AuthService? teacherAuth,
+    this.finalFirebase = false,
   }) : _importer = importer ?? RosterImporter(),
        _attendanceService = attendanceService ?? AttendanceService(),
        _csvExporter = csvExporter ?? AttendanceCsvExporter(),
-       _rosterMergeService = rosterMergeService ?? RosterMergeService();
+       _rosterMergeService = rosterMergeService ?? RosterMergeService(),
+       desktopAuth = teacherAuth ?? DesktopTeacherAuth();
 
   final RosterImporter _importer;
   final AttendanceService _attendanceService;
@@ -41,7 +47,8 @@ class AttendanceController extends ChangeNotifier {
   String? workspacePath;
   String? lastMessage;
   bool busy = false;
-  final desktopAuth = DesktopTeacherAuth();
+  final AuthService desktopAuth;
+  final bool finalFirebase;
   SharedWorkspaceSync? sync;
   TeacherWorkspace? _legacyWorkspace;
   bool get canMigrateLegacy =>
@@ -70,7 +77,7 @@ class AttendanceController extends ChangeNotifier {
     }
   }
 
-  HttpAttendanceLinkService? sharedLinks;
+  AttendanceLinkService? sharedLinks;
   String get syncLabel => sync?.status ?? 'Lưu trên thiết bị';
   Future<void> disconnectAccount() async {
     if (busy) return;
@@ -97,17 +104,25 @@ class AttendanceController extends ChangeNotifier {
     notifyListeners();
     try {
       await desktopAuth.signIn();
+      final remote = finalFirebase ? FirestoreWorkspaceRemote(FirebaseFirestore.instance, desktopAuth) : null;
+      if (remote != null) {
+        try { await remote.requireTeacher(); }
+        on Object { await desktopAuth.signOut(); rethrow; }
+      }
       if (sync == null) _legacyWorkspace = workspace;
       final documents = await getApplicationDocumentsDirectory();
       sync?.removeListener(notifyListeners);
       sync?.dispose();
       sync = SharedWorkspaceSync(
-        SharedApi(desktopAuth),
+        remote ?? SharedApi(desktopAuth),
         Directory('${documents.path}/FAP Attendance Shared'),
       );
       sync!.addListener(notifyListeners);
       _store = SyncedDesktopStore(sync!, desktopAuth.current!.uid);
-      sharedLinks = HttpAttendanceLinkService(desktopAuth);
+      sharedLinks = finalFirebase
+          ? FirestoreAttendanceLinks(FirebaseFirestore.instance, desktopAuth, () => workspace?.semester,
+              hostingUrl: 'https://${FirebaseFirestore.instance.app.options.projectId}.web.app')
+          : HttpAttendanceLinkService(desktopAuth);
       workspace = await _store!.loadMostRecentWorkspace();
       lastMessage =
           'Đã đăng nhập ${desktopAuth.current!.email}. Dữ liệu cũ trên máy được giữ riêng; import vào tài khoản nếu cần.';
@@ -169,6 +184,10 @@ class AttendanceController extends ChangeNotifier {
     );
     _store = WorkspaceStore(root);
     workspace = await _store!.loadMostRecentWorkspace();
+    if (finalFirebase) {
+      _legacyWorkspace = workspace;
+      workspace = null;
+    }
     if (workspace != null) {
       final migratedSessions = await _store!.migrateLegacySessions(workspace!);
       workspacePath =
@@ -199,6 +218,7 @@ class AttendanceController extends ChangeNotifier {
     int weeks = 10,
     int meetingsPerWeek = 2,
   }) async {
+    if (finalFirebase && sync == null) throw const AppProblem('Vui lòng đăng nhập Google trước khi nạp lớp vào Firebase.');
     busy = true;
     lastMessage = null;
     notifyListeners();
@@ -391,7 +411,10 @@ class AttendanceController extends ChangeNotifier {
 
   Future<void> closeMeeting(String classId, String meetingId) async {
     if (sharedLinks != null) {
-      final session = await sharedLinks!.current();
+      final service = sharedLinks!;
+      final session = service is LiveAttendanceLinks
+          ? await service.current()
+          : await (service as HttpAttendanceLinkService).current();
       if (session != null &&
           session.classId == classId &&
           session.meetingId == meetingId) {
