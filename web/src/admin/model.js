@@ -100,7 +100,7 @@ export function generateMeetings(localId, scheduleCode, start, weeks, perWeek) {
       [3, 6],
     ][Number(scheduleCode[0]) - 1].slice(0, perWeek);
   const [hour, minute, endHour, endMinute] = [
-    [7, 0, 9, 15],
+    [7, 30, 9, 15],
     [9, 30, 11, 45],
     [12, 30, 14, 45],
     [15, 0, 17, 15],

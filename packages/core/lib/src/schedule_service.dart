@@ -16,7 +16,7 @@ class SlotTime {
 
 class ScheduleService {
   static const slotTimes = <int, SlotTime>{
-    1: SlotTime(7, 0, 9, 15),
+    1: SlotTime(7, 30, 9, 15),
     2: SlotTime(9, 30, 11, 45),
     3: SlotTime(12, 30, 14, 45),
     4: SlotTime(15, 0, 17, 15),
