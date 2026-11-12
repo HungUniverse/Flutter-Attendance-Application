@@ -187,6 +187,30 @@ void main() {
   group('AttendanceAnalyticsService - Class Summary & Export', () {
     const service = AttendanceAnalyticsService();
 
+    test('class summary matches individual reports for an unsorted schedule', () {
+      final course = _buildTestCourse(
+        meetingCount: 3,
+        closedCount: 2,
+        attendance: {
+          'm1': {'SE194673': _rec(AttendanceStatus.present)},
+          'm2': {'se194673': _rec(AttendanceStatus.absent)},
+          'm3': {'SE194673': _rec(AttendanceStatus.absent)},
+        },
+      );
+      final unsorted = course.copyWith(meetings: course.meetings.reversed.toList());
+
+      final summary = service.summarizeClass(unsorted);
+      expect(summary.meetingMetrics.map((m) => m.meetingNumber), [1, 2, 3]);
+      expect(summary.closedMeetings, 2);
+      expect(summary.studentAnalytics.first.currentAbsenceStreak, 2);
+      expect(
+        summary.studentAnalytics.map((report) => report.toJson()),
+        unsorted.students.map(
+          (student) => service.analyzeStudent(unsorted, student.rollNumber).toJson(),
+        ),
+      );
+    });
+
     test('should aggregate class summary, risk counts, and meeting participation rates', () {
       // Arrange:
       // SE194673: 0 absences (eligible)
