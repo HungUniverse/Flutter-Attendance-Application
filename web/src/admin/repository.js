@@ -23,6 +23,7 @@ import {
   protectHistory,
   correction,
 } from "./model.js";
+import { requireTeacherAccess } from "../access.js";
 
 const rows = (snapshot) =>
   snapshot.docs.map((d) => ({ ...d.data(), id: d.id }));
@@ -43,12 +44,7 @@ export class AdminRepository {
     );
   }
   async requireTeacher() {
-    const profile = await getDocFromServer(this.ref(`users/${this.uid}`));
-    if (profile.data()?.role !== "teacher")
-      throw new AdminError(
-        "Tài khoản chưa được cấp quyền giảng viên.",
-        "teacher-required",
-      );
+    return requireTeacherAccess(this.db, { uid:this.uid, email:this.email });
   }
   watch(name, next, error) {
     return onSnapshot(this.ownQuery(name), (s) => next(rows(s)), error);
