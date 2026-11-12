@@ -1,5 +1,7 @@
 .admin-body{background:#f7f7f4;color:#25322d;font-family:Roboto,Arial,sans-serif;font-size:14px;--accent:#b94b2c;--ink:#25322d;--line:#e5e8e1;--muted:#788079}
 .admin-root{min-height:100dvh}
+#mobile-logout{display:none}
+@media(max-width:800px){#mobile-logout{display:inline-block}}
 .admin-body button,.app-dialog button{width:auto;min-height:40px;margin:0;padding:10px 16px;font-size:13px;border-radius:8px}
 .admin-body button:focus-visible,.admin-body a:focus-visible,.admin-body input:focus-visible,.admin-body select:focus-visible,.app-dialog :is(button,input,select,textarea):focus-visible{outline:3px solid #cc7b42;outline-offset:3px}
 .admin-body a{color:var(--accent);text-decoration:none}
