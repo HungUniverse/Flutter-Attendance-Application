@@ -17,7 +17,7 @@ function readFinalized() {
 let finalized = readFinalized();
 
 function sessionKey(courseCode, classCode, date, scheduleCode) {
-  return `${courseCode}|${classCode}|${date}|${scheduleCode}`;
+  return `${String(courseCode || '').trim().toUpperCase()}|${String(classCode || '').trim().toUpperCase()}|${String(date || '').trim()}|${String(scheduleCode || '').trim().toUpperCase()}`;
 }
 
 function finalizedCount(course) {
@@ -103,7 +103,7 @@ function updateSummary() {
 }
 
 function showFinalized(entry) {
-  const present = entry.statuses.filter((row) => row.status === 'P').length;
+  const present = entry.statuses.filter((row) => String(row?.status || '').trim().toUpperCase() === 'P').length;
   const absent = entry.statuses.length - present;
   $('#finalizedSummary').textContent = `${entry.statuses.length} sinh viên · P: ${present} · A: ${absent} · ${$('#date').textContent}`;
   $('#finalizedBanner').hidden = false;
@@ -120,8 +120,11 @@ function render(session, source) {
   if (!meeting || !Array.isArray(session.attendance) || !session.attendance.length) {
     throw new Error('File này không phải JSON session điểm danh có danh sách sinh viên.');
   }
-  const date = String(meeting.startAt || '').slice(0, 10);
-  if (!date || !session.classCode || !session.courseCode || !session.scheduleCode) {
+  const courseCode = String(session.courseCode || '').trim().toUpperCase();
+  const classCode = String(session.classCode || '').trim().toUpperCase();
+  const scheduleCode = String(session.scheduleCode || '').trim().toUpperCase();
+  const date = String(meeting.startAt || '').trim().slice(0, 10);
+  if (!date || !classCode || !courseCode || !scheduleCode) {
     throw new Error('JSON thiếu mã lớp, môn học hoặc ngày slot.');
   }
   const nextRoster = session.attendance.map((row) => ({
@@ -134,21 +137,24 @@ function render(session, source) {
     throw new Error('Danh sách thiếu hoặc trùng MSSV/họ tên.');
   }
   roster = nextRoster;
-  activeSessionKey = sessionKey(session.courseCode, session.classCode, date, session.scheduleCode);
+  activeSessionKey = sessionKey(courseCode, classCode, date, scheduleCode);
   const saved = finalized[activeSessionKey];
   const savedStatuses = new Map(Array.isArray(saved?.statuses)
-    ? saved.statuses.map((row) => [row.rollNumber, row.status]) : []);
+    ? saved.statuses.map((row) => [
+      String(row?.rollNumber || '').trim().toUpperCase(),
+      String(row?.status || '').trim().toUpperCase(),
+    ]) : []);
   const isFinalized = Boolean(saved && savedStatuses.size === roster.length &&
     roster.every((student) => savedStatuses.has(student.roll)));
-  $('#classHeading').textContent = `${session.courseCode} · ${session.classCode}`;
-  $('#course').textContent = session.courseCode;
-  $('#classCode').textContent = session.classCode;
+  $('#classHeading').textContent = `${courseCode} · ${classCode}`;
+  $('#course').textContent = courseCode;
+  $('#classCode').textContent = classCode;
   $('#date').textContent = date;
-  const dailySlot = String(session.scheduleCode).slice(-1);
+  const dailySlot = scheduleCode.slice(-1);
   $('#slot').textContent = dailySlot;
   $('#studentCount').textContent = String(roster.length);
   const main = document.querySelector('main');
-  main.dataset.attendanceClass = session.classCode;
+  main.dataset.attendanceClass = classCode;
   main.dataset.attendanceDate = date;
   main.dataset.attendanceSlot = dailySlot;
   delete main.dataset.attendanceFinalized;
@@ -264,10 +270,14 @@ $('#sessionFile').addEventListener('change', async (event) => {
   const file = event.target.files?.[0];
   if (!file) return;
   try {
-    const session = JSON.parse(await file.text());
+    const session = JSON.parse((await file.text()).replace(/^\uFEFF/, ''));
+    const normCourse = String(session.courseCode || '').trim().toUpperCase();
+    const normClass = String(session.classCode || '').trim().toUpperCase();
+    const normSchedule = String(session.scheduleCode || '').trim().toUpperCase();
     activeClassIndex = markbookClasses.findIndex((course) =>
-      course.courseCode === session.courseCode && course.classCode === session.classCode &&
-      course.scheduleCode === session.scheduleCode);
+      String(course.courseCode || '').trim().toUpperCase() === normCourse &&
+      String(course.classCode || '').trim().toUpperCase() === normClass &&
+      String(course.scheduleCode || '').trim().toUpperCase() === normSchedule);
     if (activeClassIndex >= 0) {
       populateMeetings(markbookClasses[activeClassIndex], session.meeting?.startAt);
     } else {

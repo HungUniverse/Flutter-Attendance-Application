@@ -113,4 +113,43 @@ describe('FAP demo page', () => {
     expect(adapter.preview(rows).metadataWarnings).toContain('Slot này đã chốt danh sách; không thể điền lại.');
     dom.window.close();
   });
+
+  it('normalizes lowercase finalized statuses and UTF-8 BOM session JSON uploads', async () => {
+    const dom = new JSDOM(html, { url: 'http://localhost:4173/', runScripts: 'outside-only' });
+    dom.window.fetch = async () => ({ ok: true, json: async () => markbook } as Response);
+    const key = `${session.courseCode}|${session.classCode}|${session.meeting.startAt.slice(0, 10)}|${session.scheduleCode}`;
+    dom.window.localStorage.setItem('fap-demo-finalized-v1', JSON.stringify({
+      [key]: {
+        statuses: session.attendance.map((row: { rollNumber: string }, idx: number) => ({
+          rollNumber: ` ${row.rollNumber.toLowerCase()} `,
+          status: idx === 0 ? 'p' : 'a',
+        })),
+        submittedAt: '2026-09-07T08:00:00.000Z',
+      },
+    }));
+    dom.window.eval(script);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    openClass(dom, 0);
+    expect(dom.window.document.querySelector('#finalizedBanner')?.hasAttribute('hidden')).toBe(false);
+    expect(dom.window.document.querySelector('#finalizedSummary')?.textContent).toContain('P: 1 · A: 2');
+
+    const input = dom.window.document.querySelector<HTMLInputElement>('#sessionFile')!;
+    const bomSession = {
+      ...secondSession,
+      courseCode: ' prn232 ',
+      classCode: ' se1920 ',
+      scheduleCode: ' m01 ',
+    };
+    Object.defineProperty(input, 'files', {
+      value: [{
+        name: 'bom-session.json',
+        text: async () => `\uFEFF${JSON.stringify(bomSession)}`,
+      }],
+      configurable: true,
+    });
+    input.dispatchEvent(new dom.window.Event('change'));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(dom.window.document.querySelector('#classHeading')?.textContent).toBe('PRN232 · SE1920');
+    dom.window.close();
+  });
 });
