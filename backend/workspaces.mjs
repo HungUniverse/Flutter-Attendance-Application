@@ -2,17 +2,27 @@ import { createHash } from 'node:crypto';
 
 export class WorkspaceConflict extends Error { constructor() { super('Dữ liệu đã thay đổi trên thiết bị khác. Tải bản mới trước khi sửa tiếp.'); this.status = 409; } }
 const key = value => createHash('sha256').update(value).digest('hex');
+const normalizeSemester = value => String(value ?? '').trim().toUpperCase();
 export class FileWorkspaceStore {
   constructor(store) { this.store = store; }
   async read(uid, semester) {
-    const target = typeof semester === 'string' ? semester.trim().toUpperCase() : '';
-    return this.store.transaction(state => {
-      const rows = Object.values(state.workspaces?.[key(uid)] ?? {});
-      return (target ? rows.find(r => String(r.workspace.semester ?? '').trim().toUpperCase() === target) : rows.sort((a,b) => b.updatedAt.localeCompare(a.updatedAt))[0]) ?? null;
+    const target = typeof semester === 'string' ? normalizeSemester(semester) : '';
+    return this.store.read(state => {
+      const rows = state.workspaces?.[key(uid)] ?? {};
+      if (target) {
+        return rows[key(target)]
+          ?? Object.values(rows).find(row => normalizeSemester(row.workspace.semester) === target)
+          ?? null;
+      }
+      let latest = null;
+      for (const row of Object.values(rows)) {
+        if (!latest || row.updatedAt > latest.updatedAt) latest = row;
+      }
+      return latest;
     });
   }
   async write(uid, input) {
-    const normalizedSemester = String(input.workspace.semester ?? '').trim().toUpperCase();
+    const normalizedSemester = normalizeSemester(input.workspace.semester);
     return this.store.transaction(state => {
       state.workspaces ??= {}; const rows = state.workspaces[key(uid)] ??= {};
       const id = key(normalizedSemester); const previous = rows[id];
@@ -30,13 +40,13 @@ export class FirestoreWorkspaceStore {
   constructor(db) { this.db = db; }
   collection(uid) { return this.db.collection('teachers').doc(uid).collection('workspaces'); }
   async read(uid, semester) {
-    const target = typeof semester === 'string' ? semester.trim().toUpperCase() : '';
+    const target = typeof semester === 'string' ? normalizeSemester(semester) : '';
     if (target) return (await this.collection(uid).doc(key(target)).get()).data() ?? null;
     const result = await this.collection(uid).orderBy('updatedAt', 'desc').limit(1).get();
     return result.docs[0]?.data() ?? null;
   }
   async write(uid, input) {
-    const normalizedSemester = String(input.workspace.semester ?? '').trim().toUpperCase();
+    const normalizedSemester = normalizeSemester(input.workspace.semester);
     const ref = this.collection(uid).doc(key(normalizedSemester));
     return this.db.runTransaction(async transaction => {
       const previous = (await transaction.get(ref)).data();

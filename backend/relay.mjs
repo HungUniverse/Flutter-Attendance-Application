@@ -15,21 +15,38 @@ const jsonHeaders = { 'content-type': 'application/json; charset=utf-8',
 /** One process + one persistent volume. Atomic JSON files, no database. */
 export class SessionStore {
   constructor(directory) { this.directory = directory; this.tail = Promise.resolve(); }
-  transaction(action) {
-    const operation = this.tail.then(async () => {
-      await mkdir(this.directory, { recursive: true, mode: 0o700 });
+  async load(file) {
+    try {
+      return JSON.parse(await readFile(file, 'utf8'));
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      return { sessions: [] };
+    }
+  }
+
+  enqueue(action) {
+    const operation = this.tail.then(action);
+    this.tail = operation.catch(() => {});
+    return operation;
+  }
+
+  read(action) {
+    const file = join(this.directory, 'sessions.json');
+    return this.enqueue(async () => action(await this.load(file)));
+  }
+
+  transaction(action, afterCommit) {
+    return this.enqueue(async () => {
       const file = join(this.directory, 'sessions.json');
-      let state;
-      try { state = JSON.parse(await readFile(file, 'utf8')); }
-      catch (error) { if (error.code !== 'ENOENT') throw error; state = { sessions: [] }; }
+      const state = await this.load(file);
       const result = await action(state);
+      await mkdir(this.directory, { recursive: true, mode: 0o700 });
       const temporary = `${file}.tmp`;
       await writeFile(temporary, JSON.stringify(state), { mode: 0o600 });
       await rename(temporary, file);
+      afterCommit?.();
       return result;
     });
-    this.tail = operation.catch(() => {});
-    return operation;
   }
 }
 
@@ -78,7 +95,10 @@ export function createRelay({ store, verifyIdentity, teachers, publicOrigin,
     url: `${origin}/join/${s.token}`, expiresAt: s.expiresAt, receiving: open(s),code:s.codeSecret ? secretCode(s) : null });
   const byToken = (state, token) => state.sessions.find(s => s.token === token) ?? fail(404, 'Không tìm thấy link.');
   const byOwner = (state, id, owner) => state.sessions.find(s => s.id === id && s.owner === owner) ?? fail(404, 'Không tìm thấy phiên của tài khoản.');
-  function today() { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(clock())); }
+  const meetingDate = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit',
+  });
+  const today = () => meetingDate.format(clock());
   return createServer(async (req, res) => {
     const send = (status, value) => { res.writeHead(status, jsonHeaders); res.end(JSON.stringify(value)); };
     try {
@@ -131,14 +151,15 @@ export function createRelay({ store, verifyIdentity, teachers, publicOrigin,
       }
       if (path === '/api/sessions/current' && req.method === 'GET') {
         const user = await identity(req); if (!allowed.has(user.email)) fail(403, 'Tài khoản không có quyền giảng viên.');
-        const current = await store.transaction(state => {
-          const s = [...state.sessions].reverse().find(s => s.owner === user.uid && s.meetingDate === today());
+        const current = await store.read(state => {
+          const date = today();
+          const s = state.sessions.findLast(s => s.owner === user.uid && s.meetingDate === date);
           return s ? summary(s) : null;
         }); send(200, { session: current }); return;
       }
       const page = /^\/join\/([a-f0-9]{64})$/.exec(path);
       if (page && req.method === 'GET') {
-        await store.transaction(state => { const s = byToken(state, page[1]); if (!open(s)) fail(410, 'Buổi học đã dừng nhận hoặc đã chốt.'); });
+        await store.read(state => { const s = byToken(state, page[1]); if (!open(s)) fail(410, 'Buổi học đã dừng nhận hoặc đã chốt.'); });
         res.writeHead(200, { ...jsonHeaders, 'content-type': 'text/html; charset=utf-8',
           'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com; connect-src 'self' https://*.googleapis.com https://*.firebaseapp.com; frame-src https://*.firebaseapp.com https://accounts.google.com; style-src 'unsafe-inline'; base-uri 'none'; form-action 'self'" });
         res.end(studentHtml); return;
@@ -149,7 +170,7 @@ export function createRelay({ store, verifyIdentity, teachers, publicOrigin,
         if (student[2] === 'challenge') {
           await body(req);
           rateLimit(`challenge:${req.socket.remoteAddress}`, 120);
-          const value = await store.transaction(state => {
+          const value = await store.read(state => {
             const s = byToken(state, token);
             if (!open(s)) fail(410, 'Link đã dừng nhận hoặc buổi học đã chốt.');
             for (const [id,c] of challenges) if (c.expiresAt <= clock()) challenges.delete(id);
@@ -172,9 +193,8 @@ export function createRelay({ store, verifyIdentity, teachers, publicOrigin,
           if (!s.emails.includes(user.email)) fail(403, 'Email không thuộc danh sách lớp.');
           if(s.codeSecret && input.code!==secretCode(s) && input.code!==secretCode(s,Math.floor(clock()/15000)-1)) fail(403,'Mã xác nhận không đúng hoặc đã hết hạn. Xem mã mới trên màn hình giảng viên.');
           s.submissions[user.email] ??= { email: user.email, at: new Date(clock()).toISOString() };
-          challenges.delete(input.challengeId);
           return { accepted: true, message: 'Đã gửi điểm danh. Giảng viên sẽ xác nhận kết quả.' };
-        });
+        }, () => challenges.delete(input.challengeId));
         send(200, result); return;
       }
       if (path === '/api/sessions' && req.method === 'POST') {
@@ -209,11 +229,14 @@ export function createRelay({ store, verifyIdentity, teachers, publicOrigin,
       if (teacher && ['GET','DELETE'].includes(req.method)) {
         const user = await identity(req);
         if (!allowed.has(user.email)) fail(403, 'Tài khoản không có quyền giảng viên.');
-        const result = await store.transaction(state => {
+        const sessionDetails = state => {
           const s = byOwner(state, teacher[1], user.uid);
           if (req.method === 'DELETE') s.receiving = false;
           return { ...summary(s), submissions: Object.values(s.submissions) };
-        });
+        };
+        const result = req.method === 'DELETE'
+          ? await store.transaction(sessionDetails)
+          : await store.read(sessionDetails);
         send(200, result); return;
       }
       fail(404, 'Không tìm thấy nội dung.');
