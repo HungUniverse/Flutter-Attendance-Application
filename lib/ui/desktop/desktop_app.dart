@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../application/attendance_controller.dart';
 import '../../domain/models.dart';
 import '../../domain/schedule_service.dart';
+import '../../data/roster_importer.dart';
 import '../theme.dart';
 import 'class_detail_page.dart';
 import 'schedule_settings_dialog.dart';
@@ -772,8 +773,10 @@ class _DesktopHomePageState extends State<DesktopHomePage> {
     if (picked == null || picked.files.single.bytes == null || !mounted) return;
     final settings = await showDialog<_ImportSettings>(
       context: context,
-      builder: (context) =>
-          _ImportDialog(initialTeacherEmail: suggestedTeacherEmail ?? ''),
+      builder: (context) => _ImportDialog(
+        initialTeacherEmail: suggestedTeacherEmail ?? '',
+        fileName: picked.files.single.name,
+      ),
     );
     if (settings == null) return;
     try {
@@ -845,9 +848,10 @@ class _ImportSettings {
 }
 
 class _ImportDialog extends StatefulWidget {
-  const _ImportDialog({this.initialTeacherEmail = ''});
+  const _ImportDialog({this.initialTeacherEmail = '', required this.fileName});
 
   final String initialTeacherEmail;
+  final String fileName;
 
   @override
   State<_ImportDialog> createState() => _ImportDialogState();
@@ -864,6 +868,8 @@ class _ImportDialogState extends State<_ImportDialog> {
   void initState() {
     super.initState();
     teacherEmail = TextEditingController(text: widget.initialTeacherEmail);
+    semester.text =
+        RosterImporter.semesterFromFileName(widget.fileName) ?? 'FA26';
   }
 
   @override
@@ -875,12 +881,21 @@ class _ImportDialogState extends State<_ImportDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Thiết lập học kỳ'),
+    title: const Text('Nạp Markbook giảng viên'),
     content: SizedBox(
       width: 420,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          Text(
+            widget.fileName,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Class · RollNumber · Email · MemberCode · FullName. Mã lịch, môn và lớp lấy từ tên sheet; các cột điểm không được nhập.',
+          ),
+          const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
