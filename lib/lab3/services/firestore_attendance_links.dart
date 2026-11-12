@@ -179,10 +179,19 @@ class FirestoreAttendanceLinks
 
   @override
   Future<void> stop(LinkSession session) async {
-    await db.doc('attendanceSessions/${session.id}').update({
-      'receiving': false,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    final ref = db.doc('attendanceSessions/${session.id}');
+    try {
+      await ref.update({
+        'receiving': false,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } on FirebaseException catch (error) {
+      if (error.code == 'permission-denied' || error.code == 'not-found') {
+        final snapshot = await ref.get(const GetOptions(source: Source.server));
+        if (!snapshot.exists) throw const AttendanceLinkNotFound();
+      }
+      rethrow;
+    }
   }
 
   @override

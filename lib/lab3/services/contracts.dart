@@ -189,3 +189,7 @@ class AppProblem implements Exception {
   @override
   String toString() => message;
 }
+
+class AttendanceLinkNotFound extends AppProblem {
+  const AttendanceLinkNotFound() : super('Không tìm thấy phiên điểm danh.');
+}
