@@ -8,7 +8,7 @@ service cloud.firestore {
     }
     function admin() {
       return googleUser() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', '') == 'admin';
     }
     function teacher() {
       return admin() || (googleUser()
